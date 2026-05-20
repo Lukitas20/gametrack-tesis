@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+dist/
+.pytest_cache/
+
+# Env
+.env
+*.env.local
+
+# Node
+node_modules/
+dist/
+.next/
+
+# Docker
+postgres_data/
+
+# ML
+*.pkl
+*.joblib
+ml/data/*.csv
+ml/data/*.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
