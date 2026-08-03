@@ -1,45 +1,54 @@
-from pydantic import BaseModel
-from datetime import datetime
-from typing import Optional, List
+"""Schemas del catálogo: juegos, géneros y etiquetas."""
+
+from datetime import date, datetime
+
+from pydantic import BaseModel, ConfigDict
 
 
-class GameBase(BaseModel):
-    title: str
-    description: Optional[str] = None
-    short_description: Optional[str] = None
-    developer: Optional[str] = None
-    publisher: Optional[str] = None
-    genres: Optional[List[str]] = None
-    tags: Optional[List[str]] = None
-    platforms: Optional[List[str]] = None
-    price_usd: Optional[float] = None
-    is_free: bool = False
-    cover_image_url: Optional[str] = None
-    header_image_url: Optional[str] = None
-    metacritic_score: Optional[int] = None
+class GenreOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
 
-
-class GameCreate(GameBase):
-    steam_app_id: Optional[int] = None
-    rawg_id: Optional[int] = None
-
-
-class GameResponse(GameBase):
     id: int
-    steam_app_id: Optional[int]
-    rawg_id: Optional[int]
-    internal_rating: Optional[float]
-    total_reviews: int
-    steam_positive_reviews: int
-    steam_negative_reviews: int
-    created_at: datetime
-
-    class Config:
-        from_attributes = True
+    slug: str
+    name: str
 
 
-class GameListResponse(BaseModel):
+class TagOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    slug: str
+    name: str
+
+
+class GameSummary(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    slug: str
+    name: str
+    released: date | None
+    developer: str | None
+    background_image: str | None
+    metacritic: int | None
+    avg_rating: float
+    ratings_count: int
+    genres: list[GenreOut]
+
+
+class GameDetail(GameSummary):
+    description: str | None
+    publisher: str | None
+    platforms: list[str]
+    playtime_hours: int | None
+    reviews_count: int
+    tags: list[TagOut]
+
+
+class GamePage(BaseModel):
+    """Envoltura de paginación para el listado de juegos."""
+
     total: int
-    page: int
-    page_size: int
-    results: List[GameResponse]
+    limit: int
+    offset: int
+    items: list[GameSummary]

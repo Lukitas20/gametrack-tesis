@@ -1,0 +1,16 @@
+# Normaliza los finales de línea a LF en el repositorio.
+# Sin esto, un colaborador en Windows y otro en Linux/macOS generan diffs
+# completos sobre archivos que nadie tocó.
+* text=auto eol=lf
+
+# Binarios: nunca convertir.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.db binary
+*.sqlite3 binary
+*.pkl binary
+*.joblib binary

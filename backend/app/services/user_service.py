@@ -1,15 +1,23 @@
+"""Lógica de negocio de usuarios."""
+
+from sqlalchemy import select
 from sqlalchemy.orm import Session
-from app.models.user import User
-from app.schemas.user import UserCreate
+
 from app.core.security import hash_password, verify_password
+from app.models import Genre, User, UserPreference
+from app.schemas.user import UserCreate
+
+
+def get_user(db: Session, user_id: int) -> User | None:
+    return db.get(User, user_id)
 
 
 def get_user_by_username(db: Session, username: str) -> User | None:
-    return db.query(User).filter(User.username == username).first()
+    return db.scalar(select(User).where(User.username == username))
 
 
-def get_user_by_steam_id(db: Session, steam_id: str) -> User | None:
-    return db.query(User).filter(User.steam_id == steam_id).first()
+def get_user_by_email(db: Session, email: str) -> User | None:
+    return db.scalar(select(User).where(User.email == email))
 
 
 def create_user(db: Session, data: UserCreate) -> User:
@@ -17,6 +25,9 @@ def create_user(db: Session, data: UserCreate) -> User:
         username=data.username,
         email=data.email,
         hashed_password=hash_password(data.password),
+        full_name=data.full_name,
+        role=data.role,
+        studio=data.studio,
     )
     db.add(user)
     db.commit()
@@ -26,28 +37,17 @@ def create_user(db: Session, data: UserCreate) -> User:
 
 def authenticate_user(db: Session, username: str, password: str) -> User | None:
     user = get_user_by_username(db, username)
-    if not user or not user.hashed_password:
+    if not user or not user.hashed_password or not user.is_active:
         return None
     if not verify_password(password, user.hashed_password):
         return None
     return user
 
 
-def get_or_create_steam_user(db: Session, steam_id: str, steam_username: str, avatar_url: str) -> User:
-    user = get_user_by_steam_id(db, steam_id)
-    if user:
-        user.steam_username = steam_username
-        user.steam_avatar_url = avatar_url
-        db.commit()
-        db.refresh(user)
-        return user
-    user = User(
-        username=f"steam_{steam_id}",
-        steam_id=steam_id,
-        steam_username=steam_username,
-        steam_avatar_url=avatar_url,
-    )
-    db.add(user)
+def set_preferences(db: Session, user: User, genre_ids: list[int]) -> User:
+    """Reemplaza las preferencias de género del usuario por las indicadas."""
+    genres = db.scalars(select(Genre).where(Genre.id.in_(genre_ids))).all()
+    user.preferences = [UserPreference(genre=genre, weight=1.0) for genre in genres]
     db.commit()
     db.refresh(user)
     return user

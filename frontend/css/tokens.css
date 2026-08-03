@@ -1,0 +1,186 @@
+/* Tokens de diseño de GameTrack.
+ *
+ * Los colores de los gráficos no se eligieron a ojo: están validados por
+ * backend/scripts/validate_palette.py, que mide contraste WCAG contra cada
+ * superficie y separación perceptual en OKLab simulando las tres dicromacias.
+ * Si se cambia alguno, hay que volver a correr ese script.
+ *
+ * El gris neutro del modo oscuro es más oscuro que el del claro a propósito:
+ * bajo protanopia el rojo se desatura hacia el gris y sólo la luminosidad los
+ * separa. Con el mismo gris en ambos modos el par caía a ΔE 4,2.
+ */
+
+:root {
+  color-scheme: light;
+
+  /* --- Superficies --- */
+  --page: #f9f9f7;
+  --surface: #fcfcfb;
+  --surface-raised: #ffffff;
+  --surface-sunken: #f2f1ed;
+  --surface-hover: #f0efec;
+
+  /* --- Tinta --- */
+  --ink: #0b0b0b;
+  --ink-secondary: #52514e;
+  --ink-muted: #898781;
+
+  /* --- Trazos --- */
+  --border: rgba(11, 11, 11, 0.1);
+  --border-strong: rgba(11, 11, 11, 0.18);
+  --grid: #e1e0d9;
+  --baseline: #c3c2b7;
+
+  /* --- Acento (slot categórico 1) --- */
+  --accent: #2a78d6;
+  --accent-hover: #256abf;
+  --accent-ink: #ffffff;
+  --accent-wash: rgba(42, 120, 214, 0.1);
+  --accent-wash-strong: rgba(42, 120, 214, 0.16);
+
+  /* --- Escala divergente del sentimiento --- */
+  --positivo: #2a78d6;
+  --neutro: #898781;
+  --negativo: #e34948;
+  --positivo-wash: rgba(42, 120, 214, 0.12);
+  --neutro-wash: rgba(137, 135, 129, 0.14);
+  --negativo-wash: rgba(227, 73, 72, 0.12);
+
+  /* --- Estado (fijo, nunca tematizado; siempre con ícono + etiqueta) --- */
+  --good: #0ca30c;
+  --warning: #fab219;
+  --serious: #ec835a;
+  --critical: #d03b3b;
+  --success-text: #006300;
+
+  /* --- Slots categóricos, en orden fijo (nunca ciclar) --- */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
+
+  /* --- Sombras --- */
+  --shadow-sm: 0 1px 2px rgba(11, 11, 11, 0.04), 0 1px 1px rgba(11, 11, 11, 0.03);
+  --shadow-md: 0 2px 8px rgba(11, 11, 11, 0.06), 0 1px 2px rgba(11, 11, 11, 0.04);
+  --shadow-lg: 0 12px 32px rgba(11, 11, 11, 0.12), 0 2px 8px rgba(11, 11, 11, 0.06);
+
+  /* --- Tipografía: una sola familia sans, sin display ni serif --- */
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --fs-xs: 0.75rem;
+  --fs-sm: 0.8125rem;
+  --fs-base: 0.9375rem;
+  --fs-md: 1.0625rem;
+  --fs-lg: 1.375rem;
+  --fs-xl: 1.875rem;
+  --fs-hero: 3rem;
+
+  /* --- Espaciado --- */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 20px;
+  --s-6: 24px;
+  --s-8: 32px;
+  --s-10: 40px;
+  --s-12: 48px;
+
+  /* --- Radios --- */
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --r-full: 999px;
+
+  --header-h: 60px;
+  --content-max: 1280px;
+}
+
+/* El toggle del usuario debe ganar en ambas direcciones: la media query cubre
+ * la preferencia del sistema y el atributo data-theme la elección explícita. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --surface-raised: #222221;
+    --surface-sunken: #141413;
+    --surface-hover: #262625;
+
+    --ink: #ffffff;
+    --ink-secondary: #c3c2b7;
+    --ink-muted: #898781;
+
+    --border: rgba(255, 255, 255, 0.1);
+    --border-strong: rgba(255, 255, 255, 0.18);
+    --grid: #2c2c2a;
+    --baseline: #383835;
+
+    --accent: #3987e5;
+    --accent-hover: #5598e7;
+    --accent-ink: #0b0b0b;
+    --accent-wash: rgba(57, 135, 229, 0.14);
+    --accent-wash-strong: rgba(57, 135, 229, 0.22);
+
+    --positivo: #3987e5;
+    --neutro: #5c5c54;
+    --negativo: #e66767;
+    --positivo-wash: rgba(57, 135, 229, 0.16);
+    --neutro-wash: rgba(137, 135, 129, 0.18);
+    --negativo-wash: rgba(230, 103, 103, 0.16);
+
+    --success-text: #0ca30c;
+
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-4: #c98500;
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 2px 10px rgba(0, 0, 0, 0.45);
+    --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.4);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --page: #0d0d0d;
+  --surface: #1a1a19;
+  --surface-raised: #222221;
+  --surface-sunken: #141413;
+  --surface-hover: #262625;
+
+  --ink: #ffffff;
+  --ink-secondary: #c3c2b7;
+  --ink-muted: #898781;
+
+  --border: rgba(255, 255, 255, 0.1);
+  --border-strong: rgba(255, 255, 255, 0.18);
+  --grid: #2c2c2a;
+  --baseline: #383835;
+
+  --accent: #3987e5;
+  --accent-hover: #5598e7;
+  --accent-ink: #0b0b0b;
+  --accent-wash: rgba(57, 135, 229, 0.14);
+  --accent-wash-strong: rgba(57, 135, 229, 0.22);
+
+  --positivo: #3987e5;
+  --neutro: #5c5c54;
+  --negativo: #e66767;
+  --positivo-wash: rgba(57, 135, 229, 0.16);
+  --neutro-wash: rgba(137, 135, 129, 0.18);
+  --negativo-wash: rgba(230, 103, 103, 0.16);
+
+  --success-text: #0ca30c;
+
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-4: #c98500;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 2px 10px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.4);
+}

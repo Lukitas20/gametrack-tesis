@@ -2,27 +2,30 @@
 __pycache__/
 *.py[cod]
 .venv/
+venv/
 *.egg-info/
-dist/
 .pytest_cache/
+.ruff_cache/
 
-# Env
+# Entorno
 .env
 *.env.local
 
-# Node
+# Base de datos local
+*.db
+*.sqlite3
+
+# Datos generados por el seed
+backend/data/generated/
+
+# Node / frontend
 node_modules/
 dist/
-.next/
+.vite/
 
-# Docker
-postgres_data/
-
-# ML
+# Modelos entrenados
 *.pkl
 *.joblib
-ml/data/*.csv
-ml/data/*.json
 
 # IDE
 .vscode/

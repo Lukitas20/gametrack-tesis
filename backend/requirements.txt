@@ -1,14 +1,28 @@
-fastapi==0.111.0
-uvicorn[standard]==0.29.0
-sqlalchemy==2.0.30
-alembic==1.13.1
-psycopg2-binary==2.9.9
-redis==5.0.4
-python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
-python-dotenv==1.0.1
-pydantic-settings==2.2.1
-httpx==0.27.0
-pytest==8.2.0
-pytest-asyncio==0.23.6
-bcrypt==4.0.1
+# Versiones verificadas sobre Python 3.13.
+
+# --- API ---
+fastapi==0.140.0
+uvicorn[standard]==0.51.0
+pydantic[email]==2.13.4
+pydantic-settings==2.14.2
+python-dotenv==1.2.2
+
+# --- Base de datos ---
+sqlalchemy==2.0.51
+alembic==1.17.2
+# Descomentar solo si se usa PostgreSQL en lugar de SQLite:
+# psycopg2-binary==2.9.10
+
+# --- Seguridad ---
+PyJWT==2.13.0
+bcrypt==5.0.0
+
+# --- IA: recomendación y NLP ---
+scikit-learn==1.9.0
+numpy==2.5.1
+scipy==1.18.0
+pandas==3.0.5
+
+# --- Integraciones y tests ---
+httpx==0.28.1
+pytest==9.1.1

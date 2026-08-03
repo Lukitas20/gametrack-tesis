@@ -1,0 +1,1248 @@
+/* Componentes de interfaz.
+ *
+ * Los gráficos siguen especificaciones fijas: marcas finas (barras ≤24px con
+ * el extremo de dato redondeado 4px y escuadrado en la línea base), rejilla y
+ * ejes en trazo capilar sólido —nunca punteado—, y un hueco de 2px del color
+ * de la superficie separando rellenos contiguos en lugar de un borde dibujado.
+ */
+
+/* ------------------------------------------------------------------ *
+ * Botones
+ * ------------------------------------------------------------------ */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-2);
+  padding: var(--s-2) var(--s-4);
+  min-height: 36px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface-raised);
+  color: var(--ink);
+  font-size: var(--fs-sm);
+  font-weight: 550;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.14s, border-color 0.14s, transform 0.08s;
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
+}
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--accent);
+  border-color: transparent;
+  color: var(--accent-ink);
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: transparent;
+}
+
+.btn-ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--ink-secondary);
+}
+.btn-ghost:hover:not(:disabled) {
+  background: var(--surface-hover);
+  border-color: transparent;
+  color: var(--ink);
+}
+
+.btn-sm {
+  min-height: 30px;
+  padding: var(--s-1) var(--s-3);
+  font-size: var(--fs-xs);
+}
+
+.btn-lg {
+  min-height: 44px;
+  padding: var(--s-3) var(--s-6);
+  font-size: var(--fs-base);
+}
+
+.btn-icon {
+  padding: var(--s-2);
+  min-width: 36px;
+}
+
+.btn[aria-pressed="true"] {
+  background: var(--accent-wash);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ------------------------------------------------------------------ *
+ * Tarjetas
+ * ------------------------------------------------------------------ */
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: var(--s-5);
+  box-shadow: var(--shadow-sm);
+}
+
+.card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s-4);
+  margin-bottom: var(--s-4);
+}
+
+.card-title {
+  font-size: var(--fs-base);
+  font-weight: 650;
+}
+
+.card-sub {
+  font-size: var(--fs-xs);
+  color: var(--ink-muted);
+  margin-top: 2px;
+}
+
+.grid {
+  display: grid;
+  gap: var(--s-4);
+}
+.grid-2 {
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+.grid-3 {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+.grid-4 {
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+
+/* ------------------------------------------------------------------ *
+ * Chips y etiquetas
+ * ------------------------------------------------------------------ */
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  padding: 3px var(--s-2);
+  border-radius: var(--r-full);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  font-size: var(--fs-xs);
+  font-weight: 550;
+  color: var(--ink-secondary);
+  white-space: nowrap;
+}
+
+button.chip {
+  cursor: pointer;
+  transition: background 0.14s, border-color 0.14s, color 0.14s;
+}
+button.chip:hover {
+  background: var(--surface-hover);
+  color: var(--ink);
+}
+button.chip[aria-pressed="true"] {
+  background: var(--accent-wash);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.chip-accent {
+  background: var(--accent-wash);
+  border-color: transparent;
+  color: var(--accent);
+}
+
+/* Los chips de sentimiento llevan punto de color + texto: el color nunca es
+ * el único portador del significado. */
+.chip-sent {
+  gap: 6px;
+}
+.chip-sent .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.chip-sent[data-s="positivo"] {
+  background: var(--positivo-wash);
+  border-color: transparent;
+}
+.chip-sent[data-s="positivo"] .dot {
+  background: var(--positivo);
+}
+.chip-sent[data-s="neutro"] {
+  background: var(--neutro-wash);
+  border-color: transparent;
+}
+.chip-sent[data-s="neutro"] .dot {
+  background: var(--neutro);
+}
+.chip-sent[data-s="negativo"] {
+  background: var(--negativo-wash);
+  border-color: transparent;
+}
+.chip-sent[data-s="negativo"] .dot {
+  background: var(--negativo);
+}
+
+.badge-role {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  padding: 2px var(--s-2);
+  border-radius: var(--r-full);
+  font-size: var(--fs-xs);
+  font-weight: 650;
+  background: var(--accent-wash);
+  color: var(--accent);
+}
+
+/* ------------------------------------------------------------------ *
+ * Formularios y fila de filtros
+ * ------------------------------------------------------------------ */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.label {
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--ink-secondary);
+}
+
+.input,
+.select,
+.textarea {
+  width: 100%;
+  padding: var(--s-2) var(--s-3);
+  min-height: 36px;
+  background: var(--surface-raised);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  font-size: var(--fs-sm);
+  transition: border-color 0.14s, box-shadow 0.14s;
+}
+
+.input:focus,
+.select:focus,
+.textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-wash);
+}
+
+.textarea {
+  min-height: 110px;
+  resize: vertical;
+  line-height: 1.6;
+}
+
+.select {
+  cursor: pointer;
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
+    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: calc(100% - 15px) 15px, calc(100% - 10px) 15px;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: var(--s-8);
+}
+
+.search-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 200px;
+}
+.search-wrap .input {
+  padding-left: 34px;
+}
+.search-wrap svg {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--ink-muted);
+  pointer-events: none;
+}
+
+/* Una sola fila de filtros por encima de todo lo que condiciona. */
+.filter-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  flex-wrap: wrap;
+  padding: var(--s-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  margin-bottom: var(--s-5);
+}
+
+.tag-scroll {
+  display: flex;
+  gap: var(--s-2);
+  overflow-x: auto;
+  padding-bottom: var(--s-1);
+  scrollbar-width: thin;
+}
+
+/* ------------------------------------------------------------------ *
+ * Segmented control (comparación de estrategias)
+ * ------------------------------------------------------------------ */
+
+.segmented {
+  display: inline-flex;
+  padding: 3px;
+  gap: 2px;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+}
+
+.segmented button {
+  padding: var(--s-2) var(--s-4);
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ink-secondary);
+  font-size: var(--fs-sm);
+  font-weight: 550;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.14s, color 0.14s;
+}
+
+.segmented button:hover {
+  color: var(--ink);
+}
+
+.segmented button[aria-pressed="true"] {
+  background: var(--surface-raised);
+  color: var(--ink);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ------------------------------------------------------------------ *
+ * Tarjeta de juego
+ * ------------------------------------------------------------------ */
+
+.game-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: var(--s-4);
+}
+
+.game-card {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  cursor: pointer;
+  text-align: left;
+  padding: 0;
+  transition: transform 0.16s, box-shadow 0.16s, border-color 0.16s;
+}
+
+.game-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-lg);
+  border-color: var(--border-strong);
+}
+
+.game-cover {
+  aspect-ratio: 16 / 9;
+  display: grid;
+  place-items: center;
+  position: relative;
+  overflow: hidden;
+  background: var(--surface-sunken);
+  flex-shrink: 0;
+}
+
+.game-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* El dataset local no trae imágenes: la portada de reserva usa las iniciales
+ * sobre un degradado derivado del nombre, para que la grilla no se vea vacía. */
+.cover-fallback {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.92);
+  letter-spacing: -0.03em;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.3);
+}
+
+.game-meta {
+  padding: var(--s-3) var(--s-4) var(--s-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  flex: 1;
+}
+
+.game-name {
+  font-size: var(--fs-sm);
+  font-weight: 650;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.game-sub {
+  font-size: var(--fs-xs);
+  color: var(--ink-muted);
+}
+
+.rating-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--fs-xs);
+  font-weight: 650;
+  color: var(--ink-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.rating-inline svg {
+  color: var(--warning);
+}
+
+/* Motivo de la recomendación: siempre visible, no en un tooltip. */
+.reason {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: var(--s-2) var(--s-3);
+  margin-top: auto;
+  background: var(--accent-wash);
+  border-top: 1px solid var(--border);
+  font-size: var(--fs-xs);
+  line-height: 1.4;
+  color: var(--ink-secondary);
+}
+
+.reason svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--accent);
+}
+
+.rank-badge {
+  position: absolute;
+  top: var(--s-2);
+  left: var(--s-2);
+  width: 24px;
+  height: 24px;
+  border-radius: var(--r-sm);
+  display: grid;
+  place-items: center;
+  background: rgba(11, 11, 11, 0.68);
+  backdrop-filter: blur(4px);
+  color: #fff;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------------------------------------------ *
+ * Stat tiles y figura protagonista
+ * ------------------------------------------------------------------ */
+
+.stat {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: var(--s-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+}
+
+.stat-label {
+  font-size: var(--fs-xs);
+  color: var(--ink-muted);
+  font-weight: 550;
+}
+
+/* Cifras grandes con figuras proporcionales: tabular-nums las deja sueltas. */
+.stat-value {
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.stat-note {
+  font-size: var(--fs-xs);
+  color: var(--ink-secondary);
+}
+
+.hero-figure {
+  font-size: var(--fs-hero);
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 1;
+}
+
+/* ------------------------------------------------------------------ *
+ * Gráficos
+ * ------------------------------------------------------------------ */
+
+.chart-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: var(--s-5);
+  box-shadow: var(--shadow-sm);
+  min-width: 0;
+}
+
+/* El contenedor crece con su contenido, para que la banda del eje nunca
+ * quede fuera y aparezca un scroll interno. */
+.chart-body {
+  overflow-x: auto;
+}
+
+.chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.chart-grid-line {
+  stroke: var(--grid);
+  stroke-width: 1;
+}
+
+.chart-baseline {
+  stroke: var(--baseline);
+  stroke-width: 1;
+}
+
+.chart-tick {
+  fill: var(--ink-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-axis-label {
+  fill: var(--ink-secondary);
+  font-size: 11.5px;
+  font-weight: 550;
+}
+
+.chart-value {
+  fill: var(--ink);
+  font-size: 11.5px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-mark {
+  transition: opacity 0.14s;
+}
+
+.chart-hit {
+  fill: transparent;
+  cursor: pointer;
+}
+
+.chart:hover .chart-mark[data-dim="true"] {
+  opacity: 0.35;
+}
+
+/* Leyenda: presente siempre que haya dos series o más. */
+.legend {
+  display: flex;
+  gap: var(--s-4);
+  flex-wrap: wrap;
+  margin-top: var(--s-4);
+  padding-top: var(--s-3);
+  border-top: 1px solid var(--border);
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-xs);
+  color: var(--ink-secondary);
+}
+
+.legend-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.legend-value {
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  color: var(--ink);
+}
+
+/* Tooltip: refuerza, nunca es la única vía de leer un valor. */
+.chart-tip {
+  position: fixed;
+  z-index: 200;
+  pointer-events: none;
+  padding: var(--s-2) var(--s-3);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  box-shadow: var(--shadow-lg);
+  font-size: var(--fs-xs);
+  line-height: 1.5;
+  max-width: 260px;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.chart-tip[data-show="true"] {
+  opacity: 1;
+}
+
+.chart-tip strong {
+  display: block;
+  color: var(--ink);
+  margin-bottom: 2px;
+}
+
+/* Vista de tabla: el equivalente accesible de cada gráfico. */
+.table-view {
+  margin-top: var(--s-4);
+}
+
+.table-view summary {
+  cursor: pointer;
+  font-size: var(--fs-xs);
+  color: var(--ink-muted);
+  font-weight: 550;
+  padding: var(--s-1) 0;
+}
+.table-view summary:hover {
+  color: var(--ink);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-sm);
+}
+
+th,
+td {
+  text-align: left;
+  padding: var(--s-2) var(--s-3);
+  border-bottom: 1px solid var(--border);
+}
+
+th {
+  font-size: var(--fs-xs);
+  font-weight: 650;
+  color: var(--ink-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.045em;
+}
+
+td.num,
+th.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+tr.clickable {
+  cursor: pointer;
+}
+tr.clickable:hover td {
+  background: var(--surface-hover);
+}
+
+/* ------------------------------------------------------------------ *
+ * Panel de aspectos (ABSA)
+ * ------------------------------------------------------------------ */
+
+.aspect-row {
+  padding: var(--s-4) 0;
+  border-bottom: 1px solid var(--border);
+}
+.aspect-row:last-child {
+  border-bottom: none;
+}
+
+.aspect-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-3);
+  margin-bottom: var(--s-3);
+}
+
+.aspect-name {
+  font-size: var(--fs-sm);
+  font-weight: 650;
+  text-transform: capitalize;
+}
+
+.aspect-net {
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.quote {
+  margin-top: var(--s-3);
+  padding: var(--s-3) var(--s-4);
+  background: var(--surface-sunken);
+  border-left: 2px solid var(--negativo);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+  font-size: var(--fs-sm);
+  color: var(--ink-secondary);
+  font-style: italic;
+  line-height: 1.55;
+}
+
+.quote-positive {
+  border-left-color: var(--positivo);
+}
+
+/* ------------------------------------------------------------------ *
+ * Reseñas
+ * ------------------------------------------------------------------ */
+
+.review {
+  padding: var(--s-4) 0;
+  border-bottom: 1px solid var(--border);
+}
+.review:last-child {
+  border-bottom: none;
+}
+
+.review-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--s-2);
+}
+
+.avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--accent-wash);
+  color: var(--accent);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.review-title {
+  font-size: var(--fs-sm);
+  font-weight: 650;
+}
+
+.review-body {
+  font-size: var(--fs-sm);
+  color: var(--ink-secondary);
+  line-height: 1.65;
+}
+
+.aspect-tags {
+  display: flex;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+  margin-top: var(--s-3);
+}
+
+/* ------------------------------------------------------------------ *
+ * Modal
+ * ------------------------------------------------------------------ */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: var(--s-4);
+  background: rgba(11, 11, 11, 0.55);
+  backdrop-filter: blur(4px);
+  animation: fade 0.16s ease-out;
+}
+
+.modal {
+  width: 100%;
+  max-width: 560px;
+  max-height: 88vh;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-lg);
+  padding: var(--s-6);
+  animation: pop 0.18s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+.modal-wide {
+  max-width: 760px;
+}
+
+.modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s-4);
+  margin-bottom: var(--s-5);
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Estrellas
+ * ------------------------------------------------------------------ */
+
+.stars {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.stars button {
+  padding: 2px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--baseline);
+  line-height: 0;
+  transition: transform 0.1s, color 0.12s;
+}
+
+.stars button:hover {
+  transform: scale(1.15);
+}
+
+.stars button[data-on="true"] {
+  color: var(--warning);
+}
+
+/* ------------------------------------------------------------------ *
+ * Avisos, vacíos y carga
+ * ------------------------------------------------------------------ */
+
+.notice {
+  display: flex;
+  gap: var(--s-3);
+  padding: var(--s-4);
+  border-radius: var(--r-md);
+  background: var(--accent-wash);
+  border: 1px solid transparent;
+  font-size: var(--fs-sm);
+  line-height: 1.55;
+}
+
+.notice svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--accent);
+}
+
+.notice-warn {
+  background: color-mix(in srgb, var(--warning) 14%, transparent);
+}
+.notice-warn svg {
+  color: var(--serious);
+}
+
+.empty {
+  text-align: center;
+  padding: var(--s-12) var(--s-5);
+  color: var(--ink-muted);
+}
+
+.empty h3 {
+  color: var(--ink);
+  margin-bottom: var(--s-2);
+}
+
+/* En refetch se mantiene el render anterior atenuado: sin salto de layout. */
+.is-loading {
+  opacity: 0.45;
+  pointer-events: none;
+  transition: opacity 0.14s;
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--border-strong);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--surface-sunken) 25%,
+    var(--surface-hover) 50%,
+    var(--surface-sunken) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+  border-radius: var(--r-sm);
+}
+
+@keyframes shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Toast
+ * ------------------------------------------------------------------ */
+
+.toast-stack {
+  position: fixed;
+  bottom: var(--s-5);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 300;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  align-items: center;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-3) var(--s-5);
+  background: var(--ink);
+  color: var(--page);
+  border-radius: var(--r-full);
+  box-shadow: var(--shadow-lg);
+  font-size: var(--fs-sm);
+  font-weight: 550;
+  animation: rise 0.2s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Selector de cuenta para la demo
+ * ------------------------------------------------------------------ */
+
+.account-card {
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+  width: 100%;
+  padding: var(--s-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.14s, background 0.14s, transform 0.1s;
+}
+
+.account-card:hover {
+  border-color: var(--accent);
+  background: var(--accent-wash);
+  transform: translateY(-1px);
+}
+
+.account-card .avatar {
+  width: 40px;
+  height: 40px;
+  font-size: var(--fs-sm);
+}
+
+.account-name {
+  font-weight: 650;
+  font-size: var(--fs-sm);
+}
+
+.account-note {
+  font-size: var(--fs-xs);
+  color: var(--ink-muted);
+  line-height: 1.45;
+}
+
+/* --- Menú desplegable --- */
+.menu-wrap {
+  position: relative;
+}
+
+.menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  min-width: 250px;
+  padding: var(--s-2);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-lg);
+  z-index: 60;
+  animation: pop 0.14s ease-out;
+}
+
+.menu-label {
+  padding: var(--s-2) var(--s-3) var(--s-1);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  width: 100%;
+  padding: var(--s-2) var(--s-3);
+  border: none;
+  border-radius: var(--r-sm);
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  font-size: var(--fs-sm);
+  transition: background 0.12s;
+}
+
+.menu-item:hover {
+  background: var(--surface-hover);
+}
+
+.menu-item[aria-current="true"] {
+  background: var(--accent-wash);
+  color: var(--accent);
+}
+
+.menu-sep {
+  height: 1px;
+  background: var(--border);
+  margin: var(--s-2) 0;
+}
+
+/* ------------------------------------------------------------------ *
+ * Hero del detalle de juego
+ * ------------------------------------------------------------------ */
+
+.game-hero {
+  position: relative;
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  margin-bottom: var(--s-6);
+  min-height: 210px;
+  display: flex;
+  align-items: flex-end;
+  padding: var(--s-6);
+  color: #fff;
+}
+
+.game-hero-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.game-hero-bg img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.game-hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: linear-gradient(
+    to top,
+    rgba(8, 8, 8, 0.92) 0%,
+    rgba(8, 8, 8, 0.6) 45%,
+    rgba(8, 8, 8, 0.3) 100%
+  );
+}
+
+.game-hero-content {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+}
+
+.game-hero h1 {
+  font-size: var(--fs-xl);
+  margin-bottom: var(--s-2);
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.4);
+}
+
+.game-hero .chip {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.24);
+  color: #fff;
+}
+
+.detail-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: var(--s-6);
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .detail-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.sticky-side {
+  position: sticky;
+  top: calc(var(--header-h) + var(--s-5));
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+
+/* ------------------------------------------------------------------ *
+ * Quiz
+ * ------------------------------------------------------------------ */
+
+.quiz-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--s-3);
+}
+
+.quiz-option {
+  padding: var(--s-4);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-md);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.14s, background 0.14s, transform 0.1s;
+}
+
+.quiz-option:hover {
+  border-color: var(--accent);
+  background: var(--accent-wash);
+  transform: translateY(-2px);
+}
+
+.quiz-option-emoji {
+  font-size: 1.5rem;
+  line-height: 1;
+  margin-bottom: var(--s-2);
+}
+
+.quiz-option-title {
+  font-weight: 650;
+  font-size: var(--fs-sm);
+}
+
+.quiz-option-note {
+  font-size: var(--fs-xs);
+  color: var(--ink-muted);
+  margin-top: 2px;
+}
+
+.quiz-progress {
+  display: flex;
+  gap: var(--s-1);
+  margin-bottom: var(--s-5);
+}
+
+.quiz-progress span {
+  height: 3px;
+  flex: 1;
+  border-radius: var(--r-full);
+  background: var(--surface-sunken);
+}
+
+.quiz-progress span[data-on="true"] {
+  background: var(--accent);
+}
+
+/* Barra de progreso simple con la pista en un paso más claro del mismo tono. */
+.meter {
+  height: 6px;
+  border-radius: var(--r-full);
+  background: var(--accent-wash);
+  overflow: hidden;
+}
+
+.meter-fill {
+  height: 100%;
+  border-radius: var(--r-full);
+  background: var(--accent);
+  transition: width 0.3s ease-out;
+}
