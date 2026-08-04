@@ -301,14 +301,19 @@ export function aspectChip(aspect) {
 }
 
 export function reviewItem(review) {
+  const authorName = review.author_name || "Usuario";
   return h(
     "article",
     { class: "review" },
     h(
       "div",
       { class: "review-head" },
-      h("span", { class: "avatar" }, initials(`U${review.user_id}`)),
+      h("span", { class: "avatar" }, initials(authorName)),
       h("span", { class: "review-title" }, review.title || "Reseña"),
+      h("span", { class: "muted", style: { fontSize: "var(--fs-xs)" } }, authorName),
+      review.source === "steam"
+        ? h("span", { class: "chip", title: "Reseña real importada de Steam" }, "Steam")
+        : null,
       sentimentChip(review.sentiment),
       h("span", { class: "spacer" }),
       review.sentiment_score !== null &&

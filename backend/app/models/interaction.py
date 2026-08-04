@@ -83,7 +83,10 @@ class Review(Base):
     __table_args__ = (UniqueConstraint("user_id", "game_id", name="uq_review_user_game"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    user_id: Mapped[int] = mapped_column(
+    # Nula para reseñas importadas de Steam: no pertenecen a ningún usuario
+    # registrado en GameTrack. La constraint única no las choca entre sí
+    # porque SQL no compara NULLs como iguales.
+    user_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), index=True
     )
     game_id: Mapped[int] = mapped_column(
@@ -93,6 +96,12 @@ class Review(Base):
     title: Mapped[str | None] = mapped_column(String(200))
     content: Mapped[str] = mapped_column(Text)
     language: Mapped[str] = mapped_column(String(5), default="es")
+    # "user" (escrita en GameTrack) o "steam" (importada de una reseña real).
+    source: Mapped[str] = mapped_column(String(20), default="user", server_default="user")
+    # Nombre a mostrar: el username al momento de publicar, o el nombre de
+    # perfil de Steam para las importadas. Se copia acá en vez de resolverse
+    # por join porque las reseñas de Steam no tienen ``user`` al que unirse.
+    author_name: Mapped[str | None] = mapped_column(String(120))
     # Recomendación binaria estilo Steam, independiente del puntaje.
     is_recommended: Mapped[bool | None] = mapped_column(Boolean)
     hours_at_review: Mapped[float | None] = mapped_column(Float)
@@ -110,7 +119,7 @@ class Review(Base):
         DateTime(timezone=True), server_default=func.now(), index=True
     )
 
-    user: Mapped[User] = relationship(back_populates="reviews")
+    user: Mapped[User | None] = relationship(back_populates="reviews")
     game: Mapped[Game] = relationship(back_populates="reviews")
     aspects: Mapped[list[ReviewAspect]] = relationship(
         back_populates="review", cascade="all, delete-orphan", lazy="selectin"

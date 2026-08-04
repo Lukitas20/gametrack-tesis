@@ -21,6 +21,7 @@ PASSWORD = "demo1234"
 
 # Forma real de la respuesta de store.steampowered.com/api/appdetails.
 HALF_LIFE = {
+    "type": "game",
     "name": "Half-Life 2",
     "short_description": "Gordon Freeman vuelve a City 17.",
     "detailed_description": "<h1>HTML que no queremos</h1><p>Texto largo.</p>",
@@ -70,6 +71,35 @@ def auth(client: TestClient) -> dict:
         "/api/v1/auth/login", json={"username": "jugadora", "password": PASSWORD}
     )
     return {"Authorization": f"Bearer {response.json()['access_token']}"}
+
+
+@pytest.fixture(autouse=True)
+def no_review_network(monkeypatch):
+    """Por defecto, importar un juego no trae reseñas de Steam: los tests que
+    sí quieren probar esa parte pisan este mock explícitamente."""
+    monkeypatch.setattr(steam_service, "get_app_reviews", lambda *a, **k: [])
+
+
+# Forma real de la respuesta de store.steampowered.com/appreviews/{appid}.
+RAW_REVIEWS = {
+    "success": 1,
+    "reviews": [
+        {
+            "recommendationid": "1",
+            "author": {"steamid": "1", "playtime_at_review": 600},
+            "review": "La historia es magnifica pero el rendimiento es un desastre.",
+            "voted_up": False,
+            "votes_up": 12,
+        },
+        {
+            "recommendationid": "2",
+            "author": {"steamid": "2", "playtime_at_review": 1200},
+            "review": "Un juego excelente, lo recomiendo sin dudar.",
+            "voted_up": True,
+            "votes_up": 3,
+        },
+    ],
+}
 
 
 # --- Traducción de la ficha ------------------------------------------------
@@ -231,3 +261,55 @@ def test_biblioteca_sin_clave_devuelve_vacio(
     response = client.get("/api/v1/steam/owned/76561197960287930", headers=auth(client))
     assert response.status_code == 200
     assert response.json() == []
+
+
+# --- Reseñas reales ---------------------------------------------------------
+
+
+def test_importar_trae_las_resenas_reales_y_las_analiza(
+    client: TestClient, db: Session, user: User, monkeypatch
+) -> None:
+    monkeypatch.setattr(steam_service, "get_app_details", lambda _: HALF_LIFE)
+    monkeypatch.setattr(steam_service, "get_app_reviews", lambda *a, **k: RAW_REVIEWS["reviews"])
+    monkeypatch.setattr(steam_service, "get_player_summaries_batch", lambda ids: {})
+
+    game_id = client.post("/api/v1/steam/import/220", headers=auth(client)).json()["id"]
+
+    reviews = client.get(f"/api/v1/games/{game_id}/reviews").json()
+    assert len(reviews) == 2
+    assert all(r["source"] == "steam" for r in reviews)
+    assert all(r["user_id"] is None for r in reviews)
+    assert all(r["is_analyzed"] for r in reviews)
+    # La reseña negativa sobre el rendimiento debe traer al menos un aspecto.
+    negative = next(r for r in reviews if r["is_recommended"] is False)
+    assert negative["aspects"]
+
+
+def test_importar_resenas_usa_el_nombre_de_perfil_de_steam(
+    client: TestClient, db: Session, user: User, monkeypatch
+) -> None:
+    monkeypatch.setattr(steam_service, "get_app_details", lambda _: HALF_LIFE)
+    monkeypatch.setattr(steam_service, "get_app_reviews", lambda *a, **k: RAW_REVIEWS["reviews"])
+    monkeypatch.setattr(
+        steam_service,
+        "get_player_summaries_batch",
+        lambda ids: {"1": {"personaname": "gaben"}},
+    )
+
+    game_id = client.post("/api/v1/steam/import/220", headers=auth(client)).json()["id"]
+    reviews = client.get(f"/api/v1/games/{game_id}/reviews").json()
+
+    names = {r["author_name"] for r in reviews}
+    assert "gaben" in names
+    assert "Jugador de Steam" in names
+
+
+def test_sin_resenas_reales_no_rompe_la_importacion(
+    client: TestClient, db: Session, user: User, monkeypatch
+) -> None:
+    monkeypatch.setattr(steam_service, "get_app_details", lambda _: HALF_LIFE)
+    # ``no_review_network`` ya deja get_app_reviews devolviendo [].
+
+    response = client.post("/api/v1/steam/import/220", headers=auth(client))
+    assert response.status_code == 201
+    assert response.json()["reviews_count"] == 0

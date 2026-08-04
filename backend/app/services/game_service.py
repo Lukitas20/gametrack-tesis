@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.models import Game, Genre, Review, Tag, game_genres, game_tags
 
 SORT_FIELDS = {
-    "rating": Game.avg_rating.desc(),
+    "rating": Game.popularity_score.desc(),
     "popularidad": Game.ratings_count.desc(),
     "metacritic": Game.metacritic.desc().nulls_last(),
     "nombre": Game.name.asc(),

@@ -36,7 +36,7 @@ export function accountsView() {
         h(
           "span",
           { class: "row", style: { gap: "var(--s-2)" } },
-          h("span", { class: "account-name" }, account.username),
+          h("span", { class: "account-name" }, account.label),
           h(
             "span",
             { class: "badge-role" },
@@ -46,7 +46,11 @@ export function accountsView() {
           state.user?.username === account.username &&
             h("span", { class: "chip chip-accent" }, "Actual"),
         ),
-        h("span", { class: "account-note", style: { display: "block", marginTop: "2px" } }, account.note),
+        h(
+          "span",
+          { class: "account-note", style: { display: "block", marginTop: "2px" } },
+          `${account.username} · ${account.note}`,
+        ),
       ),
       icon("chevron", 16, "muted"),
     ),

@@ -44,6 +44,10 @@ class Settings(BaseSettings):
     STEAM_API_KEY: str = ""
     STEAM_API_BASE: str = "https://api.steampowered.com"
     STEAM_STORE_BASE: str = "https://store.steampowered.com/api"
+    # Reseñas públicas de un juego: no está bajo /api, es un endpoint aparte.
+    STEAM_REVIEWS_BASE: str = "https://store.steampowered.com/appreviews"
+    # Cuántas reseñas reales se traen al importar un juego nuevo.
+    STEAM_REVIEWS_IMPORT_LIMIT: int = 100
 
     # --- Frontend / CORS ---------------------------------------------------
     CORS_ORIGINS: list[str] = [

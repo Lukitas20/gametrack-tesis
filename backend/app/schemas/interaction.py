@@ -53,7 +53,9 @@ class ReviewOut(BaseModel):
 
     id: int
     game_id: int
-    user_id: int
+    user_id: int | None
+    author_name: str | None
+    source: str
     title: str | None
     content: str
     is_recommended: bool | None

@@ -29,6 +29,12 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+import truststore
+
+# Usa el almacén de certificados del sistema operativo para las llamadas a
+# RAWG en lugar del bundle de certifi (ver app/main.py para el detalle).
+truststore.inject_into_ssl()
+
 # Permite ejecutar el script directamente desde backend/ sin instalar el paquete.
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 if str(BACKEND_ROOT) not in sys.path:
@@ -609,6 +615,7 @@ def create_reviews(
     db: Session,
     ratings: list[Rating],
     games_by_id: dict[int, dict[str, Any]],
+    players: list[User],
     rng: random.Random,
 ) -> tuple[list[Review], list[dict[str, Any]]]:
     """Crea reseñas para una parte de los ratings, sin analizar todavía."""
@@ -630,6 +637,8 @@ def create_reviews(
         for rating in remaining[: MIN_REVIEWS_PER_GAME - current]:
             selected.append(rating)
             chosen_ids.add(id(rating))
+
+    usernames_by_id = {player.id: player.username for player in players}
 
     reviews: list[Review] = []
     pending_truth: list[
@@ -659,6 +668,7 @@ def create_reviews(
             helpful_count=rng.randint(0, 180),
             is_analyzed=False,
             created_at=created_at,
+            author_name=usernames_by_id.get(rating.user_id),
         )
         reviews.append(review)
         pending_truth.append((review, labels, rating.score, text_sentiment))
@@ -876,7 +886,7 @@ def main() -> int:
         ratings = create_ratings(db, profiles, games, rng)
 
         print("Generando reseñas en español...")
-        reviews, ground_truth = create_reviews(db, ratings, games_by_id, rng)
+        reviews, ground_truth = create_reviews(db, ratings, games_by_id, players, rng)
 
         print("Armando listas...")
         lists = create_lists(db, profiles, games, rng)

@@ -10,19 +10,19 @@ export const DEMO_ACCOUNTS = [
     username: "jugador.demo",
     label: "Cuenta Demo Jugador",
     role: "jugador",
-    note: "Historial de 26 juegos valorados. Recibe recomendaciones híbridas.",
+    note: "Sin valoraciones: arranque en frío real. Valorá juegos para ver cómo cambian las recomendaciones.",
   },
   {
-    username: "nuevo.demo",
-    label: "Usuario Recién Registrado",
+    username: "tester.demo",
+    label: "Cuenta de Testing",
     role: "jugador",
-    note: "Sin ninguna valoración. Demuestra el arranque en frío.",
+    note: "Géneros elegidos y 10 juegos ya valorados: recomendaciones de contenido/híbridas desde el primer login.",
   },
   {
     username: "dev.demo",
     label: "Cuenta Demo Desarrollador",
     role: "desarrollador",
-    note: "Panel de analítica del estudio CD Projekt Red.",
+    note: "Panel de analítica del estudio con más juegos importados de Steam.",
   },
 ];
 

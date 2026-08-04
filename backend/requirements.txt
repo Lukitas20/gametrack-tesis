@@ -22,7 +22,18 @@ scikit-learn==1.9.0
 numpy==2.5.1
 scipy==1.18.0
 pandas==3.0.5
+# Embeddings semánticos para la similitud de contenido del recomendador
+# (ver app/ml/recommender.py): capturan significado más allá de la
+# coincidencia literal de palabras que daba TF-IDF.
+sentence-transformers==5.1.2
 
 # --- Integraciones y tests ---
 httpx==0.28.1
 pytest==9.1.1
+
+# --- TLS ---
+# Usa el almacén de certificados del sistema operativo en vez del bundle de
+# certifi: en Windows con inspección TLS corporativa (antivirus, proxy) el
+# bundle de certifi no incluye la CA local y httpx falla con
+# CERTIFICATE_VERIFY_FAILED aunque el resto del sistema confíe en la conexión.
+truststore==0.10.4

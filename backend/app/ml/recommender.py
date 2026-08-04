@@ -2,10 +2,10 @@
 
 Combina tres estrategias complementarias:
 
-- **Basada en contenido** — TF-IDF sobre géneros, etiquetas, desarrollador y
-  descripción de cada juego, con similitud coseno. Funciona desde la primera
-  valoración y explica bien sus resultados, pero encierra al usuario en lo
-  que ya conoce.
+- **Basada en contenido** — embeddings semánticos (modelo preentrenado
+  multilingüe) sobre géneros, etiquetas, desarrollador y descripción de cada
+  juego, con similitud coseno. Funciona desde la primera valoración y explica
+  bien sus resultados, pero encierra al usuario en lo que ya conoce.
 - **Colaborativa** — filtrado ítem-ítem sobre la matriz usuario-ítem centrada
   por usuario. Descubre afinidades que el contenido no captura, pero necesita
   historial. Se eligió ítem-ítem sobre usuario-usuario porque las similitudes
@@ -22,21 +22,32 @@ from __future__ import annotations
 
 import threading
 from dataclasses import dataclass, field
+from functools import lru_cache
 
 import numpy as np
-from sklearn.feature_extraction.text import TfidfVectorizer
+from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.ml.lexicon import SPANISH_STOPWORDS
 from app.models import Game, Rating, RecommendationSource, User
 
 # Vecinos considerados al predecir con filtrado colaborativo.
 NEIGHBOURS = 20
-# Peso mínimo de evidencia para la media bayesiana de popularidad.
-POPULARITY_PRIOR = 8.0
+# Castigo por incertidumbre en la popularidad: se resta UNCERTAINTY_WEIGHT /
+# sqrt(evidencia). Con dos reseñas cae ~0,7 puntos; con cien, ~0,1.
+UNCERTAINTY_WEIGHT = 1.0
+# Modelo de embeddings para la similitud de contenido: multilingüe (cubre el
+# catálogo en español) y liviano, apto para correr en CPU sin GPU.
+CONTENT_MODEL_NAME = "paraphrase-multilingual-MiniLM-L12-v2"
+
+
+@lru_cache(maxsize=1)
+def _content_model() -> SentenceTransformer:
+    """Carga el modelo una sola vez por proceso: instanciarlo es lo costoso,
+    no codificar texto con él."""
+    return SentenceTransformer(CONTENT_MODEL_NAME)
 
 
 @dataclass(frozen=True)
@@ -85,14 +96,14 @@ class RecommenderEngine:
 
     def _build_content_model(self, games: list[Game]) -> None:
         corpus = [game.content_soup for game in games]
-        self._vectorizer = TfidfVectorizer(
-            stop_words=SPANISH_STOPWORDS,
-            ngram_range=(1, 2),
-            sublinear_tf=True,
-            min_df=1,
+        model = _content_model()
+        embeddings = (
+            model.encode(corpus, normalize_embeddings=True, show_progress_bar=False)
+            if corpus
+            else np.zeros((0, model.get_sentence_embedding_dimension()))
         )
-        self._tfidf = self._vectorizer.fit_transform(corpus)
-        self.content_similarity = cosine_similarity(self._tfidf)
+        self._embeddings = np.asarray(embeddings)
+        self.content_similarity = cosine_similarity(self._embeddings)
         np.fill_diagonal(self.content_similarity, 0.0)
 
     # -- Colaborativo ------------------------------------------------------
@@ -142,11 +153,16 @@ class RecommenderEngine:
         rated = counts > 0
         global_mean = float(averages[rated].mean()) if rated.any() else 3.0
 
-        # Media bayesiana: un juego con dos notas de 5 no debe superar a uno
-        # con doscientas notas de 4,6.
-        self.popularity = (counts * averages + POPULARITY_PRIOR * global_mean) / (
-            counts + POPULARITY_PRIOR
-        )
+        # Un juego con dos notas de 5 no debe superar a uno con doscientas
+        # notas de 4,6. Achicar hacia la media global (media bayesiana) no
+        # alcanza acá: buena parte de la evidencia real viene de reseñas de
+        # Steam agregadas como "recomendado/no recomendado", que se agrupan
+        # cerca del techo (la media global termina siendo ~4,9), así que
+        # "achicar hacia la media" apenas mueve a un juego con pocas reseñas
+        # perfectas. En cambio, castigar directamente por incertidumbre
+        # (1/sqrt(evidencia)) sí discrimina: cae fuerte con poca evidencia y
+        # cada vez menos a medida que se acumulan reseñas reales.
+        self.popularity = averages - UNCERTAINTY_WEIGHT / np.sqrt(np.maximum(counts, 1.0))
         self.global_mean = global_mean
 
     # -- Consultas ---------------------------------------------------------
@@ -187,12 +203,11 @@ class RecommenderEngine:
             liked = list(rated)
 
         weights = np.array([self.matrix[row, i] for i in liked], dtype=float)
-        profile = (self._tfidf[liked].multiply(weights[:, np.newaxis])).sum(axis=0)
-        profile = np.asarray(profile)
+        profile = (self._embeddings[liked] * weights[:, np.newaxis]).sum(axis=0)
         norm = np.linalg.norm(profile)
         if norm < 1e-9:
             return None
-        return cosine_similarity(profile / norm, self._tfidf).ravel()
+        return cosine_similarity((profile / norm).reshape(1, -1), self._embeddings).ravel()
 
     def _content_scores_from_preferences(self, genre_slugs: list[str]) -> np.ndarray | None:
         """Perfil de contenido a partir de los géneros elegidos en el onboarding.
@@ -203,10 +218,10 @@ class RecommenderEngine:
         if not genre_slugs:
             return None
         pseudo_document = " ".join(slug for slug in genre_slugs for _ in range(3))
-        vector = self._vectorizer.transform([pseudo_document])
-        if vector.nnz == 0:
-            return None
-        return cosine_similarity(vector, self._tfidf).ravel()
+        vector = _content_model().encode(
+            [pseudo_document], normalize_embeddings=True, show_progress_bar=False
+        )
+        return cosine_similarity(vector, self._embeddings).ravel()
 
     def _collaborative_scores(self, user_id: int) -> np.ndarray | None:
         """Predice la nota de cada juego con filtrado colaborativo ítem-ítem."""

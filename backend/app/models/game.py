@@ -113,6 +113,11 @@ class Game(Base):
     avg_rating: Mapped[float] = mapped_column(Float, default=0.0, index=True)
     ratings_count: Mapped[int] = mapped_column(Integer, default=0, index=True)
     reviews_count: Mapped[int] = mapped_column(Integer, default=0)
+    # avg_rating penalizado por incertidumbre (avg - 1/sqrt(evidencia)): lo
+    # que se ordena como "mejor valorados", para que dos reseñas de 5
+    # estrellas no le ganen a cien reseñas de 4,8. avg_rating se deja intacto
+    # porque es lo que se muestra en la ficha ("4,8 ★"), no lo que se ordena.
+    popularity_score: Mapped[float] = mapped_column(Float, default=0.0, index=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

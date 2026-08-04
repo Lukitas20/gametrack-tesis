@@ -140,11 +140,11 @@ function accountMenu() {
         h(
           "span",
           { style: { flex: "1", minWidth: "0" } },
-          h("span", { style: { display: "block", fontWeight: "600" } }, account.username),
+          h("span", { style: { display: "block", fontWeight: "600" } }, account.label),
           h(
             "span",
             { class: "account-note", style: { display: "block" } },
-            account.role === "desarrollador" ? "Desarrollador" : "Jugador",
+            account.username,
           ),
         ),
         state.user?.username === account.username ? icon("check", 14) : null,

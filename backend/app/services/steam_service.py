@@ -13,6 +13,7 @@ eventos. Siendo sincrónico, FastAPI lo ejecuta en su pool de hilos.
 from __future__ import annotations
 
 import re
+import time
 import unicodedata
 from datetime import date, datetime
 
@@ -21,9 +22,26 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.models import Game, Genre, Tag, User
+from app.ml.analytics import analyze_review, apply_analysis
+from app.models import Game, Genre, Review, Tag, User
+from app.services.interaction_service import recompute_game_aggregates
 
 TIMEOUT = 15.0
+
+# Un cliente HTTP compartido en vez de `httpx.get()` suelto en cada función:
+# cada llamada suelta crea (y en teoría cierra) su propio contexto TLS, pero
+# en Windows con `truststore` cada uno abre handles al almacén de certificados
+# del sistema que no se liberan al ritmo en que se piden; en una importación
+# masiva (cientos de juegos, varios pedidos cada uno) eso agota los file
+# descriptors del proceso. Un cliente único crea ese contexto una sola vez.
+_client: httpx.Client | None = None
+
+
+def _http_client() -> httpx.Client:
+    global _client
+    if _client is None:
+        _client = httpx.Client(timeout=TIMEOUT)
+    return _client
 
 # Steam devuelve los géneros en inglés; el catálogo los maneja en español.
 # Lo que no esté acá se incorpora con su nombre original.
@@ -53,6 +71,23 @@ def slugify(text: str) -> str:
     return slug or "juego"
 
 
+def _dedupe_names(names: list[str]) -> list[str]:
+    """Algunas fichas de Steam repiten la misma categoría o género dos veces.
+
+    Sin esto, `_get_or_create` devuelve el mismo `Genre`/`Tag` para ambas
+    repeticiones y la lista queda con el objeto duplicado, lo que rompe la
+    unicidad de `game_genres`/`game_tags` al guardar.
+    """
+    seen: set[str] = set()
+    result: list[str] = []
+    for name in names:
+        key = slugify(name)
+        if key and key not in seen:
+            seen.add(key)
+            result.append(name)
+    return result
+
+
 def _parse_release_date(raw: str) -> date | None:
     """Steam no tiene un formato único de fecha; se prueban los habituales."""
     raw = (raw or "").strip()
@@ -74,10 +109,9 @@ def _parse_release_date(raw: str) -> date | None:
 def get_app_details(steam_app_id: int) -> dict | None:
     """Ficha de un juego en la tienda de Steam. ``None`` si no existe."""
     try:
-        response = httpx.get(
+        response = _http_client().get(
             f"{settings.STEAM_STORE_BASE}/appdetails",
             params={"appids": steam_app_id, "l": "spanish"},
-            timeout=TIMEOUT,
         )
     except httpx.HTTPError:
         return None
@@ -91,12 +125,101 @@ def get_app_details(steam_app_id: int) -> dict | None:
     return payload.get("data")
 
 
+_SEARCH_APPID_RE = re.compile(r'data-ds-appid="(\d+)"')
+
+
+def _featured_appids() -> list[int]:
+    """Los títulos más reconocibles: destacados y en oferta de la tienda.
+
+    Se excluye a propósito "new_releases": es donde entra la mayor parte del
+    shovelware (cualquiera puede publicar ahí), y ensucia más de lo que suma.
+    """
+    try:
+        response = _http_client().get(
+            f"{settings.STEAM_STORE_BASE}/featuredcategories",
+            params={"l": "spanish"},
+        )
+    except httpx.HTTPError:
+        return []
+    if response.status_code != 200:
+        return []
+    payload = response.json()
+
+    appids: list[int] = []
+    seen: set[int] = set()
+    for key in ("top_sellers", "specials"):
+        for item in (payload.get(key) or {}).get("items", []):
+            appid = item.get("id")
+            if appid and appid not in seen:
+                seen.add(appid)
+                appids.append(appid)
+    return appids
+
+
+def _search_appids_page(start: int, count: int) -> list[int]:
+    """Una página del buscador de la tienda, ordenada por cantidad de reseñas.
+
+    No hay un endpoint oficial documentado para "listar juegos por calidad",
+    así que se usa el mismo buscador que la tienda expone al público
+    (``category1=998`` filtra a juegos, sin DLC ni software). Ordenar por
+    reseñas filtra shovelware de forma natural: un asset-flip casi nunca
+    acumula reseñas.
+    """
+    try:
+        response = _http_client().get(
+            "https://store.steampowered.com/search/results/",
+            params={
+                "query": "",
+                "start": start,
+                "count": count,
+                "sort_by": "Reviews_DESC",
+                "category1": 998,
+                "supportedlang": "spanish",
+                "ndl": 1,
+            },
+            headers={"User-Agent": "Mozilla/5.0"},
+        )
+    except httpx.HTTPError:
+        return []
+    if response.status_code != 200:
+        return []
+    return [int(match) for match in _SEARCH_APPID_RE.findall(response.text)]
+
+
+def get_top_seller_appids(limit: int = 100, delay: float = 1.0) -> list[int]:
+    """AppIDs de juegos reales, del más al menos relevante.
+
+    Steam no tiene un endpoint público de "todos los juegos" con metadata
+    útil (``GetAppList`` da cientos de miles de entradas, incluye software y
+    bandas sonoras). Arranca con los destacados de la tienda —los títulos más
+    reconocibles— y completa con el buscador ordenado por reseñas cuando se
+    pide más volumen del que traen esas categorías (unos 40-50 juegos).
+    """
+    appids = _featured_appids()
+    seen = set(appids)
+
+    start = 0
+    page_size = 100
+    while len(appids) < limit:
+        batch = _search_appids_page(start, page_size)
+        if not batch:
+            break
+        for appid in batch:
+            if appid not in seen:
+                seen.add(appid)
+                appids.append(appid)
+        start += page_size
+        if len(appids) < limit:
+            time.sleep(delay)
+    return appids[:limit]
+
+
 def get_owned_games(steam_id: str) -> list[dict]:
     """Biblioteca de un usuario. Lista vacía si no hay clave o falla."""
     if not settings.STEAM_API_KEY:
         return []
     try:
-        response = httpx.get(
+        response = _http_client().get(
             f"{settings.STEAM_API_BASE}/IPlayerService/GetOwnedGames/v1/",
             params={
                 "key": settings.STEAM_API_KEY,
@@ -104,7 +227,6 @@ def get_owned_games(steam_id: str) -> list[dict]:
                 "include_appinfo": True,
                 "include_played_free_games": True,
             },
-            timeout=TIMEOUT,
         )
     except httpx.HTTPError:
         return []
@@ -114,15 +236,63 @@ def get_owned_games(steam_id: str) -> list[dict]:
     return response.json().get("response", {}).get("games", [])
 
 
+def get_app_reviews(
+    steam_app_id: int, num: int | None = None, language: str = "spanish"
+) -> list[dict]:
+    """Reseñas públicas reales de un juego. No requiere clave.
+
+    Se filtra por idioma porque el módulo NLP está construido sobre un
+    léxico en español (ver ``app/ml/lexicon.py``).
+    """
+    limit = num or settings.STEAM_REVIEWS_IMPORT_LIMIT
+    try:
+        response = _http_client().get(
+            f"{settings.STEAM_REVIEWS_BASE}/{steam_app_id}",
+            params={
+                "json": 1,
+                "filter": "recent",
+                "language": language,
+                "num_per_page": min(limit, 100),
+                "purchase_type": "all",
+            },
+        )
+    except httpx.HTTPError:
+        return []
+
+    if response.status_code != 200:
+        return []
+    payload = response.json()
+    if payload.get("success") != 1:
+        return []
+    return payload.get("reviews", [])
+
+
+def get_player_summaries_batch(steam_ids: list[str]) -> dict[str, dict]:
+    """Perfiles públicos de varias cuentas en un único pedido (máx. 100)."""
+    if not settings.STEAM_API_KEY or not steam_ids:
+        return {}
+    try:
+        response = _http_client().get(
+            f"{settings.STEAM_API_BASE}/ISteamUser/GetPlayerSummaries/v2/",
+            params={"key": settings.STEAM_API_KEY, "steamids": ",".join(steam_ids[:100])},
+        )
+    except httpx.HTTPError:
+        return {}
+
+    if response.status_code != 200:
+        return {}
+    players = response.json().get("response", {}).get("players", [])
+    return {player["steamid"]: player for player in players if player.get("steamid")}
+
+
 def get_player_summary(steam_id: str) -> dict | None:
     """Perfil público de un usuario, para completar nombre y avatar."""
     if not settings.STEAM_API_KEY:
         return None
     try:
-        response = httpx.get(
+        response = _http_client().get(
             f"{settings.STEAM_API_BASE}/ISteamUser/GetPlayerSummaries/v2/",
             params={"key": settings.STEAM_API_KEY, "steamids": steam_id},
-            timeout=TIMEOUT,
         )
     except httpx.HTTPError:
         return None
@@ -177,8 +347,8 @@ def parse_steam_game(data: dict) -> dict:
         "platforms": platforms,
         "background_image": data.get("header_image") or None,
         "metacritic": (data.get("metacritic") or {}).get("score"),
-        "genres": genres,
-        "tags": tags[:8],
+        "genres": _dedupe_names(genres),
+        "tags": _dedupe_names(tags)[:8],
     }
 
 
@@ -198,18 +368,71 @@ def get_game_by_steam_app_id(db: Session, steam_app_id: int) -> Game | None:
     return db.scalar(select(Game).where(Game.steam_app_id == steam_app_id))
 
 
+def import_reviews(db: Session, game: Game, steam_app_id: int) -> int:
+    """Trae reseñas reales de Steam para un juego recién importado y las
+    analiza con el mismo módulo NLP que las reseñas escritas en GameTrack.
+
+    No pertenecen a ningún usuario de la plataforma (``user_id`` nulo); se
+    identifican por el nombre de perfil de Steam del autor, resuelto en un
+    único pedido en lote para no hacer una llamada por reseña.
+    """
+    raw_reviews = get_app_reviews(steam_app_id)
+    if not raw_reviews:
+        return 0
+
+    steam_ids = [
+        author_id
+        for entry in raw_reviews
+        if (author_id := (entry.get("author") or {}).get("steamid"))
+    ]
+    profiles = get_player_summaries_batch(steam_ids)
+
+    created = 0
+    for entry in raw_reviews:
+        text = (entry.get("review") or "").strip()
+        if len(text) < 10:
+            continue
+
+        author = entry.get("author") or {}
+        profile = profiles.get(author.get("steamid"), {})
+        playtime_minutes = author.get("playtime_at_review") or 0
+
+        review = Review(
+            user_id=None,
+            game_id=game.id,
+            content=text[:8000],
+            language="es",
+            is_recommended=entry.get("voted_up"),
+            hours_at_review=round(playtime_minutes / 60, 1),
+            helpful_count=entry.get("votes_up") or 0,
+            source="steam",
+            author_name=profile.get("personaname") or "Jugador de Steam",
+        )
+        db.add(review)
+        apply_analysis(db, review, analyze_review(review))
+        created += 1
+
+    if created:
+        db.flush()
+        recompute_game_aggregates(db, game.id)
+        db.commit()
+    return created
+
+
 def import_game(db: Session, steam_app_id: int) -> Game | None:
-    """Importa un juego de Steam al catálogo.
+    """Importa un juego de Steam al catálogo, con sus reseñas reales.
 
     Si ya estaba importado lo devuelve sin volver a pedirlo. Devuelve ``None``
-    cuando Steam no reconoce el AppID.
+    cuando Steam no reconoce el AppID o el AppID no corresponde a un juego
+    (DLC, banda sonora, demo, hardware): la tienda los mezcla con juegos en
+    listados como "más vendidos".
     """
     existing = get_game_by_steam_app_id(db, steam_app_id)
     if existing:
         return existing
 
     data = get_app_details(steam_app_id)
-    if not data:
+    if not data or data.get("type") != "game":
         return None
 
     parsed = parse_steam_game(data)
@@ -231,6 +454,8 @@ def import_game(db: Session, steam_app_id: int) -> Game | None:
 
     db.commit()
     db.refresh(game)
+
+    import_reviews(db, game, steam_app_id)
     return game
 
 
