@@ -30,14 +30,14 @@ from app.ml.recommender import get_engine
 async def lifespan(app: FastAPI):
     # El prototipo crea el esquema al arrancar en lugar de usar migraciones.
     init_db()
-    # Precalienta el motor de recomendación: calcular los embeddings del
-    # catálogo tarda (segundos a minutos según su tamaño). Mejor pagar ese
+    # Precalienta el motor de recomendación: entrenar el TF-IDF y las
+    # matrices de similitud del catálogo crece con su tamaño. Mejor pagar ese
     # costo acá, una vez al arrancar, que en el primer pedido de un usuario
-    # real, que se quedaría mirando el spinner de "Calculando..." todo ese
-    # tiempo. Se salta bajo pytest: ahí `TestClient(app)` dispara este mismo
-    # arranque una vez por test, y pagar el costo real de encodear cada vez
-    # dejaría la suite completa arrastrándose sin necesidad — los tests no
-    # dependen de que el motor venga precalentado.
+    # real, que se quedaría mirando el spinner de "Calculando..." mientras
+    # tanto. Se salta bajo pytest: ahí `TestClient(app)` dispara este mismo
+    # arranque una vez por test, y reentrenar en cada uno dejaría la suite
+    # completa arrastrándose sin necesidad — los tests no dependen de que el
+    # motor venga precalentado.
     if "pytest" in sys.modules:
         yield
         return

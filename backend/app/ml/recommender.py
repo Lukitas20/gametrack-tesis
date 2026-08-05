@@ -2,10 +2,10 @@
 
 Combina tres estrategias complementarias:
 
-- **Basada en contenido** — embeddings semánticos (modelo preentrenado
-  multilingüe) sobre géneros, etiquetas, desarrollador y descripción de cada
-  juego, con similitud coseno. Funciona desde la primera valoración y explica
-  bien sus resultados, pero encierra al usuario en lo que ya conoce.
+- **Basada en contenido** — TF-IDF sobre géneros, etiquetas, desarrollador y
+  descripción de cada juego, con similitud coseno. Funciona desde la primera
+  valoración y explica bien sus resultados, pero encierra al usuario en lo
+  que ya conoce.
 - **Colaborativa** — filtrado ítem-ítem sobre la matriz usuario-ítem centrada
   por usuario. Descubre afinidades que el contenido no captura, pero necesita
   historial. Se eligió ítem-ítem sobre usuario-usuario porque las similitudes
@@ -22,15 +22,15 @@ from __future__ import annotations
 
 import threading
 from dataclasses import dataclass, field
-from functools import lru_cache
 
 import numpy as np
-from sentence_transformers import SentenceTransformer
+from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.ml.lexicon import SPANISH_STOPWORDS
 from app.models import Game, Rating, RecommendationSource, User
 
 # Vecinos considerados al predecir con filtrado colaborativo.
@@ -38,16 +38,6 @@ NEIGHBOURS = 20
 # Castigo por incertidumbre en la popularidad: se resta UNCERTAINTY_WEIGHT /
 # sqrt(evidencia). Con dos reseñas cae ~0,7 puntos; con cien, ~0,1.
 UNCERTAINTY_WEIGHT = 1.0
-# Modelo de embeddings para la similitud de contenido: multilingüe (cubre el
-# catálogo en español) y liviano, apto para correr en CPU sin GPU.
-CONTENT_MODEL_NAME = "paraphrase-multilingual-MiniLM-L12-v2"
-
-
-@lru_cache(maxsize=1)
-def _content_model() -> SentenceTransformer:
-    """Carga el modelo una sola vez por proceso: instanciarlo es lo costoso,
-    no codificar texto con él."""
-    return SentenceTransformer(CONTENT_MODEL_NAME)
 
 
 @dataclass(frozen=True)
@@ -96,14 +86,14 @@ class RecommenderEngine:
 
     def _build_content_model(self, games: list[Game]) -> None:
         corpus = [game.content_soup for game in games]
-        model = _content_model()
-        embeddings = (
-            model.encode(corpus, normalize_embeddings=True, show_progress_bar=False)
-            if corpus
-            else np.zeros((0, model.get_sentence_embedding_dimension()))
+        self._vectorizer = TfidfVectorizer(
+            stop_words=SPANISH_STOPWORDS,
+            ngram_range=(1, 2),
+            sublinear_tf=True,
+            min_df=1,
         )
-        self._embeddings = np.asarray(embeddings)
-        self.content_similarity = cosine_similarity(self._embeddings)
+        self._tfidf = self._vectorizer.fit_transform(corpus)
+        self.content_similarity = cosine_similarity(self._tfidf)
         np.fill_diagonal(self.content_similarity, 0.0)
 
     # -- Colaborativo ------------------------------------------------------
@@ -203,11 +193,12 @@ class RecommenderEngine:
             liked = list(rated)
 
         weights = np.array([self.matrix[row, i] for i in liked], dtype=float)
-        profile = (self._embeddings[liked] * weights[:, np.newaxis]).sum(axis=0)
+        profile = (self._tfidf[liked].multiply(weights[:, np.newaxis])).sum(axis=0)
+        profile = np.asarray(profile)
         norm = np.linalg.norm(profile)
         if norm < 1e-9:
             return None
-        return cosine_similarity((profile / norm).reshape(1, -1), self._embeddings).ravel()
+        return cosine_similarity(profile / norm, self._tfidf).ravel()
 
     def _content_scores_from_preferences(self, genre_slugs: list[str]) -> np.ndarray | None:
         """Perfil de contenido a partir de los géneros elegidos en el onboarding.
@@ -218,10 +209,10 @@ class RecommenderEngine:
         if not genre_slugs:
             return None
         pseudo_document = " ".join(slug for slug in genre_slugs for _ in range(3))
-        vector = _content_model().encode(
-            [pseudo_document], normalize_embeddings=True, show_progress_bar=False
-        )
-        return cosine_similarity(vector, self._embeddings).ravel()
+        vector = self._vectorizer.transform([pseudo_document])
+        if vector.nnz == 0:
+            return None
+        return cosine_similarity(vector, self._tfidf).ravel()
 
     def _collaborative_scores(self, user_id: int) -> np.ndarray | None:
         """Predice la nota de cada juego con filtrado colaborativo ítem-ítem."""

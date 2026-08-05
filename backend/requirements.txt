@@ -22,10 +22,6 @@ scikit-learn==1.9.0
 numpy==2.5.1
 scipy==1.18.0
 pandas==3.0.5
-# Embeddings semánticos para la similitud de contenido del recomendador
-# (ver app/ml/recommender.py): capturan significado más allá de la
-# coincidencia literal de palabras que daba TF-IDF.
-sentence-transformers==5.1.2
 
 # --- Integraciones y tests ---
 httpx==0.28.1
