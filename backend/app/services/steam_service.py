@@ -215,6 +215,26 @@ def get_top_seller_appids(limit: int = 100, delay: float = 1.0) -> list[int]:
     return appids[:limit]
 
 
+def get_app_list() -> list[dict]:
+    """AppID y nombre de *todo* lo publicado en Steam, sin distinguir tipo.
+
+    A diferencia del resto de esta integración (que descubre juegos de a
+    poco por búsqueda o destacados), ``GetAppList`` sí es el catálogo
+    completo en un único pedido: no hace falta clave ni paginar. La
+    contrapartida es que mezcla juegos con DLC, bandas sonoras, demos y
+    software — no hay forma de filtrar el tipo sin pedir la ficha de cada
+    uno, que es exactamente el trabajo que se difiere a ``refresh_game``
+    (ver ``scripts/import_steam_appindex.py``).
+    """
+    try:
+        response = _http_client().get(f"{settings.STEAM_API_BASE}/ISteamApps/GetAppList/v2/")
+    except httpx.HTTPError:
+        return []
+    if response.status_code != 200:
+        return []
+    return response.json().get("applist", {}).get("apps", [])
+
+
 def get_owned_games(steam_id: str) -> list[dict]:
     """Biblioteca de un usuario. Lista vacía si no hay clave o falla."""
     if not settings.STEAM_API_KEY:
@@ -484,18 +504,29 @@ def import_game(db: Session, steam_app_id: int) -> Game | None:
 
 
 def refresh_game(db: Session, game: Game) -> bool:
-    """Vuelve a pedir la ficha de Steam de un juego ya importado y trae las
-    reseñas nuevas que haya desde la última vez.
+    """Vuelve a pedir la ficha de Steam de un juego ya importado (o de una
+    ficha pendiente sin enriquecer todavía) y trae las reseñas nuevas que
+    haya desde la última vez.
 
     A diferencia de ``import_game``, esto sí puede repetirse: actualiza la
     ficha existente en lugar de crear una, y ``import_reviews`` ya se ocupa
     de no duplicar reseñas. Se usa desde ``maybe_refresh`` para mantener el
     catálogo al día sin depender de un proceso aparte sondeando Steam.
+
+    Devuelve ``False`` si el juego dejó de existir: una ficha pendiente
+    (``get_app_list`` mezcla DLC, bandas sonoras y software con juegos, ver
+    ``get_app_list``) que al pedir su detalle resulta no ser un juego se
+    borra en vez de quedar eternamente pendiente. Un juego que ya estaba
+    enriquecido nunca se borra por esto — sólo se deja de actualizar — para
+    no tirar evidencia real (reseñas, valoraciones) por una falla puntual de
+    Steam.
     """
     if game.steam_app_id is None:
-        return False
+        return True
 
+    was_pending = not game.is_enriched
     data = get_app_details(game.steam_app_id)
+
     if data and data.get("type") == "game":
         parsed = parse_steam_game(data)
         genres = parsed.pop("genres", [])
@@ -509,6 +540,11 @@ def refresh_game(db: Session, game: Game) -> bool:
             setattr(game, field, value)
         game.genres = [_get_or_create(db, Genre, name) for name in genres]
         game.tags = [_get_or_create(db, Tag, name) for name in tags]
+    elif was_pending:
+        db.delete(game)
+        db.commit()
+        invalidate_engine()
+        return False
 
     import_reviews(db, game, game.steam_app_id)
 
@@ -521,9 +557,10 @@ def refresh_game(db: Session, game: Game) -> bool:
     return True
 
 
-def maybe_refresh(db: Session, game: Game) -> None:
-    """Refresca un juego de Steam sólo si hace más de ``STEAM_SYNC_TTL_MINUTES``
-    que no se sincroniza, en vez de en cada pedido.
+def maybe_refresh(db: Session, game: Game) -> bool:
+    """Refresca un juego de Steam si hace más de ``STEAM_SYNC_TTL_MINUTES``
+    que no se sincroniza, o si es una ficha pendiente que todavía no se
+    enriqueció ni una vez (no espera al TTL en ese caso).
 
     Esto es lo que hace que el catálogo se sienta "en tiempo real" sin pagar
     el costo de golpear la API de Steam en cada vista de cada juego: como
@@ -531,9 +568,12 @@ def maybe_refresh(db: Session, game: Game) -> None:
     efectivamente está mirando (no hay un barrido de fondo sobre todo el
     catálogo). Si Steam no responde, el juego sigue sirviéndose con los
     datos que ya tenía en vez de romper el pedido.
+
+    Devuelve ``False`` si el juego se borró durante el refresco (ver
+    ``refresh_game``) — quien llama debe tratarlo como si ya no existiera.
     """
     if game.steam_app_id is None:
-        return
+        return True
 
     ttl = timedelta(minutes=settings.STEAM_SYNC_TTL_MINUTES)
     if game.steam_synced_at is not None:
@@ -541,10 +581,10 @@ def maybe_refresh(db: Session, game: Game) -> None:
         if last_sync.tzinfo is None:
             last_sync = last_sync.replace(tzinfo=timezone.utc)
         if datetime.now(timezone.utc) - last_sync < ttl:
-            return
+            return True
 
     try:
-        refresh_game(db, game)
+        return refresh_game(db, game)
     except Exception:
         # El refresco es una mejora sobre la respuesta, no la respuesta en sí:
         # si Steam devuelve algo inesperado (o no responde), la página se
@@ -552,6 +592,7 @@ def maybe_refresh(db: Session, game: Game) -> None:
         # sesión al terminar el request, lo que descarta cualquier cambio a
         # medio aplicar que no haya llegado a `commit()`.
         db.rollback()
+        return True
 
 
 def link_steam_account(

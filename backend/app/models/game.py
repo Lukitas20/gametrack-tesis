@@ -145,6 +145,17 @@ class Game(Base):
     )
 
     @property
+    def is_enriched(self) -> bool:
+        """``False`` sólo para una "ficha pendiente" de Steam: un juego que
+        entró al catálogo por su índice completo de AppIDs (ver
+        ``steam_service.get_app_list``) pero todavía no tiene géneros,
+        descripción ni reseñas. Se completa sola la primera vez que alguien
+        la abre (``steam_service.maybe_refresh``). Los juegos que no vienen
+        de Steam (dataset curado, RAWG) siempre están enriquecidos.
+        """
+        return self.steam_app_id is None or self.steam_synced_at is not None
+
+    @property
     def content_soup(self) -> str:
         """Texto plano que consume el vectorizador TF-IDF.
 

@@ -66,9 +66,12 @@ def _require_game(db: Session, game_id: int) -> Game:
     game = get_game(db, game_id)
     if game is None:
         raise HTTPException(status_code=404, detail="El juego no existe")
-    # Si viene de Steam y hace rato que no se sincroniza, se refresca acá:
-    # es el punto por el que pasan la ficha, los similares y las reseñas.
-    steam_service.maybe_refresh(db, game)
+    # Si viene de Steam y hace rato que no se sincroniza (o es una ficha
+    # pendiente que nunca se enriqueció), se refresca acá: es el punto por
+    # el que pasan la ficha, los similares y las reseñas. Si resultó no ser
+    # un juego de verdad (DLC, banda sonora), maybe_refresh ya lo borró.
+    if not steam_service.maybe_refresh(db, game):
+        raise HTTPException(status_code=404, detail="El juego no existe")
     return game
 
 

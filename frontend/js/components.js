@@ -86,6 +86,13 @@ export function gameCard(game, { rank = null, reason = null, source = null } = {
             game.genres.slice(0, 2).map((genre) => h("span", { class: "chip" }, genre.name)),
           )
         : null,
+      game.is_enriched === false
+        ? h(
+            "span",
+            { class: "chip", title: "Todavía no se completó desde Steam" },
+            "Ficha pendiente",
+          )
+        : null,
     ),
     reason &&
       h(

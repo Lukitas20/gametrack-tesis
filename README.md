@@ -107,12 +107,15 @@ gametrack/
 │   │       └── lexicon.py       # Recursos lingüísticos en español
 │   ├── data/
 │   │   ├── games_seed.json      # Catálogo curado de 45 juegos reales
+│   │   ├── steam_catalog.json   # Snapshot compartido de Steam (ficha + reseñas)
 │   │   └── generated/           # Salidas del seed (ignorado por git)
 │   ├── scripts/
-│   │   ├── seed_data.py         # Generador del dataset de demostración
-│   │   ├── review_corpus.py     # Frases en español para las reseñas
-│   │   ├── analyze_reviews.py   # Corre y evalúa el módulo NLP
-│   │   └── validate_palette.py  # Valida la paleta de los gráficos
+│   │   ├── seed_data.py             # Generador del dataset de demostración
+│   │   ├── seed_from_steam.py       # Catálogo real de Steam (ficha + reseñas)
+│   │   ├── import_steam_appindex.py # Índice completo de Steam (fichas pendientes)
+│   │   ├── review_corpus.py         # Frases en español para las reseñas
+│   │   ├── analyze_reviews.py       # Corre y evalúa el módulo NLP
+│   │   └── validate_palette.py      # Valida la paleta de los gráficos
 │   └── tests/
 └── frontend/
     ├── index.html
@@ -436,6 +439,35 @@ Steam no responde, la página se sirve igual con los datos que ya había.
 No hay un proceso aparte sondeando todo el catálogo: el refresco es perezoso
 y sólo alcanza a los juegos que alguien efectivamente está mirando.
 
+### Índice completo de Steam
+
+Importar juegos de a uno (o incluso el catálogo amplio de abajo) sigue
+siendo un subconjunto de Steam. `scripts/import_steam_appindex.py` cubre el
+resto: que el catálogo y el buscador tengan **todos** los juegos de Steam
+disponibles, no sólo los que alguien importó.
+
+Usa `GetAppList`, el único endpoint de Steam que devuelve el catálogo entero
+(~150-250 mil entradas, mezclado con DLC, bandas sonoras y software: Steam
+no distingue el tipo acá) en un único pedido, sin paginar. Cada entrada se
+guarda como **ficha pendiente**: sólo AppID y nombre, sin géneros,
+descripción ni reseñas (`Game.is_enriched = False`).
+
+```powershell
+python scripts\import_steam_appindex.py               # todo el índice (unos minutos)
+python scripts\import_steam_appindex.py --limit 5000   # para probar rápido
+```
+
+La ficha completa recién se pide la primera vez que alguien abre ese juego
+en la aplicación: mismo mecanismo que la sincronización en tiempo real de
+arriba (`steam_service.maybe_refresh`), que no espera al TTL cuando el
+juego nunca se sincronizó. Si al pedir la ficha resulta que el AppID no era
+en realidad un juego, la ficha pendiente se borra en ese momento en vez de
+quedar esperando para siempre.
+
+Las fichas pendientes aparecen en el catálogo y el buscador (con el chip
+"Ficha pendiente" en el frontend), pero no participan del recomendador:
+sin géneros, etiquetas ni reseñas no hay nada que comparar.
+
 ### Catálogo compartido por el equipo
 
 El listado de "más vendidos" de Steam depende de cuándo se lo pida, y la base
@@ -463,9 +495,10 @@ esperar a Steam. Tanto el pull de Steam como la siembra en la base son
 incrementales: correrlo de nuevo sólo agrega juegos y reseñas nuevas, no
 duplica lo que ya está.
 
-"Todos" los juegos de Steam (cientos de miles, en su mayoría irrelevantes)
-no es un objetivo realista: Steam no expone un endpoint así. El snapshot
-cubre los más vendidos y más reseñados, ajustable con `--count`.
+A diferencia del índice completo de arriba, este snapshot trae la ficha
+**y las reseñas reales** ya resueltas para un conjunto amplio y relevante
+(los más vendidos y más reseñados, ajustable con `--count`), sin depender
+de que alguien los abra primero uno por uno.
 
 ---
 

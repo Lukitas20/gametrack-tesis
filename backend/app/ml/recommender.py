@@ -26,7 +26,7 @@ from dataclasses import dataclass, field
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -71,7 +71,18 @@ class RecommenderEngine:
     """
 
     def __init__(self, db: Session) -> None:
-        games = list(db.scalars(select(Game).order_by(Game.id)))
+        # Las fichas pendientes de Steam (sin enriquecer, ver Game.is_enriched)
+        # sólo tienen AppID y nombre: sin géneros/descripción no aportan nada
+        # al contenido, y sin reseñas tampoco a la popularidad. Se excluyen
+        # del universo del recomendador; siguen apareciendo en el catálogo y
+        # el buscador, sólo no participan hasta que alguien las abre.
+        games = list(
+            db.scalars(
+                select(Game)
+                .where(or_(Game.steam_app_id.is_(None), Game.steam_synced_at.is_not(None)))
+                .order_by(Game.id)
+            )
+        )
         self.game_ids: list[int] = [game.id for game in games]
         self.game_names: dict[int, str] = {game.id: game.name for game in games}
         self._game_index: dict[int, int] = {

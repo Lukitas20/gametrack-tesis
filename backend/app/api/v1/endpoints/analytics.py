@@ -59,8 +59,10 @@ def get_game_analytics(
     if game is None:
         raise HTTPException(status_code=404, detail="El juego no existe")
     # Antes de analizar, trae las reseñas de Steam que hayan aparecido desde
-    # la última sincronización (si hace más de STEAM_SYNC_TTL_MINUTES).
-    steam_service.maybe_refresh(db, game)
+    # la última sincronización (si hace más de STEAM_SYNC_TTL_MINUTES, o si
+    # es una ficha pendiente que todavía no se enriqueció).
+    if not steam_service.maybe_refresh(db, game):
+        raise HTTPException(status_code=404, detail="El juego no existe")
     return game_analytics(db, game)
 
 

@@ -10,6 +10,7 @@ import {
   sentimentChip,
   starRating,
 } from "../components.js";
+import { resolve } from "../router.js";
 import { isDeveloper, isLoggedIn, refreshRatings } from "../store.js";
 import { emptyState, formatYear, h, icon, signed, spinnerBlock, toast } from "../ui.js";
 
@@ -23,6 +24,8 @@ export async function gameView({ params }) {
   } catch (error) {
     return h("div", null, emptyState("No encontramos el juego", error.message));
   }
+
+  if (!game.is_enriched) return pendingGameView(game);
 
   const [similar, reviews] = await Promise.all([
     api.similar(id, 6).catch(() => []),
@@ -198,6 +201,53 @@ export async function gameView({ params }) {
   );
 
   return container;
+}
+
+/**
+ * Ficha pendiente: un juego que entró al catálogo por el índice completo de
+ * Steam (`scripts/import_steam_appindex.py`) pero todavía no se pudo
+ * enriquecer. El backend ya intentó completarla al abrir esta página (ver
+ * `steam_service.maybe_refresh`) — si seguimos acá es porque Steam no
+ * respondió a tiempo, no porque falte hacer algo más.
+ */
+function pendingGameView(game) {
+  const steamUrl = game.steam_app_id
+    ? `https://store.steampowered.com/app/${game.steam_app_id}`
+    : null;
+
+  return h(
+    "div",
+    { class: "card", style: { textAlign: "center", padding: "var(--s-6)" } },
+    h("div", { style: { width: "96px", margin: "0 auto var(--s-4)" } }, cover(game)),
+    h("h1", { style: { marginBottom: "var(--s-2)" } }, game.name),
+    h(
+      "p",
+      {
+        class: "muted",
+        style: { maxWidth: "440px", margin: "0 auto var(--s-4)" },
+      },
+      "Todavía no pudimos traer la ficha completa de este juego desde Steam " +
+        "(géneros, descripción, reseñas). Puede ser una demora puntual, o que " +
+        "este AppID no sea en realidad un juego — Steam mezcla DLC, bandas " +
+        "sonoras y software en su índice.",
+    ),
+    h(
+      "div",
+      { class: "row", style: { justifyContent: "center", gap: "var(--s-3)" } },
+      h(
+        "button",
+        { class: "btn btn-primary", onClick: () => resolve() },
+        icon("refresh", 15),
+        "Reintentar",
+      ),
+      steamUrl &&
+        h(
+          "a",
+          { class: "btn", href: steamUrl, target: "_blank", rel: "noopener" },
+          "Ver en Steam",
+        ),
+    ),
+  );
 }
 
 /* ------------------------------------------------------------------ *
