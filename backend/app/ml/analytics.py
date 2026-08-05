@@ -562,7 +562,7 @@ def studio_analytics(db: Session, studio: str) -> dict:
     distribution = _distribution([(s, c) for s, c in sentiment_rows if s is not None])
 
     per_game = []
-    for game in sorted(games, key=lambda g: g.avg_rating, reverse=True):
+    for game in sorted(games, key=lambda g: g.popularity_score, reverse=True):
         game_distribution = _distribution(
             [
                 (s, c)
