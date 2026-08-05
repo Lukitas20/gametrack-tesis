@@ -119,6 +119,11 @@ class Game(Base):
     # porque es lo que se muestra en la ficha ("4,8 ★"), no lo que se ordena.
     popularity_score: Mapped[float] = mapped_column(Float, default=0.0, index=True)
 
+    # Última vez que se refrescó la ficha desde Steam (ver
+    # ``steam_service.maybe_refresh``). Nula para juegos que no vienen de
+    # Steam o que todavía no se sincronizaron ni una vez.
+    steam_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

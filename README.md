@@ -423,6 +423,50 @@ categorías de Steam ("Un jugador", "Cooperativo") se mapean a etiquetas. Al
 importar se invalida el modelo del recomendador, así que el juego nuevo entra
 en las recomendaciones sin reiniciar nada.
 
+### Sincronización en tiempo real
+
+Un juego importado de Steam no queda congelado: al visitar su ficha, sus
+similares, sus reseñas o su analítica de desarrollador, `steam_service.
+maybe_refresh` chequea cuánto hace que no se sincroniza (`STEAM_SYNC_TTL_MINUTES`,
+6 horas por defecto) y si corresponde vuelve a pedir la ficha y trae las
+reseñas nuevas que hayan aparecido en Steam, sin duplicar las que ya estaban
+(se identifican por `steam_review_id`, el `recommendationid` de Steam). Si
+Steam no responde, la página se sirve igual con los datos que ya había.
+
+No hay un proceso aparte sondeando todo el catálogo: el refresco es perezoso
+y sólo alcanza a los juegos que alguien efectivamente está mirando.
+
+### Catálogo compartido por el equipo
+
+El listado de "más vendidos" de Steam depende de cuándo se lo pida, y la base
+de datos (`*.db`) está en `.gitignore` — cada instalación local es su propia
+foto. Sin un paso extra, dos personas del equipo que importan juegos de Steam
+por su cuenta terminan viendo catálogos distintos.
+
+`scripts/seed_from_steam.py` resuelve esto con un snapshot versionado en el
+repo, `backend/data/steam_catalog.json` (mismo criterio que `games_seed.json`
+para el dataset curado):
+
+```powershell
+# Uso normal: siembra desde el snapshot que ya está en el repo, sin red.
+python scripts\seed_from_steam.py --reset
+
+# Sólo lo corre quien quiera ampliar o refrescar el catálogo compartido:
+# pega contra Steam de verdad y ACTUALIZA data/steam_catalog.json.
+python scripts\seed_from_steam.py --source live --count 150
+```
+
+Después de un `--source live`, el JSON generado se commitea; el resto del
+equipo lo obtiene con un `git pull` normal y siembra su base local con
+`--source snapshot` (el default), sin necesitar `STEAM_API_KEY` propia ni
+esperar a Steam. Tanto el pull de Steam como la siembra en la base son
+incrementales: correrlo de nuevo sólo agrega juegos y reseñas nuevas, no
+duplica lo que ya está.
+
+"Todos" los juegos de Steam (cientos de miles, en su mayoría irrelevantes)
+no es un objetivo realista: Steam no expone un endpoint así. El snapshot
+cubre los más vendidos y más reseñados, ajustable con `--count`.
+
 ---
 
 ## Migraciones

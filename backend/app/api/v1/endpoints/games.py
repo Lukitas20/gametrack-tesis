@@ -10,6 +10,7 @@ from app.models import Game
 from app.schemas.game import GameDetail, GamePage, GameSummary, GenreOut, TagOut
 from app.schemas.interaction import ReviewOut
 from app.schemas.recommendation import RecommendationOut
+from app.services import steam_service
 from app.services.game_service import (
     get_game,
     list_games,
@@ -65,6 +66,9 @@ def _require_game(db: Session, game_id: int) -> Game:
     game = get_game(db, game_id)
     if game is None:
         raise HTTPException(status_code=404, detail="El juego no existe")
+    # Si viene de Steam y hace rato que no se sincroniza, se refresca acá:
+    # es el punto por el que pasan la ficha, los similares y las reseñas.
+    steam_service.maybe_refresh(db, game)
     return game
 
 

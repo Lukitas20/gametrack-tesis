@@ -98,6 +98,10 @@ class Review(Base):
     language: Mapped[str] = mapped_column(String(5), default="es")
     # "user" (escrita en GameTrack) o "steam" (importada de una reseña real).
     source: Mapped[str] = mapped_column(String(20), default="user", server_default="user")
+    # ``recommendationid`` de Steam: identifica la reseña en su plataforma de
+    # origen para no reimportarla al refrescar el juego. Nulo para las
+    # escritas en GameTrack.
+    steam_review_id: Mapped[str | None] = mapped_column(String(32), index=True)
     # Nombre a mostrar: el username al momento de publicar, o el nombre de
     # perfil de Steam para las importadas. Se copia acá en vez de resolverse
     # por join porque las reseñas de Steam no tienen ``user`` al que unirse.

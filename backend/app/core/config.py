@@ -48,6 +48,11 @@ class Settings(BaseSettings):
     STEAM_REVIEWS_BASE: str = "https://store.steampowered.com/appreviews"
     # Cuántas reseñas reales se traen al importar un juego nuevo.
     STEAM_REVIEWS_IMPORT_LIMIT: int = 100
+    # Cada cuánto se refresca un juego de Steam ya importado (ficha, géneros,
+    # etiquetas y reseñas nuevas) al volver a visitarlo. No hay un proceso
+    # aparte sondeando el catálogo: es perezoso, sólo se refresca lo que
+    # alguien efectivamente mira (ver ``steam_service.maybe_refresh``).
+    STEAM_SYNC_TTL_MINUTES: int = 360
 
     # --- Frontend / CORS ---------------------------------------------------
     CORS_ORIGINS: list[str] = [

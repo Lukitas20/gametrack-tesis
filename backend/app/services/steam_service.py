@@ -15,7 +15,7 @@ from __future__ import annotations
 import re
 import time
 import unicodedata
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 
 import httpx
 from sqlalchemy import select
@@ -23,6 +23,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.ml.analytics import analyze_review, apply_analysis
+from app.ml.recommender import invalidate_engine
 from app.models import Game, Genre, Review, Tag, User
 from app.services.interaction_service import recompute_game_aggregates
 
@@ -369,26 +370,48 @@ def get_game_by_steam_app_id(db: Session, steam_app_id: int) -> Game | None:
 
 
 def import_reviews(db: Session, game: Game, steam_app_id: int) -> int:
-    """Trae reseñas reales de Steam para un juego recién importado y las
-    analiza con el mismo módulo NLP que las reseñas escritas en GameTrack.
+    """Trae reseñas reales de Steam nuevas para un juego y las analiza con el
+    mismo módulo NLP que las reseñas escritas en GameTrack.
 
     No pertenecen a ningún usuario de la plataforma (``user_id`` nulo); se
     identifican por el nombre de perfil de Steam del autor, resuelto en un
     único pedido en lote para no hacer una llamada por reseña.
+
+    Es seguro llamarla más de una vez sobre el mismo juego (ver
+    ``refresh_game``): cada reseña de Steam se identifica por su
+    ``recommendationid`` (``steam_review_id``), así que las que ya estén en
+    la base se descartan antes de crear nada.
     """
     raw_reviews = get_app_reviews(steam_app_id)
     if not raw_reviews:
         return 0
 
+    existing_ids = {
+        row[0]
+        for row in db.execute(
+            select(Review.steam_review_id).where(
+                Review.game_id == game.id, Review.steam_review_id.is_not(None)
+            )
+        ).all()
+    }
+    new_entries = [
+        entry
+        for entry in raw_reviews
+        if entry.get("recommendationid") is not None
+        and str(entry["recommendationid"]) not in existing_ids
+    ]
+    if not new_entries:
+        return 0
+
     steam_ids = [
         author_id
-        for entry in raw_reviews
+        for entry in new_entries
         if (author_id := (entry.get("author") or {}).get("steamid"))
     ]
     profiles = get_player_summaries_batch(steam_ids)
 
     created = 0
-    for entry in raw_reviews:
+    for entry in new_entries:
         text = (entry.get("review") or "").strip()
         if len(text) < 10:
             continue
@@ -407,6 +430,7 @@ def import_reviews(db: Session, game: Game, steam_app_id: int) -> int:
             helpful_count=entry.get("votes_up") or 0,
             source="steam",
             author_name=profile.get("personaname") or "Jugador de Steam",
+            steam_review_id=str(entry["recommendationid"]),
         )
         db.add(review)
         apply_analysis(db, review, analyze_review(review))
@@ -444,7 +468,7 @@ def import_game(db: Session, steam_app_id: int) -> Game | None:
     if db.scalar(select(Game).where(Game.slug == parsed["slug"])):
         parsed["slug"] = f"{parsed['slug']}-{steam_app_id}"
 
-    game = Game(**parsed, steam_app_id=steam_app_id)
+    game = Game(**parsed, steam_app_id=steam_app_id, steam_synced_at=datetime.now(timezone.utc))
     # El juego entra a la sesión antes de asociarle géneros y etiquetas:
     # `_get_or_create` hace flush, y si el Game todavía estuviera fuera de la
     # sesión, SQLAlchemy descartaría silenciosamente la asociación.
@@ -457,6 +481,77 @@ def import_game(db: Session, steam_app_id: int) -> Game | None:
 
     import_reviews(db, game, steam_app_id)
     return game
+
+
+def refresh_game(db: Session, game: Game) -> bool:
+    """Vuelve a pedir la ficha de Steam de un juego ya importado y trae las
+    reseñas nuevas que haya desde la última vez.
+
+    A diferencia de ``import_game``, esto sí puede repetirse: actualiza la
+    ficha existente en lugar de crear una, y ``import_reviews`` ya se ocupa
+    de no duplicar reseñas. Se usa desde ``maybe_refresh`` para mantener el
+    catálogo al día sin depender de un proceso aparte sondeando Steam.
+    """
+    if game.steam_app_id is None:
+        return False
+
+    data = get_app_details(game.steam_app_id)
+    if data and data.get("type") == "game":
+        parsed = parse_steam_game(data)
+        genres = parsed.pop("genres", [])
+        tags = parsed.pop("tags", [])
+        # El nombre y el slug son la identidad pública del juego (URLs,
+        # referencias del recomendador): no se pisan aunque Steam les haga
+        # un pequeño retoque de redacción.
+        parsed.pop("name", None)
+        parsed.pop("slug", None)
+        for field, value in parsed.items():
+            setattr(game, field, value)
+        game.genres = [_get_or_create(db, Genre, name) for name in genres]
+        game.tags = [_get_or_create(db, Tag, name) for name in tags]
+
+    import_reviews(db, game, game.steam_app_id)
+
+    game.steam_synced_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(game)
+    # Los géneros, etiquetas o la descripción pudieron haber cambiado: el
+    # contenido que ve el filtrado basado en contenido ya no es el mismo.
+    invalidate_engine()
+    return True
+
+
+def maybe_refresh(db: Session, game: Game) -> None:
+    """Refresca un juego de Steam sólo si hace más de ``STEAM_SYNC_TTL_MINUTES``
+    que no se sincroniza, en vez de en cada pedido.
+
+    Esto es lo que hace que el catálogo se sienta "en tiempo real" sin pagar
+    el costo de golpear la API de Steam en cada vista de cada juego: como
+    mucho se refresca una vez por ventana, y sólo los juegos que alguien
+    efectivamente está mirando (no hay un barrido de fondo sobre todo el
+    catálogo). Si Steam no responde, el juego sigue sirviéndose con los
+    datos que ya tenía en vez de romper el pedido.
+    """
+    if game.steam_app_id is None:
+        return
+
+    ttl = timedelta(minutes=settings.STEAM_SYNC_TTL_MINUTES)
+    if game.steam_synced_at is not None:
+        last_sync = game.steam_synced_at
+        if last_sync.tzinfo is None:
+            last_sync = last_sync.replace(tzinfo=timezone.utc)
+        if datetime.now(timezone.utc) - last_sync < ttl:
+            return
+
+    try:
+        refresh_game(db, game)
+    except Exception:
+        # El refresco es una mejora sobre la respuesta, no la respuesta en sí:
+        # si Steam devuelve algo inesperado (o no responde), la página se
+        # sirve igual con los datos que el juego ya tenía. `get_db` cierra la
+        # sesión al terminar el request, lo que descarta cualquier cambio a
+        # medio aplicar que no haya llegado a `commit()`.
+        db.rollback()
 
 
 def link_steam_account(
