@@ -223,3 +223,48 @@ def test_toda_recomendacion_trae_explicacion(db: Session, populated: dict) -> No
         for recommendation in engine.recommend(user_id=fan.id, limit=3, strategy=strategy):
             assert recommendation.reason.strip()
             assert 0.0 <= recommendation.score <= 1.0
+
+
+# --- Fichas pendientes de Steam ---------------------------------------------
+
+
+def test_ficha_pendiente_no_entra_al_motor(db: Session, catalog: dict[str, Game]) -> None:
+    pendiente = Game(steam_app_id=730, slug="pendiente", name="Ficha Pendiente")
+    db.add(pendiente)
+    db.commit()
+
+    engine = RecommenderEngine(db)
+
+    assert pendiente.id not in engine.game_ids
+    assert len(engine.game_ids) == len(catalog)
+
+
+def test_similares_de_una_ficha_pendiente_devuelve_vacio(
+    db: Session, catalog: dict[str, Game]
+) -> None:
+    pendiente = Game(steam_app_id=730, slug="pendiente", name="Ficha Pendiente")
+    db.add(pendiente)
+    db.commit()
+
+    engine = RecommenderEngine(db)
+
+    assert engine.similar_games(pendiente.id) == []
+
+
+def test_catalogo_sin_ningun_juego_enriquecido_no_rompe(db: Session) -> None:
+    """Puede pasar de verdad: correr import_steam_appindex.py antes de
+    sembrar cualquier catálogo real deja la base entera en fichas
+    pendientes. TfidfVectorizer y cosine_similarity revientan con cero
+    muestras si no se los esquiva a propósito."""
+    db.add_all(
+        [
+            Game(steam_app_id=730, slug="uno", name="Uno"),
+            Game(steam_app_id=620, slug="dos", name="Dos"),
+        ]
+    )
+    db.commit()
+
+    engine = RecommenderEngine(db)
+
+    assert engine.game_ids == []
+    assert engine.recommend(user_id=None, preferred_genres=["accion"], limit=5) == []
