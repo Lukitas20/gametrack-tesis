@@ -14,6 +14,20 @@ SORT_FIELDS = {
 }
 
 
+def enriched_game_filter():
+    """Condicion SQL barata para dejar fuera las fichas basicas del indice.
+
+    Las importaciones anteriores a ``steam_catalog_entries`` se reconocen por
+    la metadata que ya tienen, para conservar compatibilidad con bases creadas
+    antes de incorporar la sincronizacion progresiva.
+    """
+    return or_(
+        Game.steam_app_id.is_(None),
+        Game.description.is_not(None),
+        Game.background_image.is_not(None),
+    )
+
+
 def get_game(db: Session, game_id: int) -> Game | None:
     return db.get(Game, game_id)
 
@@ -29,6 +43,7 @@ def _apply_filters(
     tag: str | None,
     min_rating: float | None,
     max_playtime: int | None,
+    enriched_only: bool = False,
 ) -> Select:
     if search:
         pattern = f"%{search.lower()}%"
@@ -62,6 +77,8 @@ def _apply_filters(
         statement = statement.where(
             or_(Game.playtime_hours.is_(None), Game.playtime_hours <= max_playtime)
         )
+    if enriched_only:
+        statement = statement.where(enriched_game_filter())
     return statement
 
 
@@ -75,13 +92,14 @@ def list_games(
     sort: str = "popularidad",
     limit: int = 20,
     offset: int = 0,
+    enriched_only: bool = False,
 ) -> tuple[int, list[Game]]:
     """Listado paginado con búsqueda y filtros.
 
     Returns:
         El total de coincidencias (para paginar) y la página pedida.
     """
-    filters = (search, genre, tag, min_rating, max_playtime)
+    filters = (search, genre, tag, min_rating, max_playtime, enriched_only)
     base = _apply_filters(select(Game), *filters)
     total = db.scalar(_apply_filters(select(func.count(Game.id)), *filters))
     ordering = SORT_FIELDS.get(sort, SORT_FIELDS["popularidad"])

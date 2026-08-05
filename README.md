@@ -530,6 +530,45 @@ filtro se aplicó.
 
 ---
 
+## Catalogo completo y progresivo de Steam
+
+El indice completo usa el endpoint oficial paginado
+`IStoreService/GetAppList`, que requiere `STEAM_API_KEY`. Primero guarda AppID
+y nombre para que todos los juegos sean buscables; las fichas pendientes se
+completan por lotes o automaticamente cuando alguien abre su detalle. El
+recomendador y la pantalla Inicio solo consideran fichas completas.
+
+```powershell
+cd backend
+
+# Primera descarga del indice; se puede interrumpir y reanudar.
+.\.venv\Scripts\python.exe scripts\sync_steam_catalog.py --catalog
+
+# Crear una selección estable de 5.000 juegos populares y completar 500 por corrida.
+.\.venv\Scripts\python.exe scripts\sync_steam_catalog.py --enrich --limit 5000 --batch-size 500 --delay 1
+
+# Repetir el comando anterior hasta que informe 0 pendientes. Cada ficha se
+# confirma por separado en gametrack.db, así que nunca vuelve a empezar de cero.
+
+# Importar reseñas sólo para los primeros 300; procesa 50 juegos por corrida.
+.\.venv\Scripts\python.exe scripts\sync_steam_catalog.py --reviews 300 --limit 5000 --batch-size 50 --delay 1
+
+# En ejecuciones posteriores, traer solo altas y cambios.
+.\.venv\Scripts\python.exe scripts\sync_steam_catalog.py --catalog --incremental
+```
+
+El índice, las fichas, las reseñas y el ranking `popular-5000` se guardan en
+`backend/gametrack.db`. Las imágenes permanecen en el CDN de Steam y la base
+sólo conserva sus URLs. El checkpoint se guarda después de cada página o
+juego; si Steam limita o se corta la conexión, basta con repetir el comando.
+
+Por defecto `--strategy popular` combina destacados con el buscador de Steam
+ordenado por cantidad de reseñas. `--strategy recent` conserva la alternativa
+de priorizar cambios recientes, y `--refresh-selection` vuelve a calcular un
+ranking popular que ya estuviera guardado.
+
+---
+
 ## Tests
 
 ```powershell
@@ -537,7 +576,7 @@ cd backend
 .\.venv\Scripts\python.exe -m pytest
 ```
 
-75 pruebas sobre el modelo de datos, el módulo NLP (negación, desambiguación de
+87 pruebas sobre el modelo de datos, el módulo NLP (negación, desambiguación de
 aspectos, herencia de cláusulas), el recomendador (cada estrategia, el arranque
 en frío y la degradación entre ellas), la API (listas, filtros, permisos por rol
 y coherencia de los datos que consume el panel), la integración con Steam (sin

@@ -15,6 +15,12 @@ from app.models.enums import (
 from app.models.game import Game, Genre, Tag, game_genres, game_tags
 from app.models.game_list import GameList, GameListItem
 from app.models.interaction import Rating, Review, ReviewAspect
+from app.models.steam_catalog import (
+    SteamCatalogEntry,
+    SteamCatalogTarget,
+    SteamEnrichmentState,
+    SteamSyncState,
+)
 from app.models.user import User, UserPreference
 
 __all__ = [
@@ -30,6 +36,10 @@ __all__ = [
     "Review",
     "ReviewAspect",
     "Sentiment",
+    "SteamCatalogEntry",
+    "SteamCatalogTarget",
+    "SteamEnrichmentState",
+    "SteamSyncState",
     "Tag",
     "User",
     "UserPreference",

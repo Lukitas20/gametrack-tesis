@@ -24,20 +24,106 @@ export async function gameView({ params }) {
     return h("div", null, emptyState("No encontramos el juego", error.message));
   }
 
-  const [similar, reviews] = await Promise.all([
+  const steamStatus = game.steam_app_id ? { status: "pending" } : null;
+  renderGame(container, game, [], [], steamStatus);
+  void hydrateGame(container, id, game);
+  return container;
+}
+
+async function hydrateGame(container, id, initialGame) {
+  const enrichmentRequest = initialGame.steam_app_id
+    ? api.enrichGame(id).catch((error) => ({ status: "failed", last_error: error.message }))
+    : Promise.resolve(null);
+
+  let [similar, reviews, steamStatus] = await Promise.all([
     api.similar(id, 6).catch(() => []),
     api.reviews(id, 12).catch(() => []),
+    enrichmentRequest,
   ]);
+
+  if (!isCurrentGame(container, id)) return;
+  renderGame(container, initialGame, similar, reviews, steamStatus);
+
+  if (!steamStatus || steamStatus.status === "complete" || steamStatus.status === "failed") {
+    if (steamStatus?.status === "complete") {
+      const [freshGame, freshReviews] = await Promise.all([
+        api.game(id),
+        api.reviews(id, 12).catch(() => []),
+      ]);
+      if (isCurrentGame(container, id)) {
+        renderGame(container, freshGame, similar, freshReviews, steamStatus);
+      }
+    }
+    return;
+  }
+
+  // Steam puede tardar unos segundos, especialmente cuando además se analiza
+  // el texto de las reseñas. La ficha ya está visible durante esta espera.
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    await delay(1500);
+    if (!isCurrentGame(container, id)) return;
+
+    steamStatus = await api.enrichmentStatus(id).catch((error) => ({
+      status: "failed",
+      last_error: error.message,
+    }));
+    if (steamStatus.status !== "complete" && steamStatus.status !== "failed") continue;
+
+    if (steamStatus.status === "complete") {
+      [initialGame, similar, reviews] = await Promise.all([
+        api.game(id),
+        api.similar(id, 6).catch(() => similar),
+        api.reviews(id, 12).catch(() => reviews),
+      ]);
+    }
+    if (isCurrentGame(container, id)) {
+      renderGame(container, initialGame, similar, reviews, steamStatus);
+    }
+    return;
+  }
+}
+
+function delay(milliseconds) {
+  return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+}
+
+function isCurrentGame(container, id) {
+  return container.isConnected && window.location.hash.split("?")[0] === `#/juego/${id}`;
+}
+
+function renderGame(container, game, similar, reviews, steamStatus = null) {
+  const steamLoading = steamStatus && ["pending", "queued", "running"].includes(steamStatus.status);
 
   const reviewList = h(
     "div",
     null,
     reviews.length
       ? reviews.map(reviewItem)
-      : h("p", { class: "muted", style: { fontSize: "var(--fs-sm)" } }, "Todavía no hay reseñas."),
+      : h(
+          "p",
+          { class: "muted", style: { fontSize: "var(--fs-sm)" } },
+          steamLoading ? "Cargando reseñas reales desde Steam…" : "Todavía no hay reseñas.",
+        ),
   );
 
   container.replaceChildren(
+    steamLoading
+      ? h(
+          "section",
+          { class: "card", style: { marginBottom: "var(--s-4)" } },
+          spinnerBlock("Completando información y reseñas desde Steam…"),
+        )
+      : steamStatus?.status === "failed"
+        ? h(
+            "section",
+            { class: "card", style: { marginBottom: "var(--s-4)" } },
+            h(
+              "p",
+              { class: "muted" },
+              "La ficha está disponible, pero Steam no respondió. Podés volver a intentarlo recargando la página.",
+            ),
+          )
+        : null,
     // --- Hero ---
     h(
       "div",
@@ -90,7 +176,7 @@ export async function gameView({ params }) {
               : null,
           ),
 
-        reviewComposer(game, reviewList),
+        steamLoading ? null : reviewComposer(game, reviewList),
 
         h(
           "section",
@@ -197,7 +283,6 @@ export async function gameView({ params }) {
       : null,
   );
 
-  return container;
 }
 
 /* ------------------------------------------------------------------ *

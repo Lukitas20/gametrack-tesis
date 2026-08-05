@@ -7,7 +7,7 @@ import { h, icon, initials, toast } from "../ui.js";
 async function enter(username, password = DEMO_PASSWORD) {
   const user = await login(username, password);
   toast(`Sesión iniciada como ${user.username}`);
-  navigate(user.role === "desarrollador" ? "/dev" : "/recomendaciones");
+  navigate(user.role === "desarrollador" ? "/dev" : "/inicio");
 }
 
 export function accountsView() {

@@ -75,6 +75,10 @@ export const api = {
   game: (id) => request(`/games/${id}`, { auth: false }),
   similar: (id, limit = 6) => request(`/games/${id}/similar`, { auth: false, params: { limit } }),
   reviews: (id, limit = 10) => request(`/games/${id}/reviews`, { auth: false, params: { limit } }),
+  enrichGame: (id) =>
+    request(`/steam/enrich/${id}`, { method: "POST", auth: false }),
+  enrichmentStatus: (id) =>
+    request(`/steam/enrich/${id}/status`, { auth: false }),
 
   // --- Recomendaciones ---
   recommendations: (strategy = "auto", limit = 12) =>

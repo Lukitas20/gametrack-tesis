@@ -23,6 +23,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.database import Base
 
 if TYPE_CHECKING:
+    from app.models.steam_catalog import SteamCatalogEntry
     from app.models.game_list import GameListItem
     from app.models.interaction import Rating, Review
     from app.models.user import UserPreference
@@ -138,6 +139,23 @@ class Game(Base):
     list_items: Mapped[list[GameListItem]] = relationship(
         back_populates="game", cascade="all, delete-orphan"
     )
+    steam_catalog_entry: Mapped[SteamCatalogEntry | None] = relationship(
+        back_populates="game", cascade="all, delete-orphan", uselist=False
+    )
+
+    @property
+    def metadata_status(self) -> str:
+        """Estado visible de la ficha dentro del indice progresivo de Steam.
+
+        Los juegos locales/RAWG y las importaciones de Steam anteriores a la
+        tabla de sincronizacion ya tienen una ficha utilizable. Las entradas
+        creadas por el indice masivo, en cambio, empiezan como ``pending``.
+        """
+        if self.steam_catalog_entry is not None:
+            return self.steam_catalog_entry.metadata_status
+        if self.steam_app_id is None:
+            return "complete"
+        return "complete" if self.description or self.background_image else "pending"
 
     @property
     def content_soup(self) -> str:

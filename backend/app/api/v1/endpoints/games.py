@@ -48,10 +48,22 @@ def get_games(
     sort: str = Query(default="popularidad", pattern="^(rating|popularidad|metacritic|nombre|lanzamiento)$"),
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
+    enriched_only: bool = Query(
+        default=False, description="Solo fichas completas, para Inicio y recomendaciones"
+    ),
     db: Session = Depends(get_db),
 ) -> GamePage:
     total, games = list_games(
-        db, search, genre, tag, min_rating, max_playtime, sort, limit, offset
+        db,
+        search,
+        genre,
+        tag,
+        min_rating,
+        max_playtime,
+        sort,
+        limit,
+        offset,
+        enriched_only,
     )
     return GamePage(
         total=total,
@@ -70,6 +82,9 @@ def _require_game(db: Session, game_id: int) -> Game:
 
 @router.get("/games/{game_id}", response_model=GameDetail)
 def get_game_detail(game_id: int, db: Session = Depends(get_db)) -> Game:
+    # La ficha básica siempre responde desde SQLite. Si todavía falta
+    # información de Steam, el frontend dispara el enriquecimiento diferido y
+    # consulta su estado sin dejar al usuario mirando una pantalla bloqueada.
     return _require_game(db, game_id)
 
 

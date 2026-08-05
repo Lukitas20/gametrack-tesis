@@ -25,6 +25,8 @@ class GameSummary(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    steam_app_id: int | None
+    metadata_status: str
     slug: str
     name: str
     released: date | None

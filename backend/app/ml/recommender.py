@@ -32,6 +32,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models import Game, Rating, RecommendationSource, User
+from app.services.game_service import enriched_game_filter
 
 # Vecinos considerados al predecir con filtrado colaborativo.
 NEIGHBOURS = 20
@@ -81,7 +82,14 @@ class RecommenderEngine:
     """
 
     def __init__(self, db: Session) -> None:
-        games = list(db.scalars(select(Game).order_by(Game.id)))
+        # El indice completo de Steam puede contener decenas de miles de
+        # fichas basicas. Incluirlas produciria una matriz de similitud O(n^2)
+        # sin texto ni generos utiles. Solo se entrenan fichas enriquecidas.
+        games = list(
+            db.scalars(
+                select(Game).where(enriched_game_filter()).order_by(Game.id)
+            )
+        )
         self.game_ids: list[int] = [game.id for game in games]
         self.game_names: dict[int, str] = {game.id: game.name for game in games}
         self._game_index: dict[int, int] = {
@@ -413,7 +421,7 @@ _lock = threading.Lock()
 def _current_fingerprint(db: Session) -> tuple[int, int, int]:
     """Huella barata de los datos: cambia cuando hay que reentrenar."""
     return (
-        db.scalar(select(func.count(Game.id))) or 0,
+        db.scalar(select(func.count(Game.id)).where(enriched_game_filter())) or 0,
         db.scalar(select(func.count(Rating.id))) or 0,
         db.scalar(select(func.max(Rating.id))) or 0,
     )

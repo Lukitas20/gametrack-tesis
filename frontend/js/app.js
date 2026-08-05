@@ -17,6 +17,7 @@ import { accountsView } from "./views/auth.js";
 import { catalogView } from "./views/catalog.js";
 import { developerGameView, developerView } from "./views/developer.js";
 import { gameView } from "./views/game.js";
+import { homeView } from "./views/home.js";
 import { listsView } from "./views/lists.js";
 import { openQuiz } from "./views/quiz.js";
 import { recommendationsView } from "./views/recommendations.js";
@@ -65,6 +66,7 @@ function isDark() {
  * ------------------------------------------------------------------ */
 
 const PLAYER_NAV = [
+  ["/inicio", "Inicio"],
   ["/recomendaciones", "Para vos"],
   ["/catalogo", "Catálogo"],
   ["/listas", "Mis listas"],
@@ -130,7 +132,7 @@ function accountMenu() {
             try {
               const user = await login(account.username, DEMO_PASSWORD);
               toast(`Ahora sos ${user.username}`);
-              navigate(user.role === "desarrollador" ? "/dev" : "/recomendaciones");
+              navigate(user.role === "desarrollador" ? "/dev" : "/inicio");
             } catch (error) {
               toast(error.message, "error");
             }
@@ -271,11 +273,12 @@ function view(loader) {
 route("/", view(async () => {
   // La raíz manda a cada rol a su lugar.
   if (!isLoggedIn()) return accountsView();
-  navigate(isDeveloper() ? "/dev" : "/recomendaciones", { replace: true });
+  navigate(isDeveloper() ? "/dev" : "/inicio", { replace: true });
   return h("div");
 }));
 
 route("/cuentas", view(async () => accountsView()));
+route("/inicio", view(homeView));
 route("/catalogo", view(catalogView));
 route("/recomendaciones", view(recommendationsView));
 route("/listas", view(listsView));

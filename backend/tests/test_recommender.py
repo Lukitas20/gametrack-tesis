@@ -11,7 +11,16 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.db.base import Base
 from app.ml.recommender import RecommenderEngine, invalidate_engine
-from app.models import Game, Genre, Rating, RecommendationSource, Tag, User, UserRole
+from app.models import (
+    Game,
+    Genre,
+    Rating,
+    RecommendationSource,
+    SteamCatalogEntry,
+    Tag,
+    User,
+    UserRole,
+)
 
 # Tres RPG narrativos y tres estrategias, dos mundos sin superposición.
 CATALOG = [
@@ -223,3 +232,31 @@ def test_toda_recomendacion_trae_explicacion(db: Session, populated: dict) -> No
         for recommendation in engine.recommend(user_id=fan.id, limit=3, strategy=strategy):
             assert recommendation.reason.strip()
             assert 0.0 <= recommendation.score <= 1.0
+
+
+def test_fichas_basicas_de_steam_no_entran_al_modelo(
+    db: Session, catalog: dict[str, Game], monkeypatch
+) -> None:
+    pending = Game(steam_app_id=999, slug="pendiente", name="Pendiente")
+    db.add(pending)
+    db.flush()
+    db.add(
+        SteamCatalogEntry(
+            steam_app_id=999,
+            game_id=pending.id,
+            metadata_status="pending",
+        )
+    )
+    db.commit()
+
+    class TinyModel:
+        def get_sentence_embedding_dimension(self):
+            return 2
+
+        def encode(self, corpus, **_kwargs):
+            return np.array([[1.0, float(bool(text))] for text in corpus])
+
+    monkeypatch.setattr("app.ml.recommender._content_model", lambda: TinyModel())
+    engine = RecommenderEngine(db)
+
+    assert pending.id not in engine.game_ids
