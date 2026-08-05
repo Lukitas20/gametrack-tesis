@@ -24,6 +24,7 @@ import threading
 from dataclasses import dataclass, field
 
 import numpy as np
+from scipy.sparse import csr_matrix
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from sqlalchemy import func, or_, select
@@ -103,9 +104,20 @@ class RecommenderEngine:
             sublinear_tf=True,
             min_df=1,
         )
-        self._tfidf = self._vectorizer.fit_transform(corpus)
-        self.content_similarity = cosine_similarity(self._tfidf)
-        np.fill_diagonal(self.content_similarity, 0.0)
+        # Sin ningún juego enriquecido todavía (por ejemplo, recién corrido
+        # import_steam_appindex.py sin sembrar ningún catálogo real antes),
+        # ni fit_transform ni cosine_similarity toleran cero muestras (sklearn
+        # revienta con "empty vocabulary" y "Found array with 0 sample(s)"
+        # respectivamente), así que se arma la matriz vacía a mano en vez de
+        # llamarlos. El vectorizador queda sin entrenar a propósito;
+        # _content_scores_from_preferences ya evita usarlo en ese caso.
+        if corpus:
+            self._tfidf = self._vectorizer.fit_transform(corpus)
+            self.content_similarity = cosine_similarity(self._tfidf)
+            np.fill_diagonal(self.content_similarity, 0.0)
+        else:
+            self._tfidf = csr_matrix((0, 0))
+            self.content_similarity = np.zeros((0, 0))
 
     # -- Colaborativo ------------------------------------------------------
 
@@ -139,7 +151,9 @@ class RecommenderEngine:
         )
         self._centered = centered
 
-        if shape[0] == 0:
+        if shape[0] == 0 or shape[1] == 0:
+            # cosine_similarity rechaza una matriz de 0 muestras (0 usuarios
+            # o, con el filtro de fichas sin enriquecer, 0 juegos).
             self.item_similarity = np.zeros((shape[1], shape[1]))
         else:
             self.item_similarity = cosine_similarity(centered.T)
@@ -217,7 +231,10 @@ class RecommenderEngine:
         Los slugs se repiten tres veces para reproducir la ponderación que
         ``Game.content_soup`` le da a los géneros dentro del corpus.
         """
-        if not genre_slugs:
+        if not genre_slugs or not self.game_ids:
+            # Sin juegos enriquecidos el vectorizador no llegó a entrenarse
+            # (ver _build_content_model): usarlo acá rompería con "not
+            # fitted" en vez de simplemente no tener nada que sugerir.
             return None
         pseudo_document = " ".join(slug for slug in genre_slugs for _ in range(3))
         vector = self._vectorizer.transform([pseudo_document])
