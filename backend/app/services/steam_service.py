@@ -215,24 +215,65 @@ def get_top_seller_appids(limit: int = 100, delay: float = 1.0) -> list[int]:
     return appids[:limit]
 
 
-def get_app_list() -> list[dict]:
-    """AppID y nombre de *todo* lo publicado en Steam, sin distinguir tipo.
+STEAMSPY_BASE = "https://steamspy.com/api.php"
+STEAMSPY_PAGE_SIZE = 1000
 
-    A diferencia del resto de esta integración (que descubre juegos de a
-    poco por búsqueda o destacados), ``GetAppList`` sí es el catálogo
-    completo en un único pedido: no hace falta clave ni paginar. La
-    contrapartida es que mezcla juegos con DLC, bandas sonoras, demos y
-    software — no hay forma de filtrar el tipo sin pedir la ficha de cada
-    uno, que es exactamente el trabajo que se difiere a ``refresh_game``
-    (ver ``scripts/import_steam_appindex.py``).
+
+def _fetch_steamspy_page(page: int, retries: int = 3, retry_delay: float = 5.0) -> dict | None:
+    """Una página de ``request=all``. ``None`` si se agotaron los reintentos.
+
+    SteamSpy es un servicio comunitario gratuito, no de Valve: bajo carga
+    responde "Too many connections" (texto plano, no JSON) en vez de fallar
+    limpio, así que vale la pena un par de reintentos antes de darse por
+    vencido.
     """
-    try:
-        response = _http_client().get(f"{settings.STEAM_API_BASE}/ISteamApps/GetAppList/v2/")
-    except httpx.HTTPError:
-        return []
-    if response.status_code != 200:
-        return []
-    return response.json().get("applist", {}).get("apps", [])
+    for attempt in range(retries):
+        try:
+            response = _http_client().get(
+                STEAMSPY_BASE, params={"request": "all", "page": page}
+            )
+        except httpx.HTTPError:
+            response = None
+
+        if response is not None and response.status_code == 200:
+            try:
+                return response.json()
+            except ValueError:
+                pass
+
+        if attempt < retries - 1:
+            time.sleep(retry_delay)
+    return None
+
+
+def get_app_list(delay: float = 1.5, max_pages: int | None = None) -> list[dict]:
+    """AppID y nombre de la gran mayoría de lo publicado en Steam.
+
+    Valve dio de baja ``GetAppList``, el endpoint propio que hacía esto en
+    un único pedido (confirmado contra ``ISteamWebAPIUtil.
+    GetSupportedAPIList``, que ya no lo lista; devuelve 404 "Method not
+    found" si se lo llama). En su lugar se usa SteamSpy (steamspy.com), un
+    índice comunitario no oficial que pagina de a 1000 juegos por pedido
+    (``request=all``) y además trae reseñas positivas/negativas y dueños
+    estimados por juego — más rico que lo que daba ``GetAppList``, a costa
+    de depender de un tercero en lugar de Steam mismo.
+
+    Se detiene al llegar a una página con menos de 1000 entradas (la
+    última) o cuando SteamSpy deja de responder; en ese caso devuelve lo
+    que haya juntado hasta ahí en lugar de fallar todo el pedido.
+    """
+    apps: list[dict] = []
+    page = 0
+    while max_pages is None or page < max_pages:
+        entries = _fetch_steamspy_page(page)
+        if entries is None:
+            break
+        apps.extend(entries.values())
+        if len(entries) < STEAMSPY_PAGE_SIZE:
+            break
+        page += 1
+        time.sleep(delay)
+    return apps
 
 
 def get_owned_games(steam_id: str) -> list[dict]:

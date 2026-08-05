@@ -1,25 +1,35 @@
 #!/usr/bin/env python
-"""Importa el índice completo de Steam como fichas pendientes.
+"""Importa el índice casi completo de Steam como fichas pendientes.
 
 A diferencia de ``seed_from_steam.py`` (que trae la ficha completa y las
-reseñas de un puñado de juegos populares), esto usa ``GetAppList`` — el único
-endpoint de Steam que sí devuelve *todo* en un único pedido, sin paginar ni
-necesitar clave — para crear una fila liviana por cada AppID: sólo nombre y
-AppID, sin géneros, descripción ni reseñas todavía.
+reseñas de un puñado de juegos populares), esto usa el índice de SteamSpy
+(steamspy.com/api.php?request=all) para crear una fila liviana por cada
+AppID: sólo nombre y AppID, sin géneros, descripción ni reseñas todavía.
 
-Eso es lo que hace que el catálogo y el buscador cubran todo Steam desde el
-primer momento: cada ficha pendiente se completa sola (``steam_service.
-maybe_refresh``) la primera vez que alguien la abre en la aplicación, y si
-resulta no ser un juego de verdad (GetAppList mezcla DLC, bandas sonoras y
-software) se descarta en ese momento en vez de quedar pendiente para siempre.
+Steam mismo tenía un endpoint para esto (``GetAppList``), pero Valve lo dio
+de baja — confirmado contra ``ISteamWebAPIUtil.GetSupportedAPIList``, que ya
+no lo lista, y contra la propia URL, que devuelve 404. SteamSpy es la
+alternativa: un índice comunitario no oficial, no de Valve, que pagina de a
+1000 juegos por pedido (unos ~85-90 mil en total). Al ser un tercero puede
+estar más lento o caído en cualquier momento; el script se corta con lo que
+haya juntado hasta ahí en vez de fallar todo.
+
+Eso es lo que hace que el catálogo y el buscador cubran casi todo Steam
+desde el primer momento: cada ficha pendiente se completa sola
+(``steam_service.maybe_refresh``) la primera vez que alguien la abre en la
+aplicación, y si resulta no ser un juego de verdad (el índice mezcla DLC,
+bandas sonoras y software) se descarta en ese momento en vez de quedar
+pendiente para siempre.
 
 Es puramente aditivo: no toca los juegos que ya tienen ficha completa (del
 dataset curado, de RAWG o ya importados de Steam), y correrlo de nuevo sólo
-agrega los AppIDs nuevos que Steam haya sumado desde la última vez.
+agrega los AppIDs nuevos que hayan aparecido desde la última vez.
 
 Uso:
-    python scripts/import_steam_appindex.py             # todo el índice
-    python scripts/import_steam_appindex.py --limit 5000 # para probar rápido
+    python scripts/import_steam_appindex.py                # todo el índice (~10-15 min)
+    python scripts/import_steam_appindex.py --limit 5000    # para probar rápido
+    python scripts/import_steam_appindex.py --max-pages 5   # ídem, por páginas
+    python scripts/import_steam_appindex.py --delay 3        # más pausa entre páginas
 """
 
 from __future__ import annotations
@@ -104,12 +114,21 @@ def main() -> int:
     parser.add_argument(
         "--limit", type=int, default=None, help="tope de fichas nuevas a crear (para pruebas)"
     )
+    parser.add_argument(
+        "--max-pages",
+        type=int,
+        default=None,
+        help="tope de páginas de SteamSpy a pedir, 1000 juegos c/u (para pruebas)",
+    )
+    parser.add_argument(
+        "--delay", type=float, default=1.5, help="segundos entre páginas de SteamSpy"
+    )
     args = parser.parse_args()
 
-    print("Pidiendo el listado completo de aplicaciones de Steam (GetAppList)...")
-    apps = steam_service.get_app_list()
+    print("Pidiendo el índice de Steam a SteamSpy (steamspy.com, no es un servicio de Valve)...")
+    apps = steam_service.get_app_list(delay=args.delay, max_pages=args.max_pages)
     if not apps:
-        print("No se pudo contactar a Steam. Reintentá en unos minutos.")
+        print("No se pudo contactar a SteamSpy. Reintentá en unos minutos.")
         return 1
     print(f"{len(apps)} entradas recibidas (juegos, DLC, software y bandas sonoras mezclados).")
 
