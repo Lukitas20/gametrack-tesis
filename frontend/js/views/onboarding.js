@@ -12,7 +12,7 @@ import { h, icon, openModal, modalHead, toast } from "../ui.js";
 
 export function openOnboarding({ onDone = null } = {}) {
   openModal((close) => {
-    const selected = new Set();
+    const selected = new Set((state.user?.genres || []).map((genre) => genre.id));
     const container = h("div");
 
     function render() {

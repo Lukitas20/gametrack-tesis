@@ -5,6 +5,7 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from app.models.enums import UserRole
+from app.schemas.game import GenreOut
 
 
 class UserCreate(BaseModel):
@@ -32,6 +33,9 @@ class UserResponse(BaseModel):
     steam_id: str | None = None
     steam_username: str | None = None
     steam_avatar_url: str | None = None
+
+    # Géneros elegidos en el onboarding (ver User.genres).
+    genres: list[GenreOut] = []
 
 
 class LoginRequest(BaseModel):
@@ -62,3 +66,15 @@ class PreferencesUpdate(BaseModel):
     """Géneros elegidos en el onboarding, usados para el arranque en frío."""
 
     genre_ids: list[int] = Field(min_length=1)
+
+
+class ProfileUpdate(BaseModel):
+    """Datos editables desde la pantalla de perfil.
+
+    No incluye ``username`` (es el identificador de login, cambiarlo es un
+    problema aparte) ni contraseña (no hay flujo de verificación todavía).
+    """
+
+    full_name: str | None = Field(default=None, max_length=150)
+    email: EmailStr | None = None
+    avatar_url: str | None = Field(default=None, max_length=500)

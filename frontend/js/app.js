@@ -1,6 +1,14 @@
 /* Esqueleto de la aplicación: cabecera, navegación, cambio de rol y rutas. */
 
-import { navigate, resolve, route, setNavigateHook, setNotFound, start } from "./router.js";
+import {
+  currentPath,
+  navigate,
+  resolve,
+  route,
+  setNavigateHook,
+  setNotFound,
+  start,
+} from "./router.js";
 import {
   DEMO_ACCOUNTS,
   DEMO_PASSWORD,
@@ -12,13 +20,15 @@ import {
   state,
   subscribe,
 } from "./store.js";
-import { clear, emptyState, h, icon, initials, spinnerBlock, toast } from "./ui.js";
+import { clear, emptyState, h, icon, initials, magicLoader, toast } from "./ui.js";
 import { accountsView } from "./views/auth.js";
 import { catalogView } from "./views/catalog.js";
 import { developerGameView, developerView } from "./views/developer.js";
 import { gameView } from "./views/game.js";
 import { listsView } from "./views/lists.js";
 import { openQuiz } from "./views/quiz.js";
+import { profileView } from "./views/profile.js";
+import { ratingsView } from "./views/ratings.js";
 import { recommendationsView } from "./views/recommendations.js";
 
 const THEME_KEY = "gametrack.theme";
@@ -26,6 +36,7 @@ const THEME_KEY = "gametrack.theme";
 const main = document.getElementById("view");
 const navSlot = document.getElementById("nav");
 const actionsSlot = document.getElementById("actions");
+const headerSearchSlot = document.getElementById("header-search");
 
 /* ------------------------------------------------------------------ *
  * Tema
@@ -64,15 +75,19 @@ function isDark() {
  * Navegación
  * ------------------------------------------------------------------ */
 
+// El catálogo no tiene su propio ítem de nav: se entra por la barra de
+// búsqueda del header (ver renderHeaderSearch), que es persistente y no se
+// reconstruye en cada navegación como esta lista.
 const PLAYER_NAV = [
-  ["/recomendaciones", "Para vos"],
-  ["/catalogo", "Catálogo"],
+  ["/recomendaciones", "Inicio"],
   ["/listas", "Mis listas"],
+  ["/valoraciones", "Mis valoraciones"],
+  ["/perfil", "Perfil"],
 ];
 
 const DEVELOPER_NAV = [
   ["/dev", "Panel"],
-  ["/catalogo", "Catálogo"],
+  ["/perfil", "Perfil"],
 ];
 
 function renderNav(activePath = null) {
@@ -94,6 +109,52 @@ function renderNav(activePath = null) {
       ),
     );
   }
+}
+
+/* ------------------------------------------------------------------ *
+ * Barra de búsqueda del header
+ * ------------------------------------------------------------------ */
+
+/**
+ * Vive fuera de #nav a propósito: #nav se reconstruye en cada navegación
+ * (ver renderNav), y un input ahí perdería el foco en cada tecla si escribir
+ * dispara una navegación. Este input se crea una sola vez y sobrevive.
+ */
+let headerSearchInput = null;
+let headerSearchTimer = null;
+
+function renderHeaderSearch() {
+  headerSearchInput = h("input", {
+    type: "search",
+    placeholder: "Buscar juegos…",
+    "aria-label": "Buscar juegos",
+    onFocus: () => {
+      if (currentPath() !== "/catalogo") navigate("/catalogo");
+    },
+    onInput: (event) => {
+      clearTimeout(headerSearchTimer);
+      const value = event.target.value;
+      headerSearchTimer = setTimeout(() => {
+        const params = new URLSearchParams(window.location.hash.split("?")[1] || "");
+        if (value) params.set("q", value);
+        else params.delete("q");
+        const query = params.toString();
+        navigate(`/catalogo${query ? `?${query}` : ""}`, { replace: true });
+      }, 280);
+    },
+  });
+
+  clear(headerSearchSlot);
+  headerSearchSlot.appendChild(h("div", { class: "header-search-wrap" }, icon("search", 15), headerSearchInput));
+}
+
+/** Mantiene el input sincronizado si se llega a /catalogo por otra vía (un
+ * link con "?q=", el botón atrás). No lo pisa si el usuario lo está
+ * escribiendo en este momento: perdería la tecla que acaba de tipear. */
+function syncHeaderSearch() {
+  if (!headerSearchInput || document.activeElement === headerSearchInput) return;
+  const params = new URLSearchParams(window.location.hash.split("?")[1] || "");
+  headerSearchInput.value = currentPath() === "/catalogo" ? params.get("q") || "" : "";
 }
 
 /* ------------------------------------------------------------------ *
@@ -251,7 +312,10 @@ function renderActions() {
 /** Envuelve un handler de vista: muestra carga, captura errores y monta. */
 function view(loader) {
   return async (context) => {
-    main.replaceChildren(spinnerBlock());
+    // Es el loader de cada cambio de pantalla (incluida la ficha de un
+    // juego, que puede tardar un par de segundos si hay que enriquecerla
+    // desde Steam): el lugar con más chances de que alguien lo vea.
+    main.replaceChildren(magicLoader("Cargando…"));
     try {
       const node = await loader(context);
       main.replaceChildren(node);
@@ -279,6 +343,8 @@ route("/cuentas", view(async () => accountsView()));
 route("/catalogo", view(catalogView));
 route("/recomendaciones", view(recommendationsView));
 route("/listas", view(listsView));
+route("/valoraciones", view(ratingsView));
+route("/perfil", view(profileView));
 route("/juego/:id", view(gameView));
 route("/dev", view(developerView));
 route("/dev/juego/:id", view(developerGameView));
@@ -295,6 +361,7 @@ setNotFound(
 
 setNavigateHook((path) => {
   renderNav(path);
+  syncHeaderSearch();
   closeMenu();
 });
 
@@ -311,7 +378,8 @@ async function boot() {
   initTheme();
   renderActions();
   renderNav();
-  main.replaceChildren(spinnerBlock("Iniciando GameTrack…"));
+  renderHeaderSearch();
+  main.replaceChildren(magicLoader("Iniciando GameTrack…"));
 
   await restore();
 

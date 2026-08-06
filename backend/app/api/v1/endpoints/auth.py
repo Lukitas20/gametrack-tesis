@@ -10,6 +10,7 @@ from app.models import User
 from app.schemas.user import (
     LoginRequest,
     PreferencesUpdate,
+    ProfileUpdate,
     Token,
     UserCreate,
     UserResponse,
@@ -20,6 +21,7 @@ from app.services.user_service import (
     get_user_by_email,
     get_user_by_username,
     set_preferences,
+    update_profile,
 )
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -50,6 +52,18 @@ def login(data: LoginRequest, db: Session = Depends(get_db)) -> Token:
 @router.get("/me", response_model=UserResponse)
 def me(user: User = Depends(get_current_user)) -> User:
     return user
+
+
+@router.put("/me", response_model=UserResponse)
+def update_me(
+    data: ProfileUpdate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> User:
+    try:
+        return update_profile(db, user, data.full_name, data.email, data.avatar_url)
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
 
 
 @router.put("/me/preferences", response_model=UserResponse)

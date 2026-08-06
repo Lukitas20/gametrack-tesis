@@ -73,6 +73,11 @@ class User(Base):
     def is_developer(self) -> bool:
         return self.role is UserRole.DEVELOPER
 
+    @property
+    def genres(self) -> list[Genre]:
+        """Géneros elegidos en el onboarding, para mostrarlos en el perfil."""
+        return [preference.genre for preference in self.preferences]
+
     def __repr__(self) -> str:
         return f"<User {self.id} {self.username} ({self.role.value})>"
 

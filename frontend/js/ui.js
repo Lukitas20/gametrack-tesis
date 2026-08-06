@@ -260,3 +260,66 @@ export function spinnerBlock(message = "Cargando…") {
     h("span", null, message),
   );
 }
+
+/** El caldero hirviendo: exclusivo de "¿Qué jugamos hoy?" (ver
+ * views/quiz.js). Es una pantalla que aparece una sola vez por sesión de
+ * preguntas, así que se puede dar el lujo de ser la animación más elaborada
+ * de las dos — humo violeta, burbujas, sombrero de bruja apoyado en el
+ * borde. */
+export function cauldronLoader(message = "Preparando la poción…") {
+  return h(
+    "div",
+    { class: "gt-cauldron-loader" },
+    h(
+      "div",
+      { class: "gt-cauldron-stage" },
+      h(
+        "div",
+        { class: "gt-cauldron-smoke" },
+        h("span"),
+        h("span"),
+        h("span"),
+      ),
+      h("div", { class: "gt-cauldron-hat" }),
+      h(
+        "div",
+        { class: "gt-cauldron-rim" },
+        h(
+          "div",
+          { class: "gt-cauldron-bubbles" },
+          h("span"),
+          h("span"),
+          h("span"),
+        ),
+      ),
+      h(
+        "div",
+        { class: "gt-cauldron-body" },
+        h("div", { class: "gt-cauldron-handle left" }),
+        h("div", { class: "gt-cauldron-handle right" }),
+      ),
+    ),
+    h("span", { class: "gt-loader-message" }, message),
+  );
+}
+
+/** Círculo rúnico: la carga "de marca" para todo lo demás (cada cambio de
+ * pantalla, la búsqueda del catálogo, enriquecer una ficha pendiente desde
+ * Steam). Mismo mundo mágico que el caldero, pieza distinta — no es el
+ * caldero reciclado en todos lados. */
+export function magicLoader(message = "Cargando…") {
+  return h(
+    "div",
+    { class: "gt-magic-loader" },
+    h(
+      "div",
+      { class: "gt-magic-loader-orb" },
+      h("div", { class: "gt-magic-loader-ring" }),
+      h("div", { class: "gt-magic-loader-ring gt-ring-inner" }),
+      h("div", { class: "gt-magic-loader-dot" }),
+      h("div", { class: "gt-magic-loader-dot" }),
+      icon("sparkles", 22, "gt-magic-loader-spark"),
+    ),
+    h("span", { class: "gt-loader-message" }, message),
+  );
+}

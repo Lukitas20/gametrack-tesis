@@ -303,6 +303,9 @@ export async function recommendationsView({ query } = { query: new URLSearchPara
   if (comparing) loadComparison();
   else load();
 
+  const sections = h("div");
+  loadHomeSections(sections);
+
   return h(
     "div",
     null,
@@ -312,8 +315,8 @@ export async function recommendationsView({ query } = { query: new URLSearchPara
       h(
         "div",
         null,
-        h("p", { class: "eyebrow" }, "Para vos"),
-        h("h1", null, "Recomendaciones"),
+        h("p", { class: "eyebrow" }, "Inicio"),
+        h("h1", null, "Para vos"),
         note,
       ),
       meta,
@@ -326,7 +329,35 @@ export async function recommendationsView({ query } = { query: new URLSearchPara
       compareButton,
     ),
     body,
+    sections,
   );
+}
+
+/** Filas curadas de la portada: sólo juegos con ficha completa. */
+const HOME_ROWS = [
+  ["populares", "Populares"],
+  ["mejor_valorados", "Mejor valorados"],
+  ["recientes", "Lanzamientos recientes"],
+  ["destacados", "Destacados"],
+];
+
+async function loadHomeSections(container) {
+  let home;
+  try {
+    home = await api.home(8);
+  } catch {
+    return; // La portada es un plus; si falla, el feed personalizado ya se ve.
+  }
+
+  const rows = HOME_ROWS.filter(([key]) => home[key]?.length).map(([key, title]) =>
+    h(
+      "section",
+      { class: "section", style: { marginTop: "var(--s-8)" } },
+      h("div", { class: "section-head" }, h("h2", null, title)),
+      gameGrid(home[key]),
+    ),
+  );
+  container.replaceChildren(...rows);
 }
 
 /** Aporte numérico de cada estrategia por juego: hace auditable la mezcla. */

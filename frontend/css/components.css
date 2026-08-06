@@ -937,6 +937,271 @@ tr.clickable:hover td {
   }
 }
 
+/* Cargas "de marca", línea fantasía/hechicero (ver logo): un caldero
+ * hirviendo para "¿Qué jugamos hoy?" (gt-cauldron-loader) y un círculo
+ * rúnico para el resto (gt-magic-loader) — mismo mundo, dos piezas
+ * distintas, para que no se sientan la misma animación reciclada. Los
+ * colores son ilustrativos (violeta poción / oro caldero), no tokens de
+ * tema: se ven igual en claro y oscuro, como los degradados de portada. */
+.gt-loader-message {
+  font-weight: 600;
+  font-size: var(--fs-md);
+  color: var(--ink);
+}
+
+/* --- Caldero: exclusivo del asistente "¿Qué jugamos hoy?" --- */
+
+.gt-cauldron-loader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-5);
+  padding: var(--s-12) 0 var(--s-8);
+}
+
+.gt-cauldron-stage {
+  position: relative;
+  width: 120px;
+  height: 118px;
+}
+
+.gt-cauldron-smoke {
+  position: absolute;
+  top: -44px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 60px;
+  height: 46px;
+}
+
+.gt-cauldron-smoke span {
+  position: absolute;
+  bottom: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #cbb0ff, #8b5cf6 55%, #5b2f9e 100%);
+  filter: blur(3px);
+  opacity: 0;
+  animation: gt-smoke-rise 2.2s ease-in infinite;
+}
+.gt-cauldron-smoke span:nth-child(1) {
+  left: 6px;
+  width: 15px;
+  height: 15px;
+  animation-delay: 0s;
+}
+.gt-cauldron-smoke span:nth-child(2) {
+  left: 23px;
+  width: 20px;
+  height: 20px;
+  animation-delay: 0.7s;
+}
+.gt-cauldron-smoke span:nth-child(3) {
+  left: 38px;
+  width: 13px;
+  height: 13px;
+  animation-delay: 1.4s;
+}
+
+@keyframes gt-smoke-rise {
+  0% {
+    transform: translate(0, 0) scale(0.6);
+    opacity: 0;
+  }
+  18% {
+    opacity: 0.85;
+  }
+  100% {
+    transform: translate(9px, -46px) scale(1.7);
+    opacity: 0;
+  }
+}
+
+.gt-cauldron-hat {
+  position: absolute;
+  top: -6px;
+  right: 2px;
+  width: 0;
+  height: 0;
+  border-left: 12px solid transparent;
+  border-right: 12px solid transparent;
+  border-bottom: 30px solid #2a1f42;
+  transform: rotate(16deg);
+  z-index: 2;
+}
+.gt-cauldron-hat::after {
+  content: "";
+  position: absolute;
+  bottom: -5px;
+  left: -9px;
+  width: 42px;
+  height: 7px;
+  border-radius: 50%;
+  background: #2a1f42;
+}
+
+.gt-cauldron-rim {
+  position: relative;
+  width: 96px;
+  height: 18px;
+  margin: 0 auto;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #d9a441, #a97324);
+  box-shadow: var(--shadow-sm);
+  z-index: 1;
+}
+
+.gt-cauldron-bubbles span {
+  position: absolute;
+  bottom: 5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #c9a6ff;
+  animation: gt-bubble-pop 1.6s ease-in-out infinite;
+}
+.gt-cauldron-bubbles span:nth-child(1) {
+  left: 20px;
+  animation-delay: 0s;
+}
+.gt-cauldron-bubbles span:nth-child(2) {
+  left: 44px;
+  animation-delay: 0.5s;
+}
+.gt-cauldron-bubbles span:nth-child(3) {
+  left: 66px;
+  animation-delay: 1s;
+}
+
+@keyframes gt-bubble-pop {
+  0%,
+  100% {
+    transform: translateY(0) scale(0.4);
+    opacity: 0;
+  }
+  40% {
+    transform: translateY(-6px) scale(1);
+    opacity: 1;
+  }
+  70% {
+    transform: translateY(-10px) scale(0.7);
+    opacity: 0;
+  }
+}
+
+.gt-cauldron-body {
+  width: 108px;
+  height: 72px;
+  margin: -7px auto 0;
+  background: linear-gradient(155deg, #241a38, #140e22);
+  border-radius: 12px 12px 50% 50% / 12px 12px 62% 62%;
+  position: relative;
+  box-shadow: var(--shadow-md);
+}
+
+.gt-cauldron-handle {
+  position: absolute;
+  top: 4px;
+  width: 15px;
+  height: 20px;
+  border: 4px solid #241a38;
+  border-radius: 50%;
+}
+.gt-cauldron-handle.left {
+  left: -13px;
+  border-right-color: transparent;
+  transform: rotate(20deg);
+}
+.gt-cauldron-handle.right {
+  right: -13px;
+  border-left-color: transparent;
+  transform: rotate(-20deg);
+}
+
+/* --- Círculo rúnico: el resto de las cargas (búsqueda, enriquecimiento
+ * de fichas, transición entre pantallas). --- */
+
+.gt-magic-loader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-6);
+  padding: var(--s-14) 0;
+}
+
+.gt-magic-loader-orb {
+  position: relative;
+  width: 76px;
+  height: 76px;
+  display: grid;
+  place-items: center;
+}
+
+.gt-magic-loader-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px dashed #8b5cf6;
+  opacity: 0.55;
+  animation: gt-ring-spin 3.2s linear infinite;
+}
+.gt-magic-loader-ring.gt-ring-inner {
+  inset: 12px;
+  border-color: #d9a441;
+  opacity: 0.45;
+  animation-duration: 2.3s;
+  animation-direction: reverse;
+}
+
+.gt-magic-loader-spark {
+  color: #8b5cf6;
+  filter: drop-shadow(0 0 6px rgba(139, 92, 246, 0.5));
+  animation: gt-spark-pulse 1.2s ease-in-out infinite;
+}
+
+.gt-magic-loader-dot {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #d9a441;
+  top: 50%;
+  left: 50%;
+  margin: -2.5px;
+  animation: gt-orbit 2.4s linear infinite;
+}
+.gt-magic-loader-dot:nth-child(3) {
+  animation-delay: -1.2s;
+}
+
+@keyframes gt-ring-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes gt-spark-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.85;
+  }
+  50% {
+    transform: scale(1.22);
+    opacity: 1;
+  }
+}
+
+@keyframes gt-orbit {
+  from {
+    transform: rotate(0deg) translateX(36px) rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg) translateX(36px) rotate(-360deg);
+  }
+}
+
 .skeleton {
   background: linear-gradient(
     90deg,

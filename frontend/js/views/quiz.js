@@ -11,13 +11,13 @@ import { api } from "../api.js";
 import { navigate } from "../router.js";
 import { loadCatalog, state } from "../store.js";
 import {
+  cauldronLoader,
   coverGradient,
   h,
   icon,
   initials,
   modalHead,
   openModal,
-  spinnerBlock,
   toast,
 } from "../ui.js";
 
@@ -35,12 +35,15 @@ const QUESTIONS = [
   {
     key: "animo",
     title: "¿Cómo venís de ánimo?",
-    note: "Se traduce a etiquetas del catálogo.",
+    note: "Se traduce a géneros del catálogo.",
+    // El catálogo real de Steam no tiene etiquetas de "ánimo" (narrativo,
+    // relajante, etc.) — sus categorías son de plataforma (logros, mando,
+    // nube), no de tono. El género es la señal real más parecida que hay.
     options: [
-      { emoji: "🧠", title: "Quiero una historia", note: "Narrativo, guion fuerte", tags: ["narrativo", "historia-rica", "misterio"] },
-      { emoji: "🔥", title: "Quiero desafío", note: "Difícil, exigente", tags: ["dificil", "souls-like", "combate-preciso"] },
-      { emoji: "🌿", title: "Quiero relajarme", note: "Tranquilo, sin presión", tags: ["relajante", "sandbox", "granja", "construccion"] },
-      { emoji: "⚔️", title: "Quiero competir", note: "Competitivo, PvP", tags: ["competitivo", "esports", "fps"] },
+      { emoji: "🧠", title: "Quiero una historia", note: "RPG, aventura", genres: ["rol", "aventura"] },
+      { emoji: "🔥", title: "Quiero desafío", note: "Acción, estrategia", genres: ["accion", "estrategia"] },
+      { emoji: "🌿", title: "Quiero relajarme", note: "Casual, simuladores", genres: ["casual", "simuladores"] },
+      { emoji: "⚔️", title: "Quiero competir", note: "Acción, deportes, carreras", genres: ["accion", "deportes", "carreras"] },
     ],
   },
   {
@@ -123,7 +126,7 @@ export function openQuiz() {
     async function renderResults() {
       container.replaceChildren(
         modalHead("Buscando…", "Cruzando tus respuestas con el catálogo.", close),
-        spinnerBlock("Eligiendo tres juegos…"),
+        cauldronLoader("Eligiendo tres juegos…"),
       );
 
       try {
@@ -244,15 +247,16 @@ export function openQuiz() {
  * relajar para llegar a tres.
  */
 async function pickGames(answers) {
-  const available = new Set(state.tags.map((tag) => tag.slug));
-  const moodTags = answers.animo.tags.filter((tag) => available.has(tag));
-  const companyTags = answers.compania.tags.filter((tag) => available.has(tag));
+  const availableGenres = new Set(state.genres.map((genre) => genre.slug));
+  const availableTags = new Set(state.tags.map((tag) => tag.slug));
+  const moodGenres = answers.animo.genres.filter((slug) => availableGenres.has(slug));
+  const companyTags = answers.compania.tags.filter((slug) => availableTags.has(slug));
   const maxPlaytime = answers.tiempo.maxPlaytime;
 
-  async function fetchByTags(tags) {
-    if (!tags.length) return null;
+  async function fetchByFilter(param, values) {
+    if (!values.length) return null;
     const pages = await Promise.all(
-      tags.map((tag) => api.games({ tag, limit: 100, sort: "rating" })),
+      values.map((value) => api.games({ [param]: value, limit: 100, sort: "rating" })),
     );
     const merged = new Map();
     for (const page of pages) {
@@ -262,8 +266,8 @@ async function pickGames(answers) {
   }
 
   const [moodSet, companySet] = await Promise.all([
-    fetchByTags(moodTags),
-    fetchByTags(companyTags),
+    fetchByFilter("genre", moodGenres),
+    fetchByFilter("tag", companyTags),
   ]);
 
   const relaxed = [];

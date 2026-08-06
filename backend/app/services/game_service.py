@@ -14,6 +14,16 @@ SORT_FIELDS = {
 }
 
 
+def _enriched_only(statement: Select) -> Select:
+    """Sólo juegos con ficha completa (ver ``Game.is_enriched``).
+
+    Las secciones curadas de la portada muestran géneros, imagen y reseñas:
+    una ficha pendiente (sólo AppID + nombre) se vería rota ahí. En el
+    catálogo y el buscador sí aparecen, a propósito.
+    """
+    return statement.where(or_(Game.steam_app_id.is_(None), Game.steam_synced_at.is_not(None)))
+
+
 def get_game(db: Session, game_id: int) -> Game | None:
     return db.get(Game, game_id)
 
@@ -87,6 +97,38 @@ def list_games(
     ordering = SORT_FIELDS.get(sort, SORT_FIELDS["popularidad"])
     games = list(db.scalars(base.order_by(ordering).limit(limit).offset(offset)))
     return total or 0, games
+
+
+def list_home_section(db: Session, sort: str, limit: int = 8) -> list[Game]:
+    """Una fila curada de la portada (populares, mejor valorados, recientes)."""
+    ordering = SORT_FIELDS.get(sort, SORT_FIELDS["popularidad"])
+    statement = _enriched_only(select(Game)).order_by(ordering).limit(limit)
+    return list(db.scalars(statement))
+
+
+def list_featured(db: Session, limit: int = 8) -> list[Game]:
+    """"Destacados": no hay un campo de "juego destacado" en la base, así que
+    el criterio es de facto: mejor valorados entre los que además tienen nota
+    de Metacritic (una segunda señal de calidad, no sólo volumen de reseñas
+    de Steam). Completa con los más populares si no alcanzan para el límite.
+    """
+    with_metacritic = list(
+        db.scalars(
+            _enriched_only(select(Game))
+            .where(Game.metacritic.is_not(None))
+            .order_by(Game.popularity_score.desc())
+            .limit(limit)
+        )
+    )
+    if len(with_metacritic) >= limit:
+        return with_metacritic
+
+    exclude = [g.id for g in with_metacritic]
+    statement = _enriched_only(select(Game)).order_by(Game.popularity_score.desc())
+    if exclude:
+        statement = statement.where(Game.id.notin_(exclude))
+    fallback = list(db.scalars(statement.limit(limit - len(with_metacritic))))
+    return with_metacritic + fallback
 
 
 def list_genres(db: Session) -> list[Genre]:

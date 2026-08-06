@@ -145,10 +145,58 @@ h4 {
   display: flex;
   align-items: center;
   gap: var(--s-1);
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
   overflow-x: auto;
   scrollbar-width: none;
+}
+
+/* Barra de búsqueda del header: persiste entre navegaciones (no se
+ * reconstruye como la nav en cada cambio de ruta), así que escribir no
+ * pierde el foco. Toma el espacio central que antes ocupaba la nav. */
+.header-search {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+}
+
+.header-search-wrap {
+  position: relative;
+  width: 100%;
+  max-width: 420px;
+}
+
+.header-search-wrap svg {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--ink-muted);
+  pointer-events: none;
+}
+
+.header-search-wrap input {
+  width: 100%;
+  padding: var(--s-2) var(--s-3) var(--s-2) 36px;
+  border-radius: var(--r-full, 999px);
+  border: 1px solid var(--border);
+  background: var(--surface-sunken);
+  color: var(--ink);
+  font-size: var(--fs-sm);
+  transition: border-color 0.14s, background 0.14s;
+}
+
+.header-search-wrap input:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: var(--surface);
+}
+
+@media (max-width: 720px) {
+  .header-search-wrap {
+    max-width: 220px;
+  }
 }
 .main-nav::-webkit-scrollbar {
   display: none;

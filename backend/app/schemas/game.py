@@ -56,3 +56,12 @@ class GamePage(BaseModel):
     limit: int
     offset: int
     items: list[GameSummary]
+
+
+class HomeSections(BaseModel):
+    """Filas curadas de la portada. Sólo juegos con ficha completa."""
+
+    populares: list[GameSummary]
+    mejor_valorados: list[GameSummary]
+    recientes: list[GameSummary]
+    destacados: list[GameSummary]

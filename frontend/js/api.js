@@ -65,6 +65,7 @@ export const api = {
     request("/auth/login", { method: "POST", body: { username, password }, auth: false }),
   register: (data) => request("/auth/register", { method: "POST", body: data, auth: false }),
   me: () => request("/auth/me"),
+  updateProfile: (data) => request("/auth/me", { method: "PUT", body: data }),
   setPreferences: (genreIds) =>
     request("/auth/me/preferences", { method: "PUT", body: { genre_ids: genreIds } }),
 
@@ -72,6 +73,7 @@ export const api = {
   genres: () => request("/genres", { auth: false }),
   tags: (minGames = 3) => request("/tags", { auth: false, params: { min_games: minGames } }),
   games: (params) => request("/games", { auth: false, params }),
+  home: (limit = 8) => request("/home", { auth: false, params: { limit } }),
   game: (id) => request(`/games/${id}`, { auth: false }),
   similar: (id, limit = 6) => request(`/games/${id}/similar`, { auth: false, params: { limit } }),
   reviews: (id, limit = 10) => request(`/games/${id}/reviews`, { auth: false, params: { limit } }),
@@ -100,6 +102,9 @@ export const api = {
     request(`/me/lists/${listId}/items`, { method: "POST", body: { game_id: gameId } }),
   removeFromList: (listId, gameId) =>
     request(`/me/lists/${listId}/items/${gameId}`, { method: "DELETE" }),
+
+  // --- Steam ---
+  linkSteam: (steamId) => request("/steam/link", { method: "POST", body: { steam_id: steamId } }),
 
   // --- Analítica (rol desarrollador) ---
   studioAnalytics: (studio) => request("/analytics/studio", { params: { studio } }),

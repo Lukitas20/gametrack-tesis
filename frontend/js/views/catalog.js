@@ -3,9 +3,13 @@
 import { api } from "../api.js";
 import { gameGrid } from "../components.js";
 import { loadCatalog, state } from "../store.js";
-import { emptyState, h, icon, spinnerBlock } from "../ui.js";
+import { emptyState, h, magicLoader } from "../ui.js";
 
 const PAGE_SIZE = 24;
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 export async function catalogView({ query }) {
   const filters = {
@@ -23,17 +27,6 @@ export async function catalogView({ query }) {
   const count = h("p", { class: "muted", style: { fontSize: "var(--fs-sm)" } });
   let loading = false;
   let total = 0;
-
-  const searchInput = h("input", {
-    class: "input",
-    type: "search",
-    placeholder: "Buscar por nombre o desarrollador…",
-    value: filters.search,
-    onInput: (event) => {
-      filters.search = event.target.value;
-      debounceReload();
-    },
-  });
 
   const genreSelect = h(
     "select",
@@ -104,21 +97,22 @@ export async function catalogView({ query }) {
     ),
   );
 
-  let timer = null;
-  function debounceReload() {
-    clearTimeout(timer);
-    timer = setTimeout(reload, 280);
-  }
-
   async function reload({ append = false } = {}) {
     if (loading) return;
     loading = true;
-    // En un refetch se conserva el render anterior atenuado, sin salto.
-    if (!append && results.firstChild) results.classList.add("is-loading");
+    // Si ya hay resultados en pantalla, un refetch los mantiene atenuados en
+    // vez de reemplazarlos por un loader (sin salto). La primera carga, en
+    // cambio, arranca de la nada: ahí se ve la animación completa, con un
+    // mínimo de tiempo en pantalla para que no sea un parpadeo (las
+    // consultas locales suelen resolver en menos de lo que dura verla).
+    const isFirstLoad = !append && !results.querySelector(".game-grid");
+    if (!append && isFirstLoad) results.replaceChildren(magicLoader());
+    else if (!append) results.classList.add("is-loading");
     if (!append) filters.offset = 0;
 
     try {
-      const page = await api.games(filters);
+      const minWait = isFirstLoad ? wait(550) : Promise.resolve();
+      const [page] = await Promise.all([api.games(filters), minWait]);
       total = page.total;
 
       count.textContent = total
@@ -169,7 +163,6 @@ export async function catalogView({ query }) {
     }
   }
 
-  results.replaceChildren(spinnerBlock());
   reload();
 
   return h(
@@ -183,14 +176,13 @@ export async function catalogView({ query }) {
         null,
         h("p", { class: "eyebrow" }, "Catálogo"),
         h("h1", null, "Explorar juegos"),
-        h("p", null, "Buscá por nombre o desarrollador y filtrá por género y etiquetas."),
+        h("p", null, "Buscá arriba, en el header, o filtrá por género y etiquetas."),
       ),
       count,
     ),
     h(
       "div",
       { class: "filter-bar" },
-      h("div", { class: "search-wrap" }, icon("search", 15), searchInput),
       genreSelect,
       sortSelect,
     ),

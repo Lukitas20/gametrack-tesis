@@ -51,3 +51,25 @@ def set_preferences(db: Session, user: User, genre_ids: list[int]) -> User:
     db.commit()
     db.refresh(user)
     return user
+
+
+def update_profile(
+    db: Session,
+    user: User,
+    full_name: str | None,
+    email: str | None,
+    avatar_url: str | None,
+) -> User:
+    """Actualiza sólo los campos que vinieron en el pedido (``None`` = sin tocar)."""
+    if full_name is not None:
+        user.full_name = full_name
+    if email is not None:
+        existing = get_user_by_email(db, email)
+        if existing and existing.id != user.id:
+            raise ValueError("Ese email ya está en uso por otra cuenta")
+        user.email = email
+    if avatar_url is not None:
+        user.avatar_url = avatar_url
+    db.commit()
+    db.refresh(user)
+    return user
