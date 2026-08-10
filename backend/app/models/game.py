@@ -124,6 +124,14 @@ class Game(Base):
     # Steam o que todavía no se sincronizaron ni una vez.
     steam_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
+    # Totales REALES de reseñas que declara Steam, no las que llegamos a
+    # importar (el import está capado en STEAM_REVIEWS_IMPORT_LIMIT). Sin
+    # esto, `ratings_count` mide el tamaño de nuestra muestra y no la
+    # popularidad: un indie con 556 reseñas y CS2 con 9,7 millones se veían
+    # igual de confiables, y el de la muestra más positiva ganaba siempre.
+    steam_total_reviews: Mapped[int | None] = mapped_column(Integer)
+    steam_positive_reviews: Mapped[int | None] = mapped_column(Integer)
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

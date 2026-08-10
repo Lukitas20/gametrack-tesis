@@ -469,6 +469,49 @@ def aspect_breakdown(db: Session, game_ids: list[int]) -> list[dict]:
     return breakdown
 
 
+def aspect_scores_by_game(
+    db: Session, game_ids: list[int], aspect: Aspect
+) -> dict[int, dict]:
+    """Sentimiento real de un aspecto puntual, juego por juego.
+
+    A diferencia de ``aspect_breakdown`` (que agrega un conjunto de juegos en
+    un solo número, para el panel de estudio), esto mantiene un puntaje por
+    juego: lo usa el asistente "¿Qué jugamos hoy?" para ordenar por lo que
+    las reseñas reales dicen de ese aspecto puntual, no sólo por género.
+    """
+    if not game_ids:
+        return {}
+
+    rows = db.execute(
+        select(ReviewAspect.game_id, func.avg(ReviewAspect.score), func.count(ReviewAspect.id))
+        .where(ReviewAspect.game_id.in_(game_ids), ReviewAspect.aspect == aspect)
+        .group_by(ReviewAspect.game_id)
+    ).all()
+    result = {
+        game_id: {"score": round(float(avg_score or 0.0), 3), "mentions": count, "evidence": None}
+        for game_id, avg_score, count in rows
+    }
+    if not result:
+        return result
+
+    # La mejor cita positiva de cada juego, para mostrarla como evidencia:
+    # ordenado por score primero se queda con la más positiva por juego.
+    evidence_rows = db.execute(
+        select(ReviewAspect.game_id, ReviewAspect.evidence)
+        .where(
+            ReviewAspect.game_id.in_(result.keys()),
+            ReviewAspect.aspect == aspect,
+            ReviewAspect.sentiment == Sentiment.POSITIVE,
+            ReviewAspect.evidence.is_not(None),
+        )
+        .order_by(ReviewAspect.score.desc())
+    )
+    for game_id, evidence in evidence_rows:
+        if result[game_id]["evidence"] is None:
+            result[game_id]["evidence"] = evidence
+    return result
+
+
 def _evidence_samples(db: Session, game_ids: list[int], limit: int = 3) -> dict[str, list[str]]:
     """Citas textuales que respaldan la valoración negativa de cada aspecto.
 

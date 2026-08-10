@@ -32,13 +32,22 @@ def recompute_game_aggregates(db: Session, game_id: int) -> None:
     ).one()
     rating_count = int(rating_count or 0)
 
-    recommended, steam_count = db.execute(
-        select(
-            func.sum(case((Review.is_recommended.is_(True), 1), else_=0)),
-            func.count(Review.id),
-        ).where(Review.game_id == game_id, Review.is_recommended.is_not(None))
-    ).one()
-    steam_count = int(steam_count or 0)
+    if game.steam_total_reviews:
+        # Los totales que declara Steam, cuando los tenemos: son la señal
+        # honesta de popularidad. Contar las reseñas importadas mediría el
+        # tamaño de nuestra muestra (capada en
+        # ``STEAM_REVIEWS_IMPORT_LIMIT``), no cuánta gente jugó al juego.
+        steam_count = int(game.steam_total_reviews)
+        recommended = int(game.steam_positive_reviews or 0)
+    else:
+        recommended, steam_count = db.execute(
+            select(
+                func.sum(case((Review.is_recommended.is_(True), 1), else_=0)),
+                func.count(Review.id),
+            ).where(Review.game_id == game_id, Review.is_recommended.is_not(None))
+        ).one()
+        steam_count = int(steam_count or 0)
+        recommended = int(recommended or 0)
     steam_average = 1 + 4 * (recommended / steam_count) if steam_count else None
 
     if rating_count and steam_count:

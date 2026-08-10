@@ -43,6 +43,20 @@ export function clear(node) {
   return node;
 }
 
+/**
+ * Reemplaza los hijos de un nodo descartando `null`/`undefined`/`false`,
+ * igual que hace `h` con sus hijos.
+ *
+ * `Node.replaceChildren` es la API nativa del DOM y convierte un `null` en
+ * el texto literal "null": pasarle el resultado de un condicional
+ * (`cond ? algo : null`) imprime "null" en pantalla.
+ */
+export function mount(node, ...children) {
+  node.replaceChildren();
+  append(node, children);
+  return node;
+}
+
 /* ------------------------------------------------------------------ *
  * Íconos
  * ------------------------------------------------------------------ */

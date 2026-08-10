@@ -26,7 +26,7 @@ import { catalogView } from "./views/catalog.js";
 import { developerGameView, developerView } from "./views/developer.js";
 import { gameView } from "./views/game.js";
 import { listsView } from "./views/lists.js";
-import { openQuiz } from "./views/quiz.js";
+import { quizView, startNewQuiz } from "./views/quiz.js";
 import { profileView } from "./views/profile.js";
 import { ratingsView } from "./views/ratings.js";
 import { recommendationsView } from "./views/recommendations.js";
@@ -254,7 +254,13 @@ function renderActions() {
 
   const quizButton = h(
     "button",
-    { class: "btn btn-sm", onClick: openQuiz, title: "Asistente de decisión" },
+    {
+      class: "btn btn-sm btn-primary",
+      // Entrar por el encabezado es pedir una recomendación nueva, así que
+      // descarta la tirada anterior en vez de volver a mostrarla.
+      onClick: startNewQuiz,
+      title: "Asistente de decisión",
+    },
     icon("dice", 15),
     h("span", { class: "quiz-label" }, "¿Qué jugamos hoy?"),
   );
@@ -344,6 +350,7 @@ route("/catalogo", view(catalogView));
 route("/recomendaciones", view(recommendationsView));
 route("/listas", view(listsView));
 route("/valoraciones", view(ratingsView));
+route("/que-jugamos", view(quizView));
 route("/perfil", view(profileView));
 route("/juego/:id", view(gameView));
 route("/dev", view(developerView));

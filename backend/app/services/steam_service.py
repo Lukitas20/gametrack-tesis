@@ -107,20 +107,39 @@ def _parse_release_date(raw: str) -> date | None:
 # ---------------------------------------------------------------------------
 
 
+class SteamUnavailable(RuntimeError):
+    """No se pudo hablar con Steam (timeout, error de red, 5xx, 429...).
+
+    Existe para separarlo del caso "Steam contestó que ese AppID no es un
+    juego", que devuelve ``None``. Confundir los dos es destructivo: quien
+    limpia fichas pendientes que resultaron no ser juegos borraría el
+    catálogo entero durante una caída de Steam.
+    """
+
+
 def get_app_details(steam_app_id: int) -> dict | None:
-    """Ficha de un juego en la tienda de Steam. ``None`` si no existe."""
+    """Ficha de un juego en la tienda de Steam.
+
+    Devuelve ``None`` sólo cuando Steam responde que ese AppID no existe o
+    no tiene ficha pública. Si no se pudo contactar a Steam levanta
+    ``SteamUnavailable``: no saber no es lo mismo que saber que no está.
+    """
     try:
         response = _http_client().get(
             f"{settings.STEAM_STORE_BASE}/appdetails",
             params={"appids": steam_app_id, "l": "spanish"},
         )
-    except httpx.HTTPError:
-        return None
+    except httpx.HTTPError as error:
+        raise SteamUnavailable(f"No se pudo contactar a Steam: {error}") from error
 
     if response.status_code != 200:
-        return None
+        raise SteamUnavailable(f"Steam respondió {response.status_code}")
 
-    payload = response.json().get(str(steam_app_id), {})
+    try:
+        payload = response.json().get(str(steam_app_id), {})
+    except ValueError as error:  # respuesta que no es JSON (portal cautivo, proxy)
+        raise SteamUnavailable("Steam respondió algo que no es JSON") from error
+
     if not payload.get("success"):
         return None
     return payload.get("data")
@@ -329,6 +348,46 @@ def get_app_reviews(
     return payload.get("reviews", [])
 
 
+def get_review_totals(steam_app_id: int) -> tuple[int, int] | None:
+    """Cantidad REAL de reseñas de un juego en Steam: ``(total, positivas)``.
+
+    Es lo que mide popularidad de verdad. No alcanza con contar las reseñas
+    importadas: el import está capado (``STEAM_REVIEWS_IMPORT_LIMIT``), así
+    que todos los juegos terminan con una muestra parecida y el conteo deja
+    de distinguir a Counter-Strike (9,7 millones) de un indie con 500.
+
+    Pide una sola reseña porque lo único que interesa es ``query_summary``,
+    que Steam devuelve igual. ``None`` si no se pudo averiguar.
+    """
+    try:
+        response = _http_client().get(
+            f"{settings.STEAM_REVIEWS_BASE}/{steam_app_id}",
+            params={
+                "json": 1,
+                "num_per_page": 1,
+                # Los totales son del juego, no de un idioma: filtrar acá
+                # subestimaría la popularidad de todo lo que no sea español.
+                "language": "all",
+                "purchase_type": "all",
+            },
+        )
+    except httpx.HTTPError:
+        return None
+
+    if response.status_code != 200:
+        return None
+    try:
+        summary = response.json().get("query_summary") or {}
+    except ValueError:
+        return None
+
+    total = summary.get("total_reviews")
+    positive = summary.get("total_positive")
+    if total is None or positive is None:
+        return None
+    return int(total), int(positive)
+
+
 def get_player_summaries_batch(steam_ids: list[str]) -> dict[str, dict]:
     """Perfiles públicos de varias cuentas en un único pedido (máx. 100)."""
     if not settings.STEAM_API_KEY or not steam_ids:
@@ -516,7 +575,12 @@ def import_game(db: Session, steam_app_id: int) -> Game | None:
     if existing:
         return existing
 
-    data = get_app_details(steam_app_id)
+    try:
+        data = get_app_details(steam_app_id)
+    except SteamUnavailable:
+        # Importar es opcional y reintentable: sin Steam simplemente no se
+        # importa nada ahora, sin distinguirlo de un AppID inexistente.
+        return None
     if not data or data.get("type") != "game":
         return None
 
@@ -561,6 +625,10 @@ def refresh_game(db: Session, game: Game) -> bool:
     enriquecido nunca se borra por esto — sólo se deja de actualizar — para
     no tirar evidencia real (reseñas, valoraciones) por una falla puntual de
     Steam.
+
+    Que Steam no conteste (``SteamUnavailable``) **no** cuenta como "no es
+    un juego" y se propaga sin borrar nada: correr una limpieza mientras
+    Steam está caído borraría el catálogo entero.
     """
     if game.steam_app_id is None:
         return True
@@ -586,6 +654,12 @@ def refresh_game(db: Session, game: Game) -> bool:
         db.commit()
         invalidate_engine()
         return False
+
+    # Los totales reales van antes de importar reseñas: es lo que usa
+    # `recompute_game_aggregates` para medir popularidad de verdad.
+    totals = get_review_totals(game.steam_app_id)
+    if totals is not None:
+        game.steam_total_reviews, game.steam_positive_reviews = totals
 
     import_reviews(db, game, game.steam_app_id)
 

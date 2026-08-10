@@ -390,6 +390,33 @@ def test_refresh_borra_una_ficha_pendiente_que_no_es_un_juego(db: Session, monke
     assert db.get(Game, game_id) is None
 
 
+def test_refresh_no_borra_una_ficha_pendiente_si_steam_no_responde(
+    db: Session, monkeypatch
+) -> None:
+    """La regresión que motivó ``SteamUnavailable``.
+
+    "Steam no contestó" no es "Steam dijo que no es un juego": cuando
+    ``get_app_details`` devolvía ``None`` para las dos cosas, correr el
+    enriquecido masivo durante una caída de Steam borraba justo las fichas
+    más populares del catálogo, una por una.
+    """
+
+    def unavailable(_):
+        raise steam_service.SteamUnavailable("timeout")
+
+    monkeypatch.setattr(steam_service, "get_app_details", unavailable)
+
+    game = Game(steam_app_id=730, slug="counter-strike", name="Counter-Strike")
+    db.add(game)
+    db.commit()
+    game_id = game.id
+
+    with pytest.raises(steam_service.SteamUnavailable):
+        steam_service.refresh_game(db, game)
+
+    assert db.get(Game, game_id) is not None
+
+
 def test_refresh_no_borra_un_juego_ya_enriquecido_si_steam_falla(
     db: Session, monkeypatch
 ) -> None:

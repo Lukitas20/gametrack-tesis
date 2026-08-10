@@ -59,6 +59,11 @@ import truststore
 # Usa el almacén de certificados del sistema operativo (ver app/main.py).
 truststore.inject_into_ssl()
 
+# El catálogo real de Steam tiene nombres en japonés, chino y cirílico que la
+# consola de Windows (cp1252) no sabe imprimir: sin esto, mostrar el progreso
+# corta el proceso entero con UnicodeEncodeError.
+sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
@@ -98,7 +103,13 @@ def fetch_catalog_from_steam(count: int, delay: float) -> list[dict[str, Any]]:
 
     games: list[dict[str, Any]] = []
     for index, appid in enumerate(appids, start=1):
-        data = steam_service.get_app_details(appid)
+        try:
+            data = steam_service.get_app_details(appid)
+        except steam_service.SteamUnavailable as error:
+            # Cortar acá y quedarse con lo juntado es mejor que seguir
+            # golpeando una API que no responde: es incremental, se retoma.
+            print(f"  [{index}/{len(appids)}] Steam dejó de responder ({error}). Se corta acá.")
+            break
         if not data or data.get("type") != "game":
             print(f"  [{index}/{len(appids)}] AppID {appid}: no disponible, se salta")
             if index < len(appids):

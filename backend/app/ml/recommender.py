@@ -180,6 +180,15 @@ class RecommenderEngine:
         self.popularity = averages - UNCERTAINTY_WEIGHT / np.sqrt(np.maximum(counts, 1.0))
         self.global_mean = global_mean
 
+        # Alcance: cuánta gente lo jugó, en escala logarítmica (la diferencia
+        # entre 500 y 5.000 reseñas importa mucho más que entre 1 y 1,5
+        # millones). Va aparte de `popularity` a propósito: son preguntas
+        # distintas — "¿qué tan bueno es?" contra "¿qué tan masivo es?" — y
+        # mezclarlas rompería el orden de "mejor valorados" del catálogo.
+        # Sin este término, un indie con 500 reseñas 99 % positivas le gana
+        # siempre a Counter-Strike con 9,7 millones al 86 %.
+        self.reach = _normalize(np.log10(np.maximum(counts, 1.0) + 1.0))
+
     # -- Consultas ---------------------------------------------------------
 
     def similar_games(self, game_id: int, limit: int = 10) -> list[Recommendation]:
@@ -241,6 +250,53 @@ class RecommenderEngine:
         if vector.nnz == 0:
             return None
         return cosine_similarity(vector, self._tfidf).ravel()
+
+    def suggest_by_mood(
+        self, genres: list[str], limit: int = 30, exclude: set[int] | None = None
+    ) -> list[Recommendation]:
+        """Perfil de contenido armado al vuelo a partir de una respuesta
+        puntual (el asistente "¿Qué jugamos hoy?"), sin pesar el historial
+        del usuario a propósito: la pregunta es por el ánimo de ahora mismo,
+        no por el gusto general — usar ``_content_scores_from_history`` acá
+        le taparía la respuesta a cualquiera que ya tenga valoraciones.
+        """
+        content = self._content_scores_from_preferences(genres)
+        if content is None:
+            return []
+
+        # A diferencia de la estrategia "contenido" del recomendador
+        # principal, acá el alcance pesa explícitamente: quien pregunta "qué
+        # juego hoy" espera títulos que conozca o pueda jugar con gente, no
+        # la joya oculta con quince reseñas. La afinidad sigue mandando.
+        combined = (
+            0.6 * _normalize(content)
+            + 0.15 * _normalize(self.popularity)
+            + 0.25 * self.reach
+        )
+        order = np.argsort(combined)[::-1]
+        excluded = exclude or set()
+
+        results: list[Recommendation] = []
+        for index in order:
+            game_id = self.game_ids[index]
+            if game_id in excluded:
+                continue
+            results.append(
+                Recommendation(
+                    game_id=game_id,
+                    score=round(float(combined[index]), 4),
+                    source=RecommendationSource.CONTENT,
+                    reason="Coincide con el ánimo que elegiste",
+                    components={
+                        "contenido": round(float(content[index]), 4),
+                        "popularidad": round(float(self.popularity[index]), 4),
+                        "alcance": round(float(self.reach[index]), 4),
+                    },
+                )
+            )
+            if len(results) >= limit:
+                break
+        return results
 
     def _collaborative_scores(self, user_id: int) -> np.ndarray | None:
         """Predice la nota de cada juego con filtrado colaborativo ítem-ítem."""

@@ -44,6 +44,11 @@ import truststore
 # Usa el almacén de certificados del sistema operativo (ver app/main.py).
 truststore.inject_into_ssl()
 
+# El catálogo real de Steam tiene nombres en japonés, chino y cirílico que la
+# consola de Windows (cp1252) no sabe imprimir: sin esto, mostrar el progreso
+# corta el proceso entero con UnicodeEncodeError.
+sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))

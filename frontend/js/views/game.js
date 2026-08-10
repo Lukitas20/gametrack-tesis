@@ -12,9 +12,31 @@ import {
 } from "../components.js";
 import { resolve } from "../router.js";
 import { isDeveloper, isLoggedIn, refreshRatings } from "../store.js";
-import { emptyState, formatYear, h, icon, signed, spinnerBlock, toast } from "../ui.js";
+import { emptyState, formatYear, h, icon, mount, signed, spinnerBlock, toast } from "../ui.js";
 
-export async function gameView({ params }) {
+/** De dónde vino el usuario, para ofrecerle el camino de vuelta. Sólo se
+ * aceptan destinos conocidos: el valor llega por la URL y terminaría en un
+ * `navigate`. */
+const BACK_LINKS = {
+  "que-jugamos": { path: "/que-jugamos", label: "Volver a los resultados" },
+};
+
+function backLink(query) {
+  const target = BACK_LINKS[query?.get("volver")];
+  if (!target) return null;
+  return h(
+    "a",
+    {
+      class: "btn btn-ghost btn-sm",
+      href: `#${target.path}`,
+      style: { marginBottom: "var(--s-4)" },
+    },
+    icon("arrowLeft", 13),
+    target.label,
+  );
+}
+
+export async function gameView({ params, query }) {
   const id = Number(params.id);
   const container = h("div", null, spinnerBlock("Cargando el juego…"));
 
@@ -40,7 +62,10 @@ export async function gameView({ params }) {
       : h("p", { class: "muted", style: { fontSize: "var(--fs-sm)" } }, "Todavía no hay reseñas."),
   );
 
-  container.replaceChildren(
+  mount(
+    container,
+    backLink(query),
+
     // --- Hero ---
     h(
       "div",

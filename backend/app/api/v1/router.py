@@ -8,6 +8,7 @@ from app.api.v1.endpoints import (
     home,
     interactions,
     lists,
+    quiz,
     recommendations,
     steam,
 )
@@ -21,5 +22,6 @@ api_router.include_router(home.router)
 api_router.include_router(interactions.router)
 api_router.include_router(lists.router)
 api_router.include_router(recommendations.router)
+api_router.include_router(quiz.router)
 api_router.include_router(analytics.router)
 api_router.include_router(steam.router)

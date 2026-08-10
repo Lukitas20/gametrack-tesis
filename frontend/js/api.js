@@ -81,6 +81,8 @@ export const api = {
   // --- Recomendaciones ---
   recommendations: (strategy = "auto", limit = 12) =>
     request("/recommendations", { params: { strategy, limit } }),
+  quizSuggest: (payload) =>
+    request("/quiz/suggest", { method: "POST", body: payload, auth: false }),
 
   // --- Interacciones ---
   myRatings: () => request("/me/ratings"),
