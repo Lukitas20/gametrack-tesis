@@ -648,7 +648,15 @@ def refresh_game(db: Session, game: Game) -> bool:
         for field, value in parsed.items():
             setattr(game, field, value)
         game.genres = [_get_or_create(db, Genre, name) for name in genres]
-        game.tags = [_get_or_create(db, Tag, name) for name in tags]
+        # Steam sólo conoce sus propias categorías (metadata de plataforma).
+        # Las etiquetas comunitarias que trajo la ingesta de SteamSpy
+        # describen tono y jugabilidad, y son el corpus del modelo de
+        # contenido: reemplazar la lista entera las borraría junto con sus
+        # votos, y encima en los juegos más vistos, que son los que más se
+        # refrescan (``maybe_refresh`` corre al abrir cualquier ficha vencida
+        # y sobre los tres resultados del asistente).
+        community = [tag for tag in game.tags if tag.kind == "community"]
+        game.tags = community + [_get_or_create(db, Tag, name) for name in tags]
     elif was_pending:
         db.delete(game)
         db.commit()

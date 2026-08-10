@@ -15,6 +15,7 @@ from app.models.enums import (
 from app.models.game import Game, Genre, Tag, game_genres, game_tags
 from app.models.game_list import GameList, GameListItem
 from app.models.interaction import Rating, Review, ReviewAspect
+from app.models.steamspy import SteamSpySync
 from app.models.user import User, UserPreference
 
 __all__ = [
@@ -30,6 +31,7 @@ __all__ = [
     "Review",
     "ReviewAspect",
     "Sentiment",
+    "SteamSpySync",
     "Tag",
     "User",
     "UserPreference",

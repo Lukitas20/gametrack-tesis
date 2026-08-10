@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, func, select
+from sqlalchemy import create_engine, func, select, update
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -16,7 +16,7 @@ from app.core.security import hash_password
 from app.db.base import Base
 from app.db.database import get_db
 from app.main import app
-from app.models import Game, Review, User, UserRole
+from app.models import Game, Review, Tag, User, UserRole, game_tags
 from app.services import steam_service
 
 PASSWORD = "demo1234"
@@ -415,6 +415,45 @@ def test_refresh_no_borra_una_ficha_pendiente_si_steam_no_responde(
         steam_service.refresh_game(db, game)
 
     assert db.get(Game, game_id) is not None
+
+
+def test_refresh_no_borra_las_etiquetas_comunitarias(db: Session, monkeypatch) -> None:
+    """Un refresco de la ficha no puede tirar lo que puso la ingesta.
+
+    ``refresh_game`` reemplaza la lista de etiquetas con las categorías que
+    devuelve Steam, y Steam sólo conoce las suyas (metadata de plataforma).
+    Sin cuidado, eso borra las etiquetas comunitarias de SteamSpy —y los
+    votos que alimentan el modelo de contenido— justo en los juegos más
+    vistos, que son los que más se refrescan: ``maybe_refresh`` corre al
+    abrir cualquier ficha vencida y sobre los tres resultados del asistente.
+    """
+    monkeypatch.setattr(steam_service, "get_app_details", lambda _: HALF_LIFE)
+
+    comunitaria = Tag(slug="story-rich", name="Story Rich", kind="community")
+    game = Game(steam_app_id=220, slug="half-life-2", name="Half-Life 2")
+    game.tags = [comunitaria]
+    db.add_all([comunitaria, game])
+    db.commit()
+    db.execute(
+        update(game_tags)
+        .where(game_tags.c.game_id == game.id, game_tags.c.tag_id == comunitaria.id)
+        .values(votes=5000)
+    )
+    db.commit()
+
+    steam_service.refresh_game(db, game)
+    db.refresh(game)
+
+    slugs = {tag.slug for tag in game.tags}
+    assert "story-rich" in slugs, "el refresco borró las etiquetas comunitarias"
+    # Y las de plataforma que trae Steam se agregan igual.
+    assert "un-jugador" in slugs
+    votos = db.scalar(
+        select(game_tags.c.votes).where(
+            game_tags.c.game_id == game.id, game_tags.c.tag_id == comunitaria.id
+        )
+    )
+    assert votos == 5000, "el refresco reseteó los votos de la comunidad"
 
 
 def test_refresh_no_borra_un_juego_ya_enriquecido_si_steam_falla(

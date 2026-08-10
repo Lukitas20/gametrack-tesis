@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     JSON,
+    BigInteger,
     Column,
     Date,
     DateTime,
@@ -40,6 +41,17 @@ game_tags = Table(
     Base.metadata,
     Column("game_id", ForeignKey("games.id", ondelete="CASCADE"), primary_key=True),
     Column("tag_id", ForeignKey("tags.id", ondelete="CASCADE"), primary_key=True),
+    # Votos de la comunidad de Steam para esta etiqueta en este juego (vía
+    # SteamSpy). Es la evidencia de "qué tan característico" es el rasgo, no
+    # sólo si aplica. 1 para asociaciones sin votos (categorías de la tienda,
+    # dataset curado): la membresía sigue valiendo, sin evidencia extra.
+    #
+    # Se escribe con UPDATE explícito desde ``steamspy_service`` y no a
+    # través de ``Game.tags``: la relación ``secondary`` sigue manejando la
+    # membresía (y deja el default 1), que es el único uso que tiene el resto
+    # del código. Convertirla en association object habría tocado cada
+    # lectura de ``game.tags`` para esto solo.
+    Column("votes", Integer, nullable=False, server_default="1"),
 )
 
 
@@ -71,6 +83,16 @@ class Tag(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     slug: Mapped[str] = mapped_column(String(60), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(60))
+    # Naturaleza de la etiqueta, porque cumplen roles distintos:
+    #  - "platform": categorías de la tienda de Steam (Un jugador, JcJ,
+    #    Cooperativo en línea...). Binarias y curadas por el developer:
+    #    los filtros duros de modalidad del asistente.
+    #  - "community": etiquetas votadas por usuarios vía SteamSpy (Story
+    #    Rich, Souls-like, Relaxing...). La semántica blanda: el corpus del
+    #    modelo de contenido y el vocabulario del ánimo.
+    kind: Mapped[str] = mapped_column(
+        String(20), default="platform", server_default="platform"
+    )
 
     games: Mapped[list[Game]] = relationship(secondary=game_tags, back_populates="tags")
 
@@ -131,6 +153,16 @@ class Game(Base):
     # igual de confiables, y el de la muestra más positiva ganaba siempre.
     steam_total_reviews: Mapped[int | None] = mapped_column(Integer)
     steam_positive_reviews: Mapped[int | None] = mapped_column(Integer)
+
+    # Señal masiva de SteamSpy (nivel 0/1 de la ingesta). Se guarda aparte de
+    # ``steam_total_reviews``/``steam_positive_reviews`` porque la fuente y la
+    # cadencia difieren: aquéllos vienen del endpoint de reseñas de la tienda
+    # al refrescar UNA ficha; éstos llegan en lote para TODO el catálogo, aun
+    # para juegos que nadie abrió nunca. ``steamspy_owners`` es el punto medio
+    # de la banda de dueños estimados ("100,000,000 .. 200,000,000").
+    steamspy_positive: Mapped[int | None] = mapped_column(Integer)
+    steamspy_negative: Mapped[int | None] = mapped_column(Integer)
+    steamspy_owners: Mapped[int | None] = mapped_column(BigInteger)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
