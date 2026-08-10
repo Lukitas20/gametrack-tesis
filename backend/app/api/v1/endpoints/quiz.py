@@ -108,8 +108,15 @@ def suggest(payload: QuizRequest, db: Session = Depends(get_db)) -> QuizResponse
     candidates = engine.suggest_by_mood(
         payload.genres + payload.mood_tags, limit=CANDIDATE_POOL
     )
+    # El perfil de contenido puede salir vacío (ningún término del ánimo
+    # existe en el corpus). Caer a popularidad está bien, pero hay que
+    # DECLARARLO: si no, la respuesta dice que no se relajó nada mientras
+    # devuelve lo popular del catálogo, que es la degradación silenciosa que
+    # el asistente existe para evitar.
+    relaxed: list[str] = []
     if not candidates:
         candidates = engine.recommend(user_id=None, limit=CANDIDATE_POOL, strategy="popularidad")
+        relaxed.append("el ánimo")
 
     games = {
         game.id: game
@@ -118,7 +125,6 @@ def suggest(payload: QuizRequest, db: Session = Depends(get_db)) -> QuizResponse
         )
     }
 
-    relaxed: list[str] = []
     picks = _filter(candidates, games, payload)
 
     if len(picks) < 3:
@@ -136,7 +142,8 @@ def suggest(payload: QuizRequest, db: Session = Depends(get_db)) -> QuizResponse
     if len(picks) < 3:
         fallback = engine.recommend(user_id=None, limit=12, strategy="popularidad")
         picks = fallback
-        relaxed.append("el ánimo")
+        if "el ánimo" not in relaxed:
+            relaxed.append("el ánimo")
         games.update(
             {
                 game.id: game
