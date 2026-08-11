@@ -66,13 +66,23 @@ def recompute_game_aggregates(db: Session, game_id: int) -> None:
     ).one()
     rating_count = int(rating_count or 0)
 
+    # Orden de preferencia: cualquier TOTAL real antes que nuestra muestra.
+    # Contar las reseñas importadas mide el tamaño de la muestra (capada en
+    # ``STEAM_REVIEWS_IMPORT_LIMIT``), no cuánta gente jugó al juego —
+    # Counter-Strike 2 quedaba con 64 "reseñas" y perdía en alcance contra
+    # el Counter-Strike de 1999, que sí tenía su total cargado. Mezclar
+    # totales con muestras es peor que usar una sola fuente imperfecta.
+    #
+    # Entre los dos totales gana el de Steam (autoritativo) sobre el de
+    # SteamSpy (tercero, pero con cobertura de todo el catálogo); miden lo
+    # mismo y en la misma escala, así que convivir no reintroduce la mezcla.
+    steamspy_total = (game.steamspy_positive or 0) + (game.steamspy_negative or 0)
     if game.steam_total_reviews:
-        # Los totales que declara Steam, cuando los tenemos: son la señal
-        # honesta de popularidad. Contar las reseñas importadas mediría el
-        # tamaño de nuestra muestra (capada en
-        # ``STEAM_REVIEWS_IMPORT_LIMIT``), no cuánta gente jugó al juego.
         steam_count = int(game.steam_total_reviews)
         recommended = int(game.steam_positive_reviews or 0)
+    elif steamspy_total > 0:
+        steam_count = steamspy_total
+        recommended = int(game.steamspy_positive or 0)
     else:
         recommended, steam_count = db.execute(
             select(
