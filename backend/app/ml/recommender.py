@@ -2,10 +2,13 @@
 
 Combina tres estrategias complementarias:
 
-- **Basada en contenido** — TF-IDF sobre géneros, etiquetas, desarrollador y
-  descripción de cada juego, con similitud coseno. Funciona desde la primera
-  valoración y explica bien sus resultados, pero encierra al usuario en lo
-  que ya conoce.
+- **Basada en contenido** — TF-IDF sobre las etiquetas comunitarias de cada
+  juego ponderadas por votos (vía SteamSpy) más sus géneros, con similitud
+  coseno. La frecuencia del término es la evidencia (proporción de votos
+  dentro del juego) y el IDF castiga solo lo ubicuo ("Indie", "Action") y
+  premia lo que discrimina ("Souls-like", "Farming Sim"). Funciona desde la
+  primera valoración y explica bien sus resultados, pero encierra al usuario
+  en lo que ya conoce.
 - **Colaborativa** — filtrado ítem-ítem sobre la matriz usuario-ítem centrada
   por usuario. Descubre afinidades que el contenido no captura, pero necesita
   historial. Se eligió ítem-ítem sobre usuario-usuario porque las similitudes
@@ -24,21 +27,25 @@ import threading
 from dataclasses import dataclass, field
 
 import numpy as np
-from scipy.sparse import csr_matrix
-from sklearn.feature_extraction.text import TfidfVectorizer
+from scipy.sparse import csr_matrix, lil_matrix
+from sklearn.feature_extraction.text import TfidfTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.ml.lexicon import SPANISH_STOPWORDS
-from app.models import Game, Rating, RecommendationSource, User
+from app.models import Game, Rating, RecommendationSource, Tag, User, game_tags
 
 # Vecinos considerados al predecir con filtrado colaborativo.
 NEIGHBOURS = 20
 # Castigo por incertidumbre en la popularidad: se resta UNCERTAINTY_WEIGHT /
 # sqrt(evidencia). Con dos reseñas cae ~0,7 puntos; con cien, ~0,1.
 UNCERTAINTY_WEIGHT = 1.0
+# TF fijo de un género en el corpus de contenido. Comparable al sqrt de la
+# proporción de votos de una etiqueta destacada (sqrt(0.12) ~ 0.35): el
+# género acompaña, no manda. Es la señal de respaldo de los juegos que
+# todavía no pasaron por la ingesta de etiquetas de SteamSpy.
+GENRE_TF = 0.4
 
 
 @dataclass(frozen=True)
@@ -72,15 +79,24 @@ class RecommenderEngine:
     """
 
     def __init__(self, db: Session) -> None:
-        # Las fichas pendientes de Steam (sin enriquecer, ver Game.is_enriched)
-        # sólo tienen AppID y nombre: sin géneros/descripción no aportan nada
-        # al contenido, y sin reseñas tampoco a la popularidad. Se excluyen
-        # del universo del recomendador; siguen apareciendo en el catálogo y
-        # el buscador, sólo no participan hasta que alguien las abre.
+        # Universo recomendable: un juego participa si tiene RASGOS con los
+        # que compararlo — géneros o etiquetas — sin importar cómo llegaron:
+        # ficha rica de la tienda (steam_synced_at), ingesta de SteamSpy
+        # (nivel 1) o dataset curado. Las fichas peladas (solo AppID y
+        # nombre) quedan afuera: siguen en el catálogo y el buscador, pero
+        # sin rasgos no hay nada que recomendar de ellas. Este criterio ES
+        # la política de catálogo del motor: "recomendable" = "con rasgos".
         games = list(
             db.scalars(
                 select(Game)
-                .where(or_(Game.steam_app_id.is_(None), Game.steam_synced_at.is_not(None)))
+                .where(
+                    or_(
+                        Game.steam_app_id.is_(None),
+                        Game.steam_synced_at.is_not(None),
+                        Game.genres.any(),
+                        Game.tags.any(),
+                    )
+                )
                 .order_by(Game.id)
             )
         )
@@ -90,34 +106,108 @@ class RecommenderEngine:
             game_id: index for index, game_id in enumerate(self.game_ids)
         }
 
-        self._build_content_model(games)
+        self._build_content_model(db, games)
         self._build_collaborative_model(db)
         self._build_popularity_model(games)
 
     # -- Contenido ---------------------------------------------------------
 
-    def _build_content_model(self, games: list[Game]) -> None:
-        corpus = [game.content_soup for game in games]
-        self._vectorizer = TfidfVectorizer(
-            stop_words=SPANISH_STOPWORDS,
-            ngram_range=(1, 2),
-            sublinear_tf=True,
-            min_df=1,
-        )
-        # Sin ningún juego enriquecido todavía (por ejemplo, recién corrido
-        # import_steam_appindex.py sin sembrar ningún catálogo real antes),
-        # ni fit_transform ni cosine_similarity toleran cero muestras (sklearn
-        # revienta con "empty vocabulary" y "Found array with 0 sample(s)"
-        # respectivamente), así que se arma la matriz vacía a mano en vez de
-        # llamarlos. El vectorizador queda sin entrenar a propósito;
-        # _content_scores_from_preferences ya evita usarlo en ese caso.
-        if corpus:
-            self._tfidf = self._vectorizer.fit_transform(corpus)
-            self.content_similarity = cosine_similarity(self._tfidf)
-            np.fill_diagonal(self.content_similarity, 0.0)
+    def _build_content_model(self, db: Session, games: list[Game]) -> None:
+        """Matriz TF-IDF construida directo desde los datos, sin "sopa" de texto.
+
+        Términos: etiquetas comunitarias (slug inglés, vía SteamSpy) y
+        géneros (slug español). Las categorías de plataforma quedan afuera a
+        propósito: son filtros de modalidad, no semántica — que "Logros de
+        Steam" pese en la similitud era una de las causas de que dos indies
+        cualesquiera se vieran idénticos. La descripción también queda
+        afuera: marketing con vocabulario poco discriminante.
+
+        La frecuencia (TF) de una etiqueta es la RAÍZ de su proporción de
+        votos dentro del juego (91 mil votos de "FPS" en CS2 y 800 en un
+        indie significan lo mismo si la proporción es la misma: la
+        popularidad ya entra por otro canal). La raíz amortigua el sesgo de
+        la distribución de votos sin el problema del log sobre valores < 1.
+        ``TfidfTransformer`` aplica después el IDF y normaliza L2: sigue
+        siendo TF-IDF en sentido estricto — cambió qué cuenta como término y
+        cómo se mide su frecuencia, no el modelo.
+        """
+        # slug -> columna. Géneros y etiquetas comparten el espacio: si un
+        # concepto existe en ambos ("indie"), se refuerzan en la misma celda.
+        genre_terms = {genre.slug for game in games for genre in game.genres}
+        vote_rows = db.execute(
+            select(game_tags.c.game_id, Tag.slug, game_tags.c.votes)
+            .join(Tag, Tag.id == game_tags.c.tag_id)
+            .where(Tag.kind == "community")
+        ).all()
+        community_terms = {slug for _, slug, _ in vote_rows}
+        self._term_index: dict[str, int] = {
+            term: column
+            for column, term in enumerate(sorted(genre_terms | community_terms))
+        }
+
+        matrix = lil_matrix((len(games), max(len(self._term_index), 1)))
+        votes_by_game: dict[int, list[tuple[str, int]]] = {}
+        for game_id, slug, votes in vote_rows:
+            votes_by_game.setdefault(game_id, []).append((slug, votes or 1))
+
+        for row, game in enumerate(games):
+            for genre in game.genres:
+                matrix[row, self._term_index[genre.slug]] = GENRE_TF
+            tag_votes = votes_by_game.get(game.id, [])
+            total_votes = sum(votes for _, votes in tag_votes)
+            for slug, votes in tag_votes:
+                share = votes / total_votes if total_votes else 0.0
+                matrix[row, self._term_index[slug]] = float(np.sqrt(share))
+
+        self._transformer = TfidfTransformer(norm="l2", smooth_idf=True)
+        if games and self._term_index:
+            self._tfidf = self._transformer.fit_transform(matrix.tocsr())
         else:
-            self._tfidf = csr_matrix((0, 0))
-            self.content_similarity = np.zeros((0, 0))
+            # Sin juegos con rasgos no hay corpus que entrenar; la matriz
+            # vacía hace que todo el camino de contenido devuelva None y el
+            # motor degrade a popularidad, en vez de reventar en sklearn.
+            self._tfidf = csr_matrix((len(games), 0))
+
+    def _similarity_row(self, index: int) -> np.ndarray:
+        """Similitud de un juego contra todo el catálogo, calculada al vuelo.
+
+        Antes se precomputaba la matriz completa de similitud (juegos x
+        juegos, densa). Con el catálogo chico funcionaba; con el catálogo
+        post-ingesta (decenas de miles de juegos) esa matriz son varios GB y
+        construir el motor se vuelve imposible. Como ``_tfidf`` ya está
+        normalizada L2, la fila de similitud es un producto matriz-vector
+        ralo: milisegundos, sin memoria extra.
+        """
+        if self._tfidf.shape[1] == 0:
+            return np.zeros(len(self.game_ids))
+        row = np.asarray((self._tfidf @ self._tfidf[index].T).todense()).ravel()
+        row[index] = 0.0
+        return row
+
+    def score_terms(self, term_weights: dict[str, float]) -> np.ndarray | None:
+        """Afinidad de cada juego con una consulta ponderada término->peso.
+
+        Es el punto de entrada del asistente: el vocabulario del ánimo
+        (``app.ml.quiz_vocab``) se convierte acá en un vector de consulta en
+        el mismo espacio TF-IDF del catálogo. Los términos que no existen en
+        el corpus se ignoran; si no sobrevive ninguno devuelve ``None`` para
+        que quien llama degrade declarándolo, no en silencio.
+        """
+        if not term_weights or not self.game_ids or not self._term_index:
+            return None
+        query = lil_matrix((1, len(self._term_index)))
+        known = 0
+        for term, weight in term_weights.items():
+            column = self._term_index.get(term)
+            if column is not None and weight > 0:
+                query[0, column] = float(weight)
+                known += 1
+        if not known:
+            return None
+        vector = self._transformer.transform(query.tocsr())
+        if vector.nnz == 0:
+            return None
+        return cosine_similarity(vector, self._tfidf).ravel()
 
     # -- Colaborativo ------------------------------------------------------
 
@@ -165,6 +255,22 @@ class RecommenderEngine:
         averages = np.array([game.avg_rating for game in games], dtype=float)
         counts = np.array([game.ratings_count for game in games], dtype=float)
 
+        # Juegos sin evidencia interna ni reseñas importadas, pero con la
+        # señal masiva de SteamSpy (nivel 0/1 de la ingesta): se sintetiza la
+        # misma escala que usa `recompute_game_aggregates` para las reseñas
+        # de Steam (1 + 4·ratio de positivos), con el total como evidencia.
+        # Así, un juego que nadie abrió nunca compite en popularidad y
+        # alcance con los que sí — el punto de toda la ingesta.
+        for index, game in enumerate(games):
+            if counts[index] > 0:
+                continue
+            positive = game.steamspy_positive or 0
+            negative = game.steamspy_negative or 0
+            total = positive + negative
+            if total > 0:
+                averages[index] = 1 + 4 * (positive / total)
+                counts[index] = total
+
         rated = counts > 0
         global_mean = float(averages[rated].mean()) if rated.any() else 3.0
 
@@ -196,7 +302,7 @@ class RecommenderEngine:
         if game_id not in self._game_index:
             return []
         index = self._game_index[game_id]
-        similarities = self.content_similarity[index]
+        similarities = self._similarity_row(index)
         order = np.argsort(similarities)[::-1][:limit]
         return [
             Recommendation(
@@ -237,30 +343,32 @@ class RecommenderEngine:
     def _content_scores_from_preferences(self, genre_slugs: list[str]) -> np.ndarray | None:
         """Perfil de contenido a partir de los géneros elegidos en el onboarding.
 
-        Los slugs se repiten tres veces para reproducir la ponderación que
-        ``Game.content_soup`` le da a los géneros dentro del corpus.
+        Es un caso particular de ``score_terms``: cada género elegido pesa
+        igual, y el TF-IDF resuelve el resto.
         """
-        if not genre_slugs or not self.game_ids:
-            # Sin juegos enriquecidos el vectorizador no llegó a entrenarse
-            # (ver _build_content_model): usarlo acá rompería con "not
-            # fitted" en vez de simplemente no tener nada que sugerir.
+        if not genre_slugs:
             return None
-        pseudo_document = " ".join(slug for slug in genre_slugs for _ in range(3))
-        vector = self._vectorizer.transform([pseudo_document])
-        if vector.nnz == 0:
-            return None
-        return cosine_similarity(vector, self._tfidf).ravel()
+        return self.score_terms({slug: 1.0 for slug in genre_slugs})
 
     def suggest_by_mood(
-        self, genres: list[str], limit: int = 30, exclude: set[int] | None = None
+        self,
+        term_weights: dict[str, float] | list[str],
+        limit: int = 30,
+        exclude: set[int] | None = None,
     ) -> list[Recommendation]:
         """Perfil de contenido armado al vuelo a partir de una respuesta
         puntual (el asistente "¿Qué jugamos hoy?"), sin pesar el historial
         del usuario a propósito: la pregunta es por el ánimo de ahora mismo,
         no por el gusto general — usar ``_content_scores_from_history`` acá
         le taparía la respuesta a cualquiera que ya tenga valoraciones.
+
+        Acepta un dict término->peso (el vocabulario del asistente, ver
+        ``app.ml.quiz_vocab``) o una lista de slugs con peso uniforme (el
+        contrato viejo, que el frontend legado sigue usando).
         """
-        content = self._content_scores_from_preferences(genres)
+        if isinstance(term_weights, list):
+            term_weights = {slug: 1.0 for slug in term_weights}
+        content = self.score_terms(term_weights)
         if content is None:
             return []
 
@@ -349,7 +457,7 @@ class RecommenderEngine:
         rated = np.flatnonzero(self._rated_mask[row])
         if rated.size == 0:
             return None
-        similarities = self.content_similarity[target_index, rated]
+        similarities = self._similarity_row(target_index)[rated]
         if similarities.max() <= 0:
             return None
         return self.game_names[self.game_ids[rated[int(np.argmax(similarities))]]]

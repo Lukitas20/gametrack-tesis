@@ -1,6 +1,7 @@
 """Alta y actualización de ratings y reseñas."""
 
 import math
+from statistics import median
 
 from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
@@ -9,6 +10,39 @@ from app.ml.analytics import analyze_review, apply_analysis
 from app.ml.recommender import UNCERTAINTY_WEIGHT, invalidate_engine
 from app.models import Game, Rating, Review, User
 from app.schemas.interaction import RatingCreate, ReviewCreate
+
+
+# Reseñas con horas necesarias para que la mediana signifique algo. Validado
+# con el diagnóstico sobre el catálogo real: la mediana de muestras por juego
+# es 79, así que el umbral casi no recorta cobertura (959 de 1004 juegos) y
+# filtra justo los casos donde una o dos reseñas dictarían la "duración".
+MIN_HOURS_SAMPLES = 5
+
+
+def recompute_median_review_hours(db: Session, game_id: int) -> None:
+    """Recalcula la mediana de horas de los reseñadores de un juego.
+
+    Es la única fuente de duración operativa (RAWG está muerta): la usa el
+    filtro "¿cuánto tiempo tenés?" del asistente para juegos finitos. Se
+    llama al importar reseñas nuevas; el backfill inicial sobre lo ya
+    importado es ``scripts/backfill_duracion.py``.
+    """
+    game = db.get(Game, game_id)
+    if game is None:
+        return
+    hours = [
+        float(value)
+        for (value,) in db.execute(
+            select(Review.hours_at_review).where(
+                Review.game_id == game_id,
+                Review.hours_at_review.is_not(None),
+                Review.hours_at_review > 0,
+            )
+        )
+    ]
+    game.median_review_hours = (
+        round(median(hours), 1) if len(hours) >= MIN_HOURS_SAMPLES else None
+    )
 
 
 def recompute_game_aggregates(db: Session, game_id: int) -> None:

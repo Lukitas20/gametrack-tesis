@@ -129,7 +129,17 @@ class Game(Base):
     metacritic: Mapped[int | None] = mapped_column(Integer)
     # Puntaje de la fuente externa (RAWG), escala 0-5.
     external_rating: Mapped[float | None] = mapped_column(Float)
+    # Horas típicas según RAWG. Fuente muerta en la práctica (la API está
+    # caída hace meses y nunca llegó a poblarse): se conserva por si revive,
+    # pero la duración operativa es ``median_review_hours``.
     playtime_hours: Mapped[int | None] = mapped_column(Integer)
+    # Mediana de horas jugadas por los reseñadores de Steam al momento de
+    # reseñar (``Review.hours_at_review``). Es la medida de COMPROMISO de un
+    # juego finito ("cuánto lleva terminarlo"); para un juego-servicio mide
+    # otra cosa (acumulación de sesiones) y el filtro de duración lo exime
+    # (ver ``app.ml.quiz_vocab.is_session_based``). Nula con menos de
+    # MIN_HOURS_SAMPLES muestras: una mediana de 2 reseñas no significa nada.
+    median_review_hours: Mapped[float | None] = mapped_column(Float)
 
     # Agregados calculados sobre los ratings internos de GameTrack.
     avg_rating: Mapped[float] = mapped_column(Float, default=0.0, index=True)

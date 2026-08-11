@@ -10,25 +10,25 @@ Diseño — por qué un catálogo canónico y no la base de desarrollo:
 * La base real está gitignoreada y diverge entre integrantes: un test que
   dependa de ella pasa en una máquina y falla en otra, que es exactamente lo
   contrario de una red de seguridad. El catálogo de acá es un *fixture
-  canónico*: 17 juegos reales con los slugs de género y categoría tal como
-  los produce ``steam_service`` al importar de Steam (``jcj``,
-  ``cooperativo-en-linea``, ``un-jugador``...), congelado en el repo.
+  canónico*: 17 juegos reales con los slugs de plataforma tal como los
+  produce la tienda (``jcj``, ``cooperativo-en-linea``) y las etiquetas
+  comunitarias con votos tal como las trae la ingesta de SteamSpy — de
+  hecho, se siembran ejecutando ``steamspy_service.apply_appdetails``, la
+  misma ruta de código que la ingesta real, para que estos tests también
+  vigilen esa frontera de integración.
 * Las expectativas son de sentido común verificable ("relajarme + solo no
   puede devolver Counter-Strike 2"), no de scores exactos: sobreviven a
-  cambios de pesos, de vectorizador y de catálogo mientras el comportamiento
-  siga siendo el correcto. Si un refactor las rompe, rompió algo que un
-  usuario notaría.
-* Para correr las mismas expectativas contra la base de desarrollo local
-  (útil antes/después de una migración de ingesta):
+  cambios de pesos y de catálogo mientras el comportamiento siga siendo el
+  correcto. Si un refactor las rompe, rompió algo que un usuario notaría.
+* Protegen de regresiones; NO miden si el catálogo real mejoró. Esa pieza es
+  el arnés de anotación (pendiente), no esta suite ni el modo live.
+* Para correr las mismas expectativas contra la base de desarrollo local:
 
       GOLDEN_LIVE=1 pytest tests/test_quiz_golden.py -k live -rs
 
-  Ese modo salta las expectativas cuyos juegos no estén en el catálogo
-  local, y queda excluido de CI (sin la variable, se skipea entero).
-
-Los payloads se arman con los mismos mapeos que ``frontend/js/views/quiz.js``
-(MOODS / COMPANY / TIME): si el frontend y estos tests divergen, el test está
-probando otra cosa — mantenerlos a la par.
+Los payloads usan el contrato nuevo (claves ``mood``/``company`` resueltas
+por ``app.ml.quiz_vocab`` en el servidor); un test aparte fija que el
+contrato viejo del frontend legado sigue funcionando.
 """
 
 from __future__ import annotations
@@ -47,40 +47,9 @@ from app.db.database import get_db
 from app.main import app
 from app.ml.recommender import invalidate_engine
 from app.models import Aspect, Game, Genre, Review, ReviewAspect, Sentiment, Tag
-from app.services import steam_service
-
-# ---------------------------------------------------------------------------
-# Mapeos espejo del frontend (frontend/js/views/quiz.js)
-# ---------------------------------------------------------------------------
+from app.services import steam_service, steamspy_service
 
 TIME = {"tarde": 15, "finde": 40, None: None}
-
-MOODS = {
-    "historia": {"genres": ["rol", "aventura"], "mood_tags": []},
-    "desafio": {"genres": ["accion", "estrategia"], "mood_tags": []},
-    "relajarme": {"genres": ["casual", "simuladores"], "mood_tags": []},
-    "competir": {
-        "genres": ["accion", "deportes", "carreras"],
-        "mood_tags": ["jcj", "jcj-en-linea"],
-    },
-}
-
-COMPANY = {
-    "solo": ["un-jugador"],
-    "amigos": [
-        "cooperativo",
-        "cooperativo-en-linea",
-        "pantalla-partida-compartida",
-        "coop-a-pantalla-com-partida",
-    ],
-    "en-linea": [
-        "jcj-en-linea",
-        "cooperativo-en-linea",
-        "multijugador",
-        "multijugador-multiplataforma",
-    ],
-    None: [],
-}
 
 
 def build_payload(
@@ -90,12 +59,11 @@ def build_payload(
     time: str | None = None,
     aspect: str | None = None,
 ) -> dict:
-    """Payload de ``POST /quiz/suggest`` tal como lo enviaría el frontend."""
+    """Payload de ``POST /quiz/suggest`` con el contrato nuevo."""
     return {
-        "genres": MOODS[mood]["genres"],
-        "mood_tags": MOODS[mood]["mood_tags"],
+        "mood": mood,
+        "company": company,
         "max_playtime": TIME[time],
-        "company_tags": COMPANY[company],
         "priority_aspect": aspect,
     }
 
@@ -116,8 +84,7 @@ GENRES = {
     "indie": "Indie",
 }
 
-TAGS = {
-    # Categorías de modalidad (las que filtran compañía y "competir").
+PLATFORM_TAGS = {
     "un-jugador": "Un jugador",
     "multijugador": "Multijugador",
     "jcj": "JcJ",
@@ -126,8 +93,9 @@ TAGS = {
     "cooperativo-en-linea": "Cooperativo en línea",
     "pantalla-partida-compartida": "Pantalla partida/compartida",
     "multijugador-multiplataforma": "Multijugador multiplataforma",
-    # Ruido realista: metadata de plataforma que Steam pone en casi todo.
-    # Está a propósito, para que el modelo de contenido conviva con ella.
+    # Ruido realista de plataforma: presente a propósito. Ya NO forma parte
+    # del corpus de contenido (sólo las comunitarias y los géneros), y estos
+    # tests lo mantienen para vigilar que siga sin pesar.
     "logros-de-steam": "Logros de Steam",
     "cromos-de-steam": "Cromos de Steam",
     "steam-cloud": "Steam Cloud",
@@ -135,153 +103,152 @@ TAGS = {
 
 _NOISE = ["logros-de-steam", "cromos-de-steam", "steam-cloud"]
 
-# (slug, nombre, géneros, etiquetas, horas típicas, avg_rating, ratings_count)
-# Horas en None = juego-servicio sin "duración": el filtro no debe excluirlo.
+# (slug, nombre, géneros, tags de plataforma, tags comunitarias con votos,
+#  mediana de horas de reseñadores, avg_rating, ratings_count)
+# Mediana None = sin dato (el filtro no excluye) o juego-servicio sin
+# concepto de "terminar". Los votos siguen proporciones realistas.
 CATALOG = [
     (
         "counter-strike-2", "Counter-Strike 2",
         ["accion"],
         ["multijugador", "jcj", "jcj-en-linea", "multijugador-multiplataforma", *_NOISE[2:]],
-        None, 4.3, 5000,
-        "Shooter táctico competitivo por equipos. Partidas clasificatorias, "
-        "economía por rondas y torneos de esports.",
+        {"FPS": 91172, "Shooter": 65634, "Multiplayer": 62536, "Competitive": 53536,
+         "Team-Based": 46549, "e-sports": 43682, "PvP": 34587, "Free to Play": 30000},
+        163.9, 4.3, 5000,
     ),
     (
         "dota-2", "Dota 2",
         ["accion", "estrategia"],
         ["multijugador", "jcj", "jcj-en-linea", *_NOISE[2:]],
-        None, 4.0, 4000,
-        "MOBA competitivo de cinco contra cinco. Estrategia por equipos, "
-        "ranking y una escena profesional enorme.",
+        {"MOBA": 60000, "Multiplayer": 50000, "Free to Play": 45000, "Competitive": 40000,
+         "Team-Based": 38000, "PvP": 35000, "Strategy": 30000, "e-sports": 25000},
+        512.0, 4.0, 4000,
     ),
     (
         "apex-legends", "Apex Legends",
         ["accion"],
         ["multijugador", "jcj-en-linea", "cooperativo-en-linea",
          "multijugador-multiplataforma", *_NOISE],
-        None, 3.9, 3500,
-        "Battle royale por escuadrones con héroes y movilidad frenética. "
-        "Competitivo en línea con temporadas clasificatorias.",
-    ),
-    (
-        "age-of-empires-ii-definitive-edition", "Age of Empires II: Definitive Edition",
-        ["estrategia"],
-        ["un-jugador", "multijugador", "jcj-en-linea", "cooperativo-en-linea", *_NOISE],
-        35, 4.7, 2000,
-        "Estrategia en tiempo real histórica. Campañas para un jugador y "
-        "partidas clasificatorias en línea.",
-    ),
-    (
-        "forza-horizon-5", "Forza Horizon 5",
-        ["carreras", "deportes"],
-        ["un-jugador", "multijugador", "jcj-en-linea", *_NOISE],
-        20, 4.4, 1800,
-        "Carreras de mundo abierto en México. Pruebas, campeonatos y "
-        "competencia en línea.",
+        {"Battle Royale": 70000, "FPS": 60000, "Multiplayer": 55000,
+         "Free to Play": 50000, "PvP": 30000, "Team-Based": 25000},
+        100.4, 3.9, 3500,
     ),
     (
         "trackmania", "Trackmania",
         ["carreras"],
         ["un-jugador", "multijugador", "jcj-en-linea", *_NOISE[2:]],
+        {"Racing": 30000, "Multiplayer": 15000, "Competitive": 12000,
+         "Free to Play": 10000, "e-sports": 5000},
         None, 4.1, 700,
-        "Carreras arcade de tiempos: campañas para un jugador y ranking "
-        "competitivo en línea contra los récords de todos.",
+    ),
+    (
+        "age-of-empires-ii-definitive-edition", "Age of Empires II: Definitive Edition",
+        ["estrategia"],
+        ["un-jugador", "multijugador", "jcj-en-linea", "cooperativo-en-linea", *_NOISE],
+        {"Strategy": 40000, "RTS": 30000, "Multiplayer": 20000,
+         "Competitive": 15000, "Singleplayer": 12000},
+        35.0, 4.7, 2000,
+    ),
+    (
+        "forza-horizon-5", "Forza Horizon 5",
+        ["carreras", "deportes"],
+        ["un-jugador", "multijugador", "jcj-en-linea", *_NOISE],
+        {"Racing": 50000, "Open World": 40000, "Multiplayer": 25000,
+         "Driving": 20000, "Singleplayer": 15000},
+        None, 4.4, 1800,  # sin mediana: la falta de dato no excluye
     ),
     (
         "the-witcher-3-wild-hunt", "The Witcher 3: Wild Hunt",
         ["rol"],
         ["un-jugador", *_NOISE],
-        46, 4.8, 2500,
-        "Rol de mundo abierto con una narrativa profunda. Decisiones con "
-        "consecuencias y misiones escritas con oficio.",
+        {"Open World": 45000, "Story Rich": 40000, "RPG": 38000,
+         "Singleplayer": 30000, "Atmospheric": 25000, "Choices Matter": 20000},
+        53.5, 4.8, 2500,
     ),
     (
         "disco-elysium-the-final-cut", "Disco Elysium - The Final Cut",
         ["rol"],
         ["un-jugador", *_NOISE[:2]],
-        25, 4.6, 800,
-        "Rol de investigación puramente narrativo. Diálogos, personajes y "
-        "una historia que se recuerda por años.",
+        {"Story Rich": 30000, "Choices Matter": 25000, "RPG": 20000,
+         "Detective": 15000, "Singleplayer": 12000, "Atmospheric": 10000},
+        25.0, 4.6, 800,
     ),
     (
         "cyberpunk-2077", "Cyberpunk 2077",
         ["rol"],
         ["un-jugador", *_NOISE],
-        30, 4.2, 3000,
-        "Rol de acción en una megaciudad futurista. Historia cinematográfica "
-        "y personajes memorables.",
+        {"Open World": 40000, "Story Rich": 35000, "RPG": 30000,
+         "Singleplayer": 25000, "Atmospheric": 20000, "Futuristic": 15000},
+        30.0, 4.2, 3000,
     ),
     (
         "hades", "Hades",
         ["accion", "indie", "rol"],
         ["un-jugador", *_NOISE],
-        22, 4.7, 1500,
-        "Roguelike de acción exigente. Combate rápido, intentos que suman y "
-        "una dificultad que invita a mejorar.",
+        {"Roguelike": 40000, "Action Roguelike": 35000, "Singleplayer": 20000,
+         "Story Rich": 18000, "Difficult": 15000},
+        39.0, 4.7, 1500,
     ),
     (
         "celeste", "Celeste",
         ["accion", "indie"],
         ["un-jugador", *_NOISE],
-        8, 4.7, 900,
-        "Plataformas de precisión, difícil y justo. Controles exactos y un "
-        "desafío que crece pantalla a pantalla.",
+        {"Difficult": 30000, "Precision Platformer": 28000, "Platformer": 25000,
+         "Singleplayer": 15000, "Great Soundtrack": 12000},
+        14.2, 4.7, 900,
     ),
     (
         "stardew-valley", "Stardew Valley",
         ["simuladores", "rol", "indie"],
         ["un-jugador", "multijugador", "cooperativo-en-linea", *_NOISE],
-        55, 4.8, 3000,
-        "Simulador de granja tranquilo y sin apuro. Cultivar, pescar y "
-        "construir una vida en el pueblo, solo o en cooperativo.",
+        {"Farming Sim": 45000, "Relaxing": 35000, "Pixel Graphics": 30000,
+         "Singleplayer": 25000, "RPG": 22000, "Online Co-Op": 20000},
+        65.6, 4.8, 3000,
     ),
     (
         "powerwash-simulator", "PowerWash Simulator",
         ["simuladores", "casual"],
         ["un-jugador", "cooperativo-en-linea", *_NOISE],
-        12, 4.5, 600,
-        "Simulador relajante de limpieza a presión. Sin presión ni tiempo: "
-        "satisfacción visual y calma.",
+        {"Relaxing": 25000, "Simulation": 20000, "Casual": 15000,
+         "Online Co-Op": 12000, "Singleplayer": 10000},
+        12.0, 4.5, 600,
     ),
     (
         "unpacking", "Unpacking",
         ["casual", "indie"],
         ["un-jugador", *_NOISE[:2]],
-        4, 4.3, 400,
-        "Casual contemplativo: desempacar cajas y ordenar una vida. Corto, "
-        "tranquilo y sin ninguna prisa.",
+        {"Relaxing": 15000, "Casual": 14000, "Cozy": 12000,
+         "Short": 8000, "Singleplayer": 6000},
+        4.0, 4.3, 400,
     ),
     (
         "a-short-hike", "A Short Hike",
         ["aventura", "casual", "indie"],
         ["un-jugador", *_NOISE[:2]],
-        5, 4.8, 500,
-        "Aventura breve y amable: explorar una montaña a tu ritmo, charlar "
-        "con quien te cruces y llegar a la cima.",
+        {"Relaxing": 12000, "Cozy": 11000, "Exploration": 9000,
+         "Short": 7000, "Adventure": 6000, "Singleplayer": 4000},
+        5.0, 4.8, 500,
     ),
     (
         "it-takes-two", "It Takes Two",
         ["accion", "aventura"],
         ["cooperativo", "cooperativo-en-linea", "pantalla-partida-compartida", *_NOISE],
-        10, 4.8, 1200,
-        "Aventura cooperativa obligatoria de a dos. Mecánicas nuevas en cada "
-        "capítulo, pensada para jugar con alguien.",
+        {"Co-op": 40000, "Split Screen": 30000, "Local Co-Op": 25000,
+         "Multiplayer": 20000, "Adventure": 15000},
+        10.6, 4.8, 1200,
     ),
     (
         "overcooked-2", "Overcooked! 2",
         ["casual", "indie", "simuladores"],
         ["multijugador", "cooperativo", "cooperativo-en-linea",
          "pantalla-partida-compartida", *_NOISE[:2]],
-        15, 4.4, 1000,
-        "Caos cooperativo de cocina para jugar con amigos en el sillón o en "
-        "línea. Gritos garantizados.",
+        {"Co-op": 30000, "Local Co-Op": 25000, "Multiplayer": 20000,
+         "Casual": 15000, "Funny": 12000},
+        15.0, 4.4, 1000,
     ),
 ]
 
-# Reseñas con salida ABSA ya materializada: estos tests prueban el ranking
-# por aspecto del asistente, no el léxico (que tiene su propia suite en
-# test_analytics.py), así que las filas de ReviewAspect se siembran directo.
-# (slug, aspecto, score, sentimiento, evidencia)
+# Salida ABSA materializada (el léxico tiene su propia suite).
 ASPECTS = [
     ("the-witcher-3-wild-hunt", Aspect.STORY, 0.9, Sentiment.POSITIVE,
      "La historia es una obra maestra, hasta la misión secundaria más chica está bien escrita"),
@@ -302,46 +269,51 @@ ASPECTS = [
 
 def seed_catalog(db: Session) -> None:
     genres = {slug: Genre(slug=slug, name=name) for slug, name in GENRES.items()}
-    tags = {slug: Tag(slug=slug, name=name) for slug, name in TAGS.items()}
+    tags = {
+        slug: Tag(slug=slug, name=name, kind="platform")
+        for slug, name in PLATFORM_TAGS.items()
+    }
     db.add_all([*genres.values(), *tags.values()])
 
     games: dict[str, Game] = {}
-    for slug, name, game_genres, game_tags, hours, avg, count, description in CATALOG:
+    for slug, name, game_genres, platform, community, hours, avg, count in CATALOG:
         game = Game(
             slug=slug,
             name=name,
-            description=description,
-            playtime_hours=hours,
+            median_review_hours=hours,
             avg_rating=avg,
             ratings_count=count,
         )
         game.genres = [genres[g] for g in game_genres]
-        game.tags = [tags[t] for t in game_tags]
+        game.tags = [tags[t] for t in platform]
         db.add(game)
+        db.flush()
+        # Las comunitarias entran por la MISMA ruta que la ingesta real:
+        # membresía + votos + kind, tal como las dejaría el worker.
+        steamspy_service.apply_appdetails(db, game, {"tags": community})
         games[slug] = game
-    db.flush()
 
     for slug, aspect, score, sentiment, evidence in ASPECTS:
         review = Review(
-            game_id=games[slug].id,
-            content=evidence,
-            language="es",
-            source="steam",
-            is_analyzed=True,
+            game_id=games[slug].id, content=evidence, language="es",
+            source="steam", is_analyzed=True,
         )
         db.add(review)
         db.flush()
         db.add(
             ReviewAspect(
-                review_id=review.id,
-                game_id=games[slug].id,
-                aspect=aspect,
-                sentiment=sentiment,
-                score=score,
-                evidence=evidence,
+                review_id=review.id, game_id=games[slug].id, aspect=aspect,
+                sentiment=sentiment, score=score, evidence=evidence,
             )
         )
     db.commit()
+
+
+# Índice slug -> todas sus etiquetas (plataforma + comunidad), para asserts.
+GAME_TAGS: dict[str, set[str]] = {
+    slug: set(platform) | {steam_service.slugify(name) for name in community}
+    for slug, _, _, platform, community, *_ in CATALOG
+}
 
 
 # ---------------------------------------------------------------------------
@@ -353,9 +325,9 @@ def seed_catalog(db: Session) -> None:
 def sin_red(monkeypatch: pytest.MonkeyPatch) -> None:
     """El endpoint refresca los tres elegidos contra Steam: acá nunca.
 
-    Preserva además el invariante de ``SteamUnavailable``: un test que
-    tocara la red sería no determinístico, que es lo mismo que estos golden
-    tests existen para impedir.
+    ``True`` = "el juego sigue existiendo, no hizo falta refrescar": el valor
+    que el resto del código interpreta como inocuo (``False`` significa "el
+    juego se borró" para ``_require_game``).
     """
     monkeypatch.setattr(steam_service, "maybe_refresh", lambda db, game: True)
 
@@ -403,9 +375,7 @@ class GoldenCase:
     company: str | None = None
     time: str | None = None
     aspect: str | None = None
-    # Slugs que tienen que estar en el top 3.
     must_include: tuple[str, ...] = ()
-    # Slugs que no pueden aparecer en el top 3.
     must_exclude: tuple[str, ...] = ()
     # (a, b): b no puede aparecer sin a, ni por delante de a ("a domina a b").
     rank_above: tuple[tuple[str, str], ...] = ()
@@ -416,28 +386,36 @@ class GoldenCase:
 
 
 CASES = [
-    # --- El caso testigo de la tesis: competir no es "multijugador" --------
+    # --- El caso testigo: competir no es "multijugador" --------------------
     GoldenCase(
         id="competir-en-linea-rankea-cs2-sobre-stardew",
         mood="competir", company="en-linea",
         rank_above=(("counter-strike-2", "stardew-valley"),),
         must_exclude=("stardew-valley", "powerwash-simulator", "unpacking"),
-        picks_must_have_tag=("jcj", "jcj-en-linea"),
+        picks_must_have_tag=("jcj", "jcj-en-linea", "pvp"),
     ),
     GoldenCase(
         id="competir-excluye-coop-tranquilos-aunque-sean-multijugador",
         mood="competir", company="en-linea",
-        # Stardew y Overcooked son multijugador (pasarían "en línea") pero no
-        # JcJ: el requisito del ánimo tiene que seguir filtrándolos.
         must_exclude=("stardew-valley", "overcooked-2", "it-takes-two"),
+    ),
+    GoldenCase(
+        id="competir-pesa-los-votos-cs2-domina-a-forza",
+        mood="competir", company="en-linea",
+        # Forza pasa los filtros (jcj-en-línea) pero su comunidad lo etiquetó
+        # Racing/Open World, no Competitive/PvP: el peso de los votos tiene
+        # que rankear a CS2 y Dota por encima. Antes de las etiquetas
+        # comunitarias esta distinción era literalmente imposible.
+        rank_above=(
+            ("counter-strike-2", "forza-horizon-5"),
+            ("dota-2", "forza-horizon-5"),
+        ),
     ),
     GoldenCase(
         id="competir-solo-es-jcj-con-campania-no-cs2",
         mood="competir", company="solo",
-        # CS2 y Dota no tienen "un-jugador": competir + solo debe caer en
-        # títulos JcJ que sí se juegan solos (AoE2, Forza), no en CS2.
         must_exclude=("counter-strike-2", "dota-2", "apex-legends"),
-        picks_must_have_tag=("jcj", "jcj-en-linea"),
+        picks_must_have_tag=("jcj", "jcj-en-linea", "pvp"),
     ),
     # --- Relajarse: la inversa del testigo ---------------------------------
     GoldenCase(
@@ -447,7 +425,7 @@ CASES = [
         picks_must_have_tag=("un-jugador",),
     ),
     GoldenCase(
-        id="relajarme-solo-prefiere-simuladores-tranquilos",
+        id="relajarme-solo-prefiere-lo-relajante",
         mood="relajarme", company="solo",
         must_include=("stardew-valley",),
         rank_above=(
@@ -461,6 +439,7 @@ CASES = [
         must_exclude=("counter-strike-2", "dota-2", "celeste", "the-witcher-3-wild-hunt"),
         picks_must_have_tag=(
             "cooperativo", "cooperativo-en-linea", "pantalla-partida-compartida",
+            "co-op", "online-co-op", "local-co-op", "split-screen",
         ),
     ),
     # --- Historia y desafío ------------------------------------------------
@@ -472,52 +451,49 @@ CASES = [
         picks_must_have_tag=("un-jugador",),
     ),
     GoldenCase(
-        id="desafio-solo-trae-accion-exigente-no-contemplativos",
+        id="desafio-solo-trae-exigentes-no-contemplativos",
         mood="desafio", company="solo",
+        must_include=("celeste",),
         must_exclude=("unpacking", "powerwash-simulator", "a-short-hike"),
         picks_must_have_tag=("un-jugador",),
     ),
-    # --- Duración ----------------------------------------------------------
+    # --- Duración: compromiso vs. sesión -----------------------------------
     GoldenCase(
         id="una-tarde-solo-excluye-campanias-largas",
         mood="historia", company="solo", time="tarde",
-        # Con ≤15 h quedan Celeste, Unpacking, A Short Hike y PowerWash: los
-        # juegos largos no pueden colarse sin declarar la relajación.
+        # Medianas > 15 h en juegos finitos: afuera sin relajación.
         must_exclude=(
             "the-witcher-3-wild-hunt", "stardew-valley",
-            "disco-elysium-the-final-cut", "cyberpunk-2077",
+            "disco-elysium-the-final-cut", "cyberpunk-2077", "hades",
         ),
     ),
     GoldenCase(
-        id="sin-duracion-conocida-no-se-excluye-por-tiempo",
+        id="una-tarde-no-excluye-a-los-juegos-servicio",
         mood="competir", company="en-linea", time="tarde",
-        # CS2/Dota/Apex no tienen horas cargadas (juegos-servicio): el
-        # filtro de duración no puede descartarlos por falta de dato.
-        # Comportamiento decidido: "sin dato" pasa el filtro; si algún día
-        # se cambia a "sin dato no pasa", este test obliga a discutirlo.
+        # EL caso que motivó el rediseño de la duración: CS2 tiene 164 h de
+        # mediana ACUMULADA porque cada partida dura 40 minutos — es lo que
+        # jugás una tarde. AoE2 en cambio es finito (35 h de campaña) y sí
+        # queda afuera de la franja.
         must_include=("counter-strike-2",),
+        must_exclude=("age-of-empires-ii-definitive-edition",),
+        expect_relaxed=(),
     ),
     # --- Aspecto prioritario (ABSA) ----------------------------------------
     GoldenCase(
-        id="prioridad-historia-ordena-por-absa",
+        id="prioridad-historia-sube-la-evidencia-de-historia",
         mood="historia", company="solo", aspect="historia",
-        # Witcher (0.90) > Disco (0.85) > Cyberpunk (0.60); el resto no tiene
-        # evidencia de historia y va detrás.
-        must_include=(
-            "the-witcher-3-wild-hunt",
-            "disco-elysium-the-final-cut",
-            "cyberpunk-2077",
-        ),
+        must_include=("the-witcher-3-wild-hunt",),
         rank_above=(
-            ("the-witcher-3-wild-hunt", "disco-elysium-the-final-cut"),
+            ("the-witcher-3-wild-hunt", "cyberpunk-2077"),
             ("disco-elysium-the-final-cut", "cyberpunk-2077"),
         ),
     ),
     GoldenCase(
         id="prioridad-optimizacion-castiga-al-que-crashea",
         mood="historia", company="solo", aspect="optimizacion",
-        # Las reseñas dicen que Witcher anda bien (+0.2) y Cyberpunk mal
-        # (-0.7): con esa prioridad, Cyberpunk no puede ir por delante.
+        # Witcher anda bien (+0.2), Cyberpunk crashea (-0.7): con el boost
+        # aditivo la evidencia negativa BAJA al juego (con el reordenamiento
+        # lexicográfico anterior, "evidencia mala" ganaba a "sin evidencia").
         rank_above=(("the-witcher-3-wild-hunt", "cyberpunk-2077"),),
     ),
 ]
@@ -529,12 +505,10 @@ def test_golden(client: TestClient, case: GoldenCase) -> None:
         client,
         build_payload(mood=case.mood, company=case.company, time=case.time, aspect=case.aspect),
     )
-    slugs = pick_slugs(body)
-    assert_expectations(case, slugs, body)
+    assert_expectations(case, pick_slugs(body), body)
 
 
 def assert_expectations(case: GoldenCase, slugs: list[str], body: dict) -> None:
-    # Contrato base: siempre tres sugerencias distintas.
     assert len(slugs) == 3, f"esperaba 3 sugerencias, vinieron {len(slugs)}: {slugs}"
     assert len(set(slugs)) == 3, f"sugerencias repetidas: {slugs}"
 
@@ -550,8 +524,8 @@ def assert_expectations(case: GoldenCase, slugs: list[str], body: dict) -> None:
     if case.picks_must_have_tag:
         allowed = set(case.picks_must_have_tag)
         for slug in slugs:
-            if slug in GAME_TAGS:
-                tags = set(GAME_TAGS[slug])
+            tags = GAME_TAGS.get(slug)
+            if tags is not None:
                 assert tags & allowed, (
                     f"{slug} no tiene ninguna de {sorted(allowed)} y fue sugerido igual"
                 )
@@ -562,8 +536,53 @@ def assert_expectations(case: GoldenCase, slugs: list[str], body: dict) -> None:
         )
 
 
-# Índice slug -> etiquetas del catálogo canónico, para los asserts.
-GAME_TAGS = {slug: set(tags) for slug, _, _, tags, *_ in CATALOG}
+# ---------------------------------------------------------------------------
+# Contratos del vocabulario de duración (unitarios: fijan comportamiento
+# decidido que el top-3 del endpoint no permite observar directamente)
+# ---------------------------------------------------------------------------
+
+from app.ml import quiz_vocab  # noqa: E402
+
+
+def test_sin_mediana_conocida_no_se_excluye_por_tiempo() -> None:
+    """La falta de dato no excluye. Comportamiento decidido: cambiarlo a
+    "sin dato no pasa" obliga a discutirlo acá primero."""
+    assert quiz_vocab.passes_time_budget(None, {"un-jugador"}, max_hours=15)
+
+
+def test_juego_finito_largo_no_entra_en_una_tarde() -> None:
+    assert not quiz_vocab.passes_time_budget(53.5, {"un-jugador", "story-rich"}, 15)
+    assert quiz_vocab.passes_time_budget(53.5, {"un-jugador"}, None)
+
+
+def test_juego_servicio_queda_exento_del_presupuesto() -> None:
+    """CS2: 164 h de mediana ACUMULADA y partidas de 40 minutos. Dos vías de
+    detección: sin modo de un jugador, o marcadores de servicio aun con él
+    (Trackmania: campaña + free-to-play/e-sports)."""
+    cs2 = {"multijugador", "jcj", "pvp", "competitive", "fps"}
+    assert quiz_vocab.is_session_based(cs2)
+    assert quiz_vocab.passes_time_budget(163.9, cs2, max_hours=15)
+
+    trackmania = {"un-jugador", "racing", "free-to-play", "e-sports"}
+    assert quiz_vocab.is_session_based(trackmania)
+
+
+def test_coop_finito_sin_un_jugador_es_falso_positivo_aceptado() -> None:
+    """It Takes Two no tiene modo de un jugador, así que la regla lo trata
+    como juego de sesión y lo exime del filtro de duración. Es el falso
+    positivo asumido del diseño: su costo es leve (un juego finito se cuela
+    en una franja corta y el ranking decide) y el beneficio es no repetir el
+    bug de CS2 excluido de "una tarde". Si este trade-off se revisa, este
+    test es el lugar donde discutirlo."""
+    it_takes_two = {"cooperativo", "co-op", "split-screen", "local-co-op"}
+    assert quiz_vocab.is_session_based(it_takes_two)
+
+
+def test_finito_con_campania_no_es_servicio() -> None:
+    witcher = {"un-jugador", "singleplayer", "story-rich", "open-world"}
+    assert not quiz_vocab.is_session_based(witcher)
+    stardew = {"un-jugador", "multijugador", "online-co-op", "relaxing", "farming-sim"}
+    assert not quiz_vocab.is_session_based(stardew)
 
 
 # ---------------------------------------------------------------------------
@@ -572,10 +591,7 @@ GAME_TAGS = {slug: set(tags) for slug, _, _, tags, *_ in CATALOG}
 
 
 def test_mismo_payload_mismas_sugerencias(client: TestClient) -> None:
-    """Determinismo: dos corridas idénticas devuelven exactamente lo mismo.
-
-    Sin esto, ninguna métrica offline es comparable entre corridas.
-    """
+    """Determinismo: sin esto, ninguna métrica offline es comparable."""
     payload = build_payload(mood="historia", company="solo", aspect="historia")
     assert pick_slugs(suggest(client, payload)) == pick_slugs(suggest(client, payload))
 
@@ -608,28 +624,22 @@ def test_sin_prioridad_no_hay_evidencia_ni_reordenamiento(client: TestClient) ->
 def test_escasez_relaja_en_orden_y_lo_declara(client: TestClient) -> None:
     """Cuando los filtros duros dejan menos de tres candidatos, el sistema
     puede relajar, pero declarando exactamente qué soltó y en qué orden
-    (duración primero, compañía después). El ánimo nunca se suelta acá."""
-    payload = build_payload(mood="competir", company="amigos", time="tarde")
-    body = suggest(client, payload)
+    (duración primero, compañía después). El requisito del ánimo (JcJ) no
+    se suelta nunca en esta rama."""
+    body = suggest(client, build_payload(mood="competir", company="amigos", time="tarde"))
     slugs = pick_slugs(body)
 
     assert body["relaxed"] == ["la duración", "con quién jugás"]
-    # Aun relajando, el requisito del ánimo (JcJ) se mantiene siempre.
     for slug in slugs:
-        tags = GAME_TAGS[slug]
-        assert tags & {"jcj", "jcj-en-linea"}, (
+        assert GAME_TAGS[slug] & {"jcj", "jcj-en-linea", "pvp"}, (
             f"{slug} no es JcJ: la relajación soltó el ánimo, que es lo único innegociable"
         )
 
 
 def test_fallback_a_popularidad_declara_que_solto_el_animo(client: TestClient) -> None:
-    """Regresión: el perfil de contenido vacío tiene que declararse.
-
-    Cuando ningún término del ánimo existe en el corpus, ``suggest_by_mood``
-    devuelve vacío y el endpoint cae a popularidad. Eso está bien; lo que no
-    puede pasar es que la respuesta diga que no se relajó nada mientras
-    devuelve lo popular del catálogo.
-    """
+    """Regresión del bug real de degradación silenciosa: si el perfil del
+    ánimo no matchea ningún término del corpus, se cae a popularidad y SE
+    DECLARA en `relaxed`."""
     payload = {
         "genres": ["genero-inexistente"],
         "mood_tags": [],
@@ -639,9 +649,27 @@ def test_fallback_a_popularidad_declara_que_solto_el_animo(client: TestClient) -
     }
     body = suggest(client, payload)
     assert len(body["picks"]) == 3
-    assert "el ánimo" in body["relaxed"], (
-        "cayó a popularidad pura sin declararlo: degradación silenciosa"
+    assert "el ánimo" in body["relaxed"]
+
+
+def test_contrato_legado_del_frontend_sigue_funcionando(client: TestClient) -> None:
+    """El payload viejo (genres/mood_tags/company_tags) se traduce al
+    mecanismo nuevo con peso uniforme: el frontend sin actualizar no rompe."""
+    body = suggest(
+        client,
+        {
+            "genres": ["accion", "deportes", "carreras"],
+            "mood_tags": ["jcj", "jcj-en-linea"],
+            "max_playtime": None,
+            "company_tags": ["jcj-en-linea", "multijugador"],
+            "priority_aspect": None,
+        },
     )
+    slugs = pick_slugs(body)
+    assert len(slugs) == 3
+    assert "stardew-valley" not in slugs
+    for slug in slugs:
+        assert GAME_TAGS[slug] & {"jcj", "jcj-en-linea"}
 
 
 # ---------------------------------------------------------------------------
@@ -656,16 +684,15 @@ GOLDEN_LIVE = os.environ.get("GOLDEN_LIVE") == "1"
 def test_golden_live(case: GoldenCase) -> None:
     """Las mismas expectativas, contra el catálogo real de la máquina local.
 
-    Sirve como foto antes/después de una migración de ingesta. Cada
-    expectativa que involucre un juego ausente del catálogo local se salta
-    (reportado con -rs), en vez de fallar por un catálogo distinto.
+    Foto antes/después de una migración de ingesta. Las expectativas que
+    involucren juegos ausentes del catálogo local se saltan (ver con -rs).
+    NO es una métrica de calidad: para eso está el arnés de anotación.
     """
     with TestClient(app) as live_client, _live_db() as db:
         present = {
-            slug for (slug,) in db.execute(
-                select(Game.slug).where(
-                    Game.slug.in_([slug for slug, *_ in CATALOG])
-                )
+            slug
+            for (slug,) in db.execute(
+                select(Game.slug).where(Game.slug.in_([slug for slug, *_ in CATALOG]))
             )
         }
         involved = set(case.must_include) | set(case.must_exclude) | {
@@ -680,18 +707,10 @@ def test_golden_live(case: GoldenCase) -> None:
             build_payload(mood=case.mood, company=case.company, time=case.time, aspect=case.aspect),
         )
         live_case = GoldenCase(
-            id=case.id,
-            mood=case.mood,
-            company=case.company,
-            time=case.time,
-            aspect=case.aspect,
-            must_include=case.must_include,
-            must_exclude=case.must_exclude,
-            rank_above=case.rank_above,
-            # Etiquetas y relajación dependen del catálogo local: en vivo
-            # sólo se afirman inclusiones, exclusiones y dominancias.
-            picks_must_have_tag=(),
-            expect_relaxed=None,
+            id=case.id, mood=case.mood, company=case.company, time=case.time,
+            aspect=case.aspect, must_include=case.must_include,
+            must_exclude=case.must_exclude, rank_above=case.rank_above,
+            picks_must_have_tag=(), expect_relaxed=None,
         )
         assert_expectations(live_case, pick_slugs(body), body)
 

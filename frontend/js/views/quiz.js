@@ -46,54 +46,28 @@ const QUESTIONS = [
     key: "animo",
     title: "¿Cómo venís de ánimo?",
     note: "Arma un perfil de contenido real, no un filtro exacto.",
-    // El catálogo real de Steam no tiene etiquetas de "ánimo" (narrativo,
-    // relajante, etc.) — sus categorías son de plataforma y modo de juego.
-    // El género es la señal más parecida al tono; donde hay una categoría
-    // que sí discrimina (JcJ para competir), se suma como requisito duro.
+    // El frontend manda la CLAVE del ánimo; qué significa (etiquetas
+    // comunitarias votadas, géneros de respaldo, requisitos duros) lo
+    // resuelve el backend en app/ml/quiz_vocab.py, donde es testeable y
+    // versionable. Acá sólo queda la presentación.
     options: [
-      { emoji: "🧠", title: "Quiero una historia", note: "RPG, aventura", genres: ["rol", "aventura"], tags: [] },
-      { emoji: "🔥", title: "Quiero desafío", note: "Acción, estrategia", genres: ["accion", "estrategia"], tags: [] },
-      { emoji: "🌿", title: "Quiero relajarme", note: "Casual, simuladores", genres: ["casual", "simuladores"], tags: [] },
-      {
-        emoji: "⚔️",
-        title: "Quiero competir",
-        note: "Jugador contra jugador",
-        genres: ["accion", "deportes", "carreras"],
-        tags: ["jcj", "jcj-en-linea"],
-      },
+      { emoji: "🧠", title: "Quiero una historia", note: "Narrativa, decisiones", mood: "historia" },
+      { emoji: "🔥", title: "Quiero desafío", note: "Exigente, souls, roguelike", mood: "desafio" },
+      { emoji: "🌿", title: "Quiero relajarme", note: "Tranquilo, sin presión", mood: "relajarme" },
+      { emoji: "⚔️", title: "Quiero competir", note: "Jugador contra jugador", mood: "competir" },
     ],
   },
   {
     key: "compania",
     title: "¿Solo o con gente?",
     note: "Última pista antes de sugerir.",
-    // Slugs reales de las categorías de Steam ("JcJ" = PvP, "Coop." = ...):
-    // los inventados (`competitivo`, `pantalla-dividida`) no existían en el
-    // catálogo y hacían que el filtro no descartara nada.
+    // También por clave: el backend une las categorías de la tienda (en
+    // español) con las etiquetas comunitarias equivalentes de SteamSpy (en
+    // inglés), y esa unión evoluciona sin tocar el frontend.
     options: [
-      { emoji: "🎧", title: "Solo", note: "Un jugador", tags: ["un-jugador"] },
-      {
-        emoji: "👥",
-        title: "Con amigos",
-        note: "Cooperativo o pantalla partida",
-        tags: [
-          "cooperativo",
-          "cooperativo-en-linea",
-          "pantalla-partida-compartida",
-          "coop-a-pantalla-com-partida",
-        ],
-      },
-      {
-        emoji: "🌐",
-        title: "En línea",
-        note: "Multijugador por internet",
-        tags: [
-          "jcj-en-linea",
-          "cooperativo-en-linea",
-          "multijugador",
-          "multijugador-multiplataforma",
-        ],
-      },
+      { emoji: "🎧", title: "Solo", note: "Un jugador", company: "solo" },
+      { emoji: "👥", title: "Con amigos", note: "Cooperativo o pantalla partida", company: "amigos" },
+      { emoji: "🌐", title: "En línea", note: "Multijugador por internet", company: "en-linea" },
     ],
   },
   {
@@ -240,10 +214,9 @@ export async function quizView() {
 
     try {
       const response = await api.quizSuggest({
-        genres: answers.animo.genres,
-        mood_tags: answers.animo.tags,
+        mood: answers.animo.mood,
+        company: answers.compania.company,
         max_playtime: answers.tiempo.maxPlaytime,
-        company_tags: answers.compania.tags,
         priority_aspect: answers.prioridad.aspect,
       });
       lastRun = { answers: { ...answers }, response };

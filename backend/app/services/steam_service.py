@@ -25,7 +25,10 @@ from app.core.config import settings
 from app.ml.analytics import analyze_review, apply_analysis
 from app.ml.recommender import invalidate_engine
 from app.models import Game, Genre, Review, Tag, User
-from app.services.interaction_service import recompute_game_aggregates
+from app.services.interaction_service import (
+    recompute_game_aggregates,
+    recompute_median_review_hours,
+)
 
 TIMEOUT = 15.0
 
@@ -559,6 +562,9 @@ def import_reviews(db: Session, game: Game, steam_app_id: int) -> int:
     if created:
         db.flush()
         recompute_game_aggregates(db, game.id)
+        # Las horas de los reseñadores recién importados mueven la mediana:
+        # es la fuente de duración del filtro "¿cuánto tiempo tenés?".
+        recompute_median_review_hours(db, game.id)
         db.commit()
     return created
 
