@@ -957,165 +957,30 @@ tr.clickable:hover td {
   align-items: center;
   justify-content: center;
   gap: var(--s-5);
-  padding: var(--s-12) 0 var(--s-8);
+  padding: var(--s-8) 0 var(--s-6);
+}
+
+/* La escena se dibuja siempre en 1080x1080 y se escala con transform (ver
+ * js/cauldron.js): así las coordenadas del diseño original no se tocan.
+ * `contain` acota el trabajo del navegador al recuadro, para que animar
+ * decenas de nodos por frame no obligue a recalcular la página entera. */
+.gt-cauldron {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--r-lg, 16px);
+  background: radial-gradient(
+    ellipse 70% 60% at 50% 42%,
+    oklch(22% 0.035 300),
+    oklch(8% 0.02 300)
+  );
+  contain: layout paint;
 }
 
 .gt-cauldron-stage {
-  position: relative;
-  width: 120px;
-  height: 118px;
-}
-
-.gt-cauldron-smoke {
   position: absolute;
-  top: -44px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 60px;
-  height: 46px;
-}
-
-.gt-cauldron-smoke span {
-  position: absolute;
-  bottom: 0;
-  border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #cbb0ff, #8b5cf6 55%, #5b2f9e 100%);
-  filter: blur(3px);
-  opacity: 0;
-  animation: gt-smoke-rise 2.2s ease-in infinite;
-}
-.gt-cauldron-smoke span:nth-child(1) {
-  left: 6px;
-  width: 15px;
-  height: 15px;
-  animation-delay: 0s;
-}
-.gt-cauldron-smoke span:nth-child(2) {
-  left: 23px;
-  width: 20px;
-  height: 20px;
-  animation-delay: 0.7s;
-}
-.gt-cauldron-smoke span:nth-child(3) {
-  left: 38px;
-  width: 13px;
-  height: 13px;
-  animation-delay: 1.4s;
-}
-
-@keyframes gt-smoke-rise {
-  0% {
-    transform: translate(0, 0) scale(0.6);
-    opacity: 0;
-  }
-  18% {
-    opacity: 0.85;
-  }
-  100% {
-    transform: translate(9px, -46px) scale(1.7);
-    opacity: 0;
-  }
-}
-
-.gt-cauldron-hat {
-  position: absolute;
-  top: -6px;
-  right: 2px;
-  width: 0;
-  height: 0;
-  border-left: 12px solid transparent;
-  border-right: 12px solid transparent;
-  border-bottom: 30px solid #2a1f42;
-  transform: rotate(16deg);
-  z-index: 2;
-}
-.gt-cauldron-hat::after {
-  content: "";
-  position: absolute;
-  bottom: -5px;
-  left: -9px;
-  width: 42px;
-  height: 7px;
-  border-radius: 50%;
-  background: #2a1f42;
-}
-
-.gt-cauldron-rim {
-  position: relative;
-  width: 96px;
-  height: 18px;
-  margin: 0 auto;
-  border-radius: 50%;
-  background: linear-gradient(180deg, #d9a441, #a97324);
-  box-shadow: var(--shadow-sm);
-  z-index: 1;
-}
-
-.gt-cauldron-bubbles span {
-  position: absolute;
-  bottom: 5px;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #c9a6ff;
-  animation: gt-bubble-pop 1.6s ease-in-out infinite;
-}
-.gt-cauldron-bubbles span:nth-child(1) {
-  left: 20px;
-  animation-delay: 0s;
-}
-.gt-cauldron-bubbles span:nth-child(2) {
-  left: 44px;
-  animation-delay: 0.5s;
-}
-.gt-cauldron-bubbles span:nth-child(3) {
-  left: 66px;
-  animation-delay: 1s;
-}
-
-@keyframes gt-bubble-pop {
-  0%,
-  100% {
-    transform: translateY(0) scale(0.4);
-    opacity: 0;
-  }
-  40% {
-    transform: translateY(-6px) scale(1);
-    opacity: 1;
-  }
-  70% {
-    transform: translateY(-10px) scale(0.7);
-    opacity: 0;
-  }
-}
-
-.gt-cauldron-body {
-  width: 108px;
-  height: 72px;
-  margin: -7px auto 0;
-  background: linear-gradient(155deg, #241a38, #140e22);
-  border-radius: 12px 12px 50% 50% / 12px 12px 62% 62%;
-  position: relative;
-  box-shadow: var(--shadow-md);
-}
-
-.gt-cauldron-handle {
-  position: absolute;
-  top: 4px;
-  width: 15px;
-  height: 20px;
-  border: 4px solid #241a38;
-  border-radius: 50%;
-}
-.gt-cauldron-handle.left {
-  left: -13px;
-  border-right-color: transparent;
-  transform: rotate(20deg);
-}
-.gt-cauldron-handle.right {
-  right: -13px;
-  border-left-color: transparent;
-  transform: rotate(-20deg);
+  top: 0;
+  left: 0;
+  transform-origin: top left;
 }
 
 /* --- Círculo rúnico: el resto de las cargas (búsqueda, enriquecimiento

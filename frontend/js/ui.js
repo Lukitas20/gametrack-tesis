@@ -1,5 +1,7 @@
 /* Utilidades de interfaz: construcción de DOM, íconos, avisos y formato. */
 
+import { cauldronScene } from "./cauldron.js";
+
 /**
  * Constructor de elementos.
  *
@@ -277,42 +279,16 @@ export function spinnerBlock(message = "Cargando…") {
 
 /** El caldero hirviendo: exclusivo de "¿Qué jugamos hoy?" (ver
  * views/quiz.js). Es una pantalla que aparece una sola vez por sesión de
- * preguntas, así que se puede dar el lujo de ser la animación más elaborada
- * de las dos — humo violeta, burbujas, sombrero de bruja apoyado en el
- * borde. */
+ * preguntas, así que se puede dar el lujo de ser la pieza más elaborada.
+ *
+ * La escena vive en ``cauldron.js``: es un port de la animación diseñada en
+ * Claude Design, con su propio bucle de animación por frame en vez de
+ * keyframes de CSS. */
 export function cauldronLoader(message = "Preparando la poción…") {
   return h(
     "div",
     { class: "gt-cauldron-loader" },
-    h(
-      "div",
-      { class: "gt-cauldron-stage" },
-      h(
-        "div",
-        { class: "gt-cauldron-smoke" },
-        h("span"),
-        h("span"),
-        h("span"),
-      ),
-      h("div", { class: "gt-cauldron-hat" }),
-      h(
-        "div",
-        { class: "gt-cauldron-rim" },
-        h(
-          "div",
-          { class: "gt-cauldron-bubbles" },
-          h("span"),
-          h("span"),
-          h("span"),
-        ),
-      ),
-      h(
-        "div",
-        { class: "gt-cauldron-body" },
-        h("div", { class: "gt-cauldron-handle left" }),
-        h("div", { class: "gt-cauldron-handle right" }),
-      ),
-    ),
+    cauldronScene(),
     h("span", { class: "gt-loader-message" }, message),
   );
 }
