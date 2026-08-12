@@ -26,6 +26,8 @@ para una tarde".
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
+
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from sqlalchemy import select
@@ -34,7 +36,7 @@ from sqlalchemy.orm import Session
 from app.db.database import get_db
 from app.ml import quiz_vocab
 from app.ml.analytics import aspect_scores_by_game
-from app.ml.recommender import Recommendation, get_engine
+from app.ml.recommender import Recommendation, RecommenderEngine, get_engine
 from app.models import Aspect, Game
 from app.schemas.game import GameSummary
 from app.services import steam_service
@@ -150,9 +152,34 @@ def _rank_with_aspect(
     return ranked, scores
 
 
-@router.post("/suggest", response_model=QuizResponse)
-def suggest(payload: QuizRequest, db: Session = Depends(get_db)) -> QuizResponse:
-    engine = get_engine(db)
+@dataclass
+class QuizOutcome:
+    """Resultado del asistente ANTES de recortarlo a tres y serializarlo.
+
+    Existe para que el arnés de evaluación pueda leer el ranking completo (a
+    la profundidad del pool) sin reimplementar el filtrado ni el
+    reordenamiento por aspecto: la tabla comparativa de la tesis mide el
+    mismo código que responde el endpoint, no una copia paralela. Ver
+    ``scripts/eval_arnes.py`` y el test de paridad en
+    ``tests/test_evaluacion.py``.
+    """
+
+    ranked: list[Recommendation]
+    games: dict[int, Game]
+    relaxed: list[str] = field(default_factory=list)
+    aspect_scores: dict[int, dict] = field(default_factory=dict)
+
+
+def run_quiz(
+    db: Session, payload: QuizRequest, engine: RecommenderEngine | None = None
+) -> QuizOutcome:
+    """Todo el asistente salvo el efecto de red y la serialización HTTP.
+
+    ``engine`` permite inyectar un motor configurado distinto (una variante
+    del arnés). Sin él usa el motor cacheado de producción, que es lo que
+    hace el endpoint.
+    """
+    engine = engine or get_engine(db)
     profile, mood_required, company = _resolve_vocabulary(payload)
 
     relaxed: list[str] = []
@@ -205,7 +232,14 @@ def suggest(payload: QuizRequest, db: Session = Depends(get_db)) -> QuizResponse
         )
 
     ranked, aspect_scores = _rank_with_aspect(db, picks, payload.priority_aspect)
-    top = ranked[:3]
+    return QuizOutcome(ranked=ranked, games=games, relaxed=relaxed, aspect_scores=aspect_scores)
+
+
+@router.post("/suggest", response_model=QuizResponse)
+def suggest(payload: QuizRequest, db: Session = Depends(get_db)) -> QuizResponse:
+    outcome = run_quiz(db, payload)
+    games, aspect_scores = outcome.games, outcome.aspect_scores
+    top = outcome.ranked[:3]
 
     # Enriquece/resincroniza los tres elegidos ahora, mientras el frontend ya
     # está mostrando el caldero: así, cuando alguien clickee un resultado, la
@@ -227,5 +261,5 @@ def suggest(payload: QuizRequest, db: Session = Depends(get_db)) -> QuizResponse
             )
             for c in top
         ],
-        relaxed=relaxed,
+        relaxed=outcome.relaxed,
     )

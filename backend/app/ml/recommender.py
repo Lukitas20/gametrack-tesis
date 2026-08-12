@@ -49,6 +49,28 @@ GENRE_TF = 0.4
 
 
 @dataclass(frozen=True)
+class EngineConfig:
+    """Hiperparámetros del motor, con la producción como default.
+
+    Existe para el arnés de evaluación (``scripts/eval_arnes.py``): cada
+    variante de la tabla comparativa de la tesis es una instancia de esto
+    corriendo EL MISMO código que sirve al usuario — no una reimplementación
+    paralela que pueda divergir de lo evaluado. Construir el motor sin
+    argumentos (``RecommenderEngine(db)``, como hace ``get_engine``) es
+    idéntico a antes de que esta clase existiera.
+    """
+
+    # Corpus de contenido
+    use_community_tags: bool = True   # etiquetas comunitarias en el corpus
+    use_vote_weights: bool = True     # TF = sqrt(prop. de votos); False = binario
+    genre_tf: float = GENRE_TF        # 0.0 = géneros fuera del corpus
+    # Combinación del asistente (suggest_by_mood)
+    w_content: float = 0.6
+    w_quality: float = 0.15
+    w_reach: float = 0.25
+
+
+@dataclass(frozen=True)
 class Recommendation:
     game_id: int
     score: float
@@ -78,7 +100,8 @@ class RecommenderEngine:
     módulo y se reconstruye sólo cuando los datos cambian (ver ``get_engine``).
     """
 
-    def __init__(self, db: Session) -> None:
+    def __init__(self, db: Session, config: EngineConfig | None = None) -> None:
+        self.config = config or EngineConfig()
         # Universo recomendable: un juego participa si tiene RASGOS con los
         # que compararlo — géneros o etiquetas — sin importar cómo llegaron:
         # ficha rica de la tienda (steam_synced_at), ingesta de SteamSpy
@@ -133,12 +156,20 @@ class RecommenderEngine:
         """
         # slug -> columna. Géneros y etiquetas comparten el espacio: si un
         # concepto existe en ambos ("indie"), se refuerzan en la misma celda.
-        genre_terms = {genre.slug for game in games for genre in game.genres}
-        vote_rows = db.execute(
-            select(game_tags.c.game_id, Tag.slug, game_tags.c.votes)
-            .join(Tag, Tag.id == game_tags.c.tag_id)
-            .where(Tag.kind == "community")
-        ).all()
+        genre_terms = (
+            {genre.slug for game in games for genre in game.genres}
+            if self.config.genre_tf > 0
+            else set()
+        )
+        vote_rows = (
+            db.execute(
+                select(game_tags.c.game_id, Tag.slug, game_tags.c.votes)
+                .join(Tag, Tag.id == game_tags.c.tag_id)
+                .where(Tag.kind == "community")
+            ).all()
+            if self.config.use_community_tags
+            else []
+        )
         community_terms = {slug for _, slug, _ in vote_rows}
         self._term_index: dict[str, int] = {
             term: column
@@ -151,13 +182,18 @@ class RecommenderEngine:
             votes_by_game.setdefault(game_id, []).append((slug, votes or 1))
 
         for row, game in enumerate(games):
-            for genre in game.genres:
-                matrix[row, self._term_index[genre.slug]] = GENRE_TF
+            if self.config.genre_tf > 0:
+                for genre in game.genres:
+                    matrix[row, self._term_index[genre.slug]] = self.config.genre_tf
             tag_votes = votes_by_game.get(game.id, [])
             total_votes = sum(votes for _, votes in tag_votes)
             for slug, votes in tag_votes:
-                share = votes / total_votes if total_votes else 0.0
-                matrix[row, self._term_index[slug]] = float(np.sqrt(share))
+                if self.config.use_vote_weights:
+                    share = votes / total_votes if total_votes else 0.0
+                    matrix[row, self._term_index[slug]] = float(np.sqrt(share))
+                else:
+                    # Variante de evaluación: membresía binaria, sin votos.
+                    matrix[row, self._term_index[slug]] = 1.0
 
         self._transformer = TfidfTransformer(norm="l2", smooth_idf=True)
         if games and self._term_index:
@@ -377,9 +413,9 @@ class RecommenderEngine:
         # juego hoy" espera títulos que conozca o pueda jugar con gente, no
         # la joya oculta con quince reseñas. La afinidad sigue mandando.
         combined = (
-            0.6 * _normalize(content)
-            + 0.15 * _normalize(self.popularity)
-            + 0.25 * self.reach
+            self.config.w_content * _normalize(content)
+            + self.config.w_quality * _normalize(self.popularity)
+            + self.config.w_reach * self.reach
         )
         order = np.argsort(combined)[::-1]
         excluded = exclude or set()
