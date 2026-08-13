@@ -1,20 +1,54 @@
 /* Tokens de diseño de GameTrack.
  *
- * Los colores de los gráficos no se eligieron a ojo: están validados por
- * backend/scripts/validate_palette.py, que mide contraste WCAG contra cada
- * superficie y separación perceptual en OKLab simulando las tres dicromacias.
- * Si se cambia alguno, hay que volver a correr ese script.
+ * Hay DOS familias de color acá, y mezclarlas es el error que este archivo
+ * intenta evitar:
+ *
+ * 1. **Marca** (`--brand-*`, `--accent*`): violeta, verde agua y oro. Salen
+ *    del logo del caldero y de la mascota, y son una decisión estética.
+ * 2. **Datos** (`--positivo`, `--negativo`, `--neutro`, `--series-*`): NO se
+ *    eligieron a ojo. Están validados por backend/scripts/validate_palette.py,
+ *    que mide contraste WCAG contra cada superficie y separación perceptual en
+ *    OKLab simulando las tres dicromacias. Si se cambia alguno, hay que volver
+ *    a correr ese script.
  *
  * El gris neutro del modo oscuro es más oscuro que el del claro a propósito:
  * bajo protanopia el rojo se desatura hacia el gris y sólo la luminosidad los
  * separa. Con el mismo gris en ambos modos el par caía a ΔE 4,2.
+ *
+ * OJO con `--surface`: el validador mide los rellenos de datos contra ese
+ * valor exacto (PALETTES["claro"]["_surface"] = #fcfcfb, oscuro = #1a1a19).
+ * Teñirlo de violeta invalida silenciosamente la validación. Por eso el tinte
+ * de marca vive sólo en `--page`, que no participa de ninguna medición.
  */
 
 :root {
   color-scheme: light;
 
+  /* --- Marca ---------------------------------------------------------- *
+   * Muestreados de los PNG reales: #302038 es el color dominante del logo
+   * (50.005 px), #108890 y #D8A040 le siguen; #482850 y #704070 salen de la
+   * túnica y el ala del sombrero de la mascota. Son los mismos en ambos
+   * temas: son la marca, no cambian porque el usuario prenda la luz. */
+  --brand-violet: #302038;
+  --brand-violet-mid: #482850;
+  --brand-violet-soft: #704070;
+  --brand-teal: #108890;
+  --brand-gold: #d8a040;
+  --brand-ink: #140620;
+
+  /* Variantes de marca ajustadas para que se sostengan como TRAZO sobre la
+   * superficie del tema (piso 3:1). El oro de marca da 2,27:1 sobre #fcfcfb
+   * — invisible —, así que en claro se oscurece. Ver el bloque oscuro para
+   * los valores del otro tema. */
+  --brand-teal-ui: #0d7076; /* 5,69:1 sobre --surface */
+  --brand-gold-ui: #a87a1c; /* 3,74:1 sobre --surface */
+  /* Cuerpo del caldero del header. El violeta de marca da 14,60:1 acá pero
+   * 1,17:1 contra el header oscuro — literalmente invisible —, así que en
+   * oscuro se levanta (ver el bloque de abajo). */
+  --brand-mark-body: var(--brand-violet);
+
   /* --- Superficies --- */
-  --page: #f9f9f7;
+  --page: #f9f8fa; /* pizca de violeta; --surface queda intacto a propósito */
   --surface: #fcfcfb;
   --surface-raised: #ffffff;
   --surface-sunken: #f2f1ed;
@@ -31,14 +65,26 @@
   --grid: #e1e0d9;
   --baseline: #c3c2b7;
 
-  /* --- Acento (slot categórico 1) --- */
-  --accent: #2a78d6;
-  --accent-hover: #256abf;
+  /* --- Acento: violeta de marca --- *
+   * Base = violeta medio de la túnica; hover oscurece hacia el violeta del
+   * logo. Contrastes verificados con backend/scripts/validate_palette.py:
+   *   #482850 sobre --surface #fcfcfb ... 12,07:1  (texto de link, piso 4,5)
+   *   #ffffff sobre #482850 ........... 12,39:1  (tinta del botón, piso 4,5)
+   *   #482850 sobre --page #f9f8fa .... 11,63:1  (anillo de foco, piso 3) */
+  --accent: var(--brand-violet-mid);
+  --accent-hover: var(--brand-violet);
   --accent-ink: #ffffff;
-  --accent-wash: rgba(42, 120, 214, 0.1);
-  --accent-wash-strong: rgba(42, 120, 214, 0.16);
+  --accent-wash: rgba(72, 40, 80, 0.1);
+  --accent-wash-strong: rgba(72, 40, 80, 0.16);
 
-  /* --- Escala divergente del sentimiento --- */
+  /* --- Escala divergente del sentimiento --- *
+   * NO sigue al acento, y no es un descuido. Estos colores son DATOS: dicen
+   * qué opinó la gente de un juego, no de qué color es la marca. Su elección
+   * está validada por script (contraste contra la superficie + separación en
+   * OKLab bajo protanopia, deuteranopia y tritanopia); atarlos a `--accent`
+   * haría que pintar la app de violeta cambie la escala de sentimiento sin
+   * que nadie lo decida, y la validación dejaría de valer. Para moverlos hay
+   * que editar PALETTES en validate_palette.py, correrlo, y pegar la salida. */
   --positivo: #2a78d6;
   --neutro: #898781;
   --negativo: #e34948;
@@ -53,7 +99,10 @@
   --critical: #d03b3b;
   --success-text: #006300;
 
-  /* --- Slots categóricos, en orden fijo (nunca ciclar) --- */
+  /* --- Slots categóricos, en orden fijo (nunca ciclar) --- *
+   * Mismo criterio que la escala de sentimiento: son datos, no marca. El
+   * slot 1 comparte hex con el acento VIEJO por historia, no por acople —
+   * ahora que el acento es violeta, queda claro que son cosas distintas. */
   --series-1: #2a78d6;
   --series-2: #eb6834;
   --series-3: #1baf7a;
@@ -101,11 +150,21 @@
   :root:not([data-theme="light"]) {
     color-scheme: dark;
 
-    --page: #0d0d0d;
+    --page: #0f0b14; /* pizca de violeta; --surface intacto (lo mide el validador) */
     --surface: #1a1a19;
     --surface-raised: #222221;
     --surface-sunken: #141413;
     --surface-hover: #262625;
+
+    /* En oscuro el violeta profundo se hunde contra el fondo, así que el
+     * acento sube de luminosidad. Contrastes verificados:
+     *   #a78bfa sobre --surface #1a1a19 ... 6,40:1  (texto, piso 4,5)
+     *   #a78bfa sobre --page #0f0b14 ...... 7,16:1  (anillo de foco, piso 3)
+     *   #140620 sobre #a78bfa ............. 7,17:1  (tinta del botón, piso 4,5)
+     * Los trazos de marca también se aclaran: sobre #1a1a19 el verde agua da
+     * 9,50:1 y el oro 9,81:1. */
+    --brand-teal-ui: #4fd1d9;
+    --brand-gold-ui: #e8bc6a;
 
     --ink: #ffffff;
     --ink-secondary: #c3c2b7;
@@ -116,11 +175,11 @@
     --grid: #2c2c2a;
     --baseline: #383835;
 
-    --accent: #3987e5;
-    --accent-hover: #5598e7;
-    --accent-ink: #0b0b0b;
-    --accent-wash: rgba(57, 135, 229, 0.14);
-    --accent-wash-strong: rgba(57, 135, 229, 0.22);
+    --accent: #a78bfa;
+    --accent-hover: #c4b5fd;
+    --accent-ink: var(--brand-ink);
+    --accent-wash: rgba(167, 139, 250, 0.14);
+    --accent-wash-strong: rgba(167, 139, 250, 0.22);
 
     --positivo: #3987e5;
     --neutro: #5c5c54;
@@ -145,11 +204,18 @@
 :root[data-theme="dark"] {
   color-scheme: dark;
 
-  --page: #0d0d0d;
+  --page: #0f0b14; /* pizca de violeta; --surface intacto (lo mide el validador) */
   --surface: #1a1a19;
   --surface-raised: #222221;
   --surface-sunken: #141413;
   --surface-hover: #262625;
+
+  /* Mismos valores y mismas razones que el bloque de la media query de
+   * arriba: #a78bfa da 6,40:1 sobre --surface, 7,16:1 sobre --page, y
+   * #140620 encima del botón da 7,17:1. */
+  --brand-teal-ui: #4fd1d9;
+  --brand-gold-ui: #e8bc6a;
+  --brand-mark-body: #8b6ea8; /* 4,13:1 contra el header oscuro */
 
   --ink: #ffffff;
   --ink-secondary: #c3c2b7;
@@ -160,11 +226,11 @@
   --grid: #2c2c2a;
   --baseline: #383835;
 
-  --accent: #3987e5;
-  --accent-hover: #5598e7;
-  --accent-ink: #0b0b0b;
-  --accent-wash: rgba(57, 135, 229, 0.14);
-  --accent-wash-strong: rgba(57, 135, 229, 0.22);
+  --accent: #a78bfa;
+  --accent-hover: #c4b5fd;
+  --accent-ink: var(--brand-ink);
+  --accent-wash: rgba(167, 139, 250, 0.14);
+  --accent-wash-strong: rgba(167, 139, 250, 0.22);
 
   --positivo: #3987e5;
   --neutro: #5c5c54;

@@ -293,10 +293,47 @@ export function cauldronLoader(message = "Preparando la poción…") {
   );
 }
 
-/** Círculo rúnico: la carga "de marca" para todo lo demás (cada cambio de
- * pantalla, la búsqueda del catálogo, enriquecer una ficha pendiente desde
- * Steam). Mismo mundo mágico que el caldero, pieza distinta — no es el
- * caldero reciclado en todos lados. */
+/** Ruta única de la ilustración de la mascota.
+ *
+ * Un solo lugar donde se decide de dónde sale: la mascota va a ser también
+ * el avatar del chatbot, y cuando llegue ese momento no debería haber que
+ * buscar la cadena repetida por todo el frontend. La mascota todavía no
+ * tiene nombre; si alguna vez lo tiene, va acá al lado, no en strings
+ * sueltos por las vistas. */
+export const MASCOT_SRC = "/assets/brand/mascota.png";
+
+/**
+ * La mascota (el maguito encapuchado) como imagen decorativa.
+ *
+ * `alt=""` + `aria-hidden` porque no aporta información: el mensaje de
+ * texto que la acompaña es el que comunica el estado. Las medidas van
+ * explícitas para que reservar su espacio no dependa de que la imagen ya
+ * haya cargado (si no, cada carga empuja el texto hacia abajo).
+ *
+ * Si el archivo no está, la imagen se saca sola del DOM en vez de dejar el
+ * ícono de imagen rota: la pantalla de carga degrada al círculo rúnico, que
+ * es exactamente lo que se veía antes de que existiera la mascota.
+ */
+export function mascot({ size = 96, className = "" } = {}) {
+  return h("img", {
+    class: `gt-mascot${className ? ` ${className}` : ""}`,
+    src: MASCOT_SRC,
+    width: size,
+    height: size,
+    alt: "",
+    "aria-hidden": "true",
+    decoding: "async",
+    onError: (event) => event.currentTarget.remove(),
+  });
+}
+
+/** Círculo rúnico con la mascota flotando en el centro: la carga "de marca"
+ * para todo lo demás (cada cambio de pantalla, la búsqueda del catálogo,
+ * enriquecer una ficha pendiente desde Steam). Mismo mundo mágico que el
+ * caldero, pieza distinta — no es el caldero reciclado en todos lados.
+ *
+ * El mensaje va en un `role="status"`: sin eso, un lector de pantalla no
+ * anuncia nada cuando el estado cambia y la espera es completamente muda. */
 export function magicLoader(message = "Cargando…") {
   return h(
     "div",
@@ -308,8 +345,9 @@ export function magicLoader(message = "Cargando…") {
       h("div", { class: "gt-magic-loader-ring gt-ring-inner" }),
       h("div", { class: "gt-magic-loader-dot" }),
       h("div", { class: "gt-magic-loader-dot" }),
+      mascot({ size: 46, className: "gt-magic-loader-mascot" }),
       icon("sparkles", 22, "gt-magic-loader-spark"),
     ),
-    h("span", { class: "gt-loader-message" }, message),
+    h("span", { class: "gt-loader-message", role: "status" }, message),
   );
 }

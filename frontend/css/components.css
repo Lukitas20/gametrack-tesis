@@ -1003,25 +1003,38 @@ tr.clickable:hover td {
   place-items: center;
 }
 
+/* Los tres colores de la marca, uno por elemento: violeta el anillo de
+ * afuera, verde agua el de adentro, oro los puntos en órbita. Antes eran
+ * hexes sueltos (#8b5cf6, #d9a441) que no se movían con el tema; los `-ui`
+ * son las variantes de marca ajustadas para sostenerse como trazo sobre la
+ * superficie de cada tema (ver tokens.css). */
 .gt-magic-loader-ring {
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  border: 2px dashed #8b5cf6;
-  opacity: 0.55;
+  border: 2px dashed var(--accent);
+  /* 0,75 y no 0,55: mezclada contra --page, la opacidad vieja dejaba el
+   * anillo interno en 1,98:1 en tema claro (invisible) y los dos anillos por
+   * debajo de 3:1 en oscuro. Con 0,75 los cuatro casos quedan sobre el piso:
+   * claro 5,58 / 3,40 y oscuro 4,45 / 6,31. */
+  opacity: 0.75;
   animation: gt-ring-spin 3.2s linear infinite;
 }
 .gt-magic-loader-ring.gt-ring-inner {
   inset: 12px;
-  border-color: #d9a441;
-  opacity: 0.45;
+  border-color: var(--brand-teal-ui);
+  opacity: 0.75;
   animation-duration: 2.3s;
   animation-direction: reverse;
 }
 
+/* La chispa se corre a la esquina para dejarle el centro a la mascota. */
 .gt-magic-loader-spark {
-  color: #8b5cf6;
-  filter: drop-shadow(0 0 6px rgba(139, 92, 246, 0.5));
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  color: var(--accent);
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--accent) 50%, transparent));
   animation: gt-spark-pulse 1.2s ease-in-out infinite;
 }
 
@@ -1030,7 +1043,7 @@ tr.clickable:hover td {
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: #d9a441;
+  background: var(--brand-gold-ui);
   top: 50%;
   left: 50%;
   margin: -2.5px;
@@ -1038,6 +1051,37 @@ tr.clickable:hover td {
 }
 .gt-magic-loader-dot:nth-child(3) {
   animation-delay: -1.2s;
+}
+
+/* --- La mascota --- *
+ * `inset: 0` + `margin: auto` centra un absoluto de tamaño conocido sin
+ * gastar `transform`, que queda libre para la animación. Si se centrara con
+ * `translate(-50%, -50%)`, la flotación tendría que repetir ese desplazamiento
+ * en cada keyframe y cualquier cambio de tamaño lo desincronizaría. */
+.gt-mascot {
+  display: block;
+}
+
+.gt-magic-loader-mascot {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  animation: gt-mascot-float 3s ease-in-out infinite;
+}
+
+/* Flotación: arranca y termina en el mismo lugar, y eso es deliberado. El
+ * bloque global de `prefers-reduced-motion` (base.css) colapsa la duración a
+ * 0,01 ms, así que la animación salta a su estado final: si el último
+ * keyframe fuera el punto alto, la mascota quedaría congelada flotando en el
+ * aire. Volviendo a translateY(0) queda quieta y en su lugar. */
+@keyframes gt-mascot-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
 }
 
 @keyframes gt-ring-spin {
