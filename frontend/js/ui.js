@@ -345,7 +345,7 @@ export function magicLoader(message = "Cargando…") {
       h("div", { class: "gt-magic-loader-ring gt-ring-inner" }),
       h("div", { class: "gt-magic-loader-dot" }),
       h("div", { class: "gt-magic-loader-dot" }),
-      mascot({ size: 46, className: "gt-magic-loader-mascot" }),
+      mascot({ size: 58, className: "gt-magic-loader-mascot" }),
       icon("sparkles", 22, "gt-magic-loader-spark"),
     ),
     h("span", { class: "gt-loader-message", role: "status" }, message),

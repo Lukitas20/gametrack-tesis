@@ -42,10 +42,6 @@
    * los valores del otro tema. */
   --brand-teal-ui: #0d7076; /* 5,69:1 sobre --surface */
   --brand-gold-ui: #a87a1c; /* 3,74:1 sobre --surface */
-  /* Cuerpo del caldero del header. El violeta de marca da 14,60:1 acá pero
-   * 1,17:1 contra el header oscuro — literalmente invisible —, así que en
-   * oscuro se levanta (ver el bloque de abajo). */
-  --brand-mark-body: var(--brand-violet);
 
   /* --- Superficies --- */
   --page: #f9f8fa; /* pizca de violeta; --surface queda intacto a propósito */
@@ -215,7 +211,6 @@
    * #140620 encima del botón da 7,17:1. */
   --brand-teal-ui: #4fd1d9;
   --brand-gold-ui: #e8bc6a;
-  --brand-mark-body: #8b6ea8; /* 4,13:1 contra el header oscuro */
 
   --ink: #ffffff;
   --ink-secondary: #c3c2b7;

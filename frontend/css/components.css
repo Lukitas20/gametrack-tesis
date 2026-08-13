@@ -995,10 +995,13 @@ tr.clickable:hover td {
   padding: var(--s-14) 0;
 }
 
+/* 96px y no 76: el orbe crece para que la mascota entre adentro sin que los
+ * anillos se le vengan encima. El radio de la órbita de los puntos
+ * (gt-orbit) va atado a esta medida. */
 .gt-magic-loader-orb {
   position: relative;
-  width: 76px;
-  height: 76px;
+  width: 96px;
+  height: 96px;
   display: grid;
   place-items: center;
 }
@@ -1104,10 +1107,10 @@ tr.clickable:hover td {
 
 @keyframes gt-orbit {
   from {
-    transform: rotate(0deg) translateX(36px) rotate(0deg);
+    transform: rotate(0deg) translateX(46px) rotate(0deg);
   }
   to {
-    transform: rotate(360deg) translateX(36px) rotate(-360deg);
+    transform: rotate(360deg) translateX(46px) rotate(-360deg);
   }
 }
 

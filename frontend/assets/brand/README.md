@@ -1,36 +1,34 @@
 # Assets de marca
 
-Dos archivos, ninguno de los dos en el repo todavía:
-
-| Archivo | Qué es | Estado |
+| Archivo | Qué es | Dónde se usa |
 |---|---|---|
-| `logo.png` | el caldero (violeta / verde agua / oro) | **falta** |
-| `mascota.png` | el maguito encapuchado de ojos turquesa | **falta** |
+| `logo.png` | el caldero; el humo entrelazado **es la G y la T** | logo del header (36px) |
+| `mascota.png` | el maguito encapuchado de ojos turquesa | pantallas de carga; a futuro, avatar del chatbot |
+| `favicon-32.png` | el logo a 32px | pestaña del navegador |
+| `apple-touch-icon.png` | el logo a 180px sobre violeta | pantalla de inicio en iOS |
 
-## Por qué faltan
+Los dos primeros son 512×512 RGBA, recortados al contenido y centrados en un
+cuadrado. Se renderizan a través de `mascot()` y de `.brand-mark`, nunca con
+rutas sueltas repetidas por el código.
 
-Los PNG que se pasaron (`Logo.png` y `Maguito.png`) **no tienen canal alfa**:
-son `mode=RGB`, con el damero de transparencia horneado como píxeles. Sobre el
-violeta de la aplicación se verían como un rectángulo a cuadritos en vez de
-recortados. Comprobado así:
+## De dónde salieron
 
-```bash
-python -c "from PIL import Image; im=Image.open('Maguito.png'); print(im.mode)"
-# RGB   <- sin la A, no hay transparencia
-```
+Los originales (`Logo.png` y `Maguito.png`) llegaron **sin canal alfa**:
+`mode=RGB`, con el damero de transparencia pintado como píxeles. Sobre el
+violeta de la aplicación se veían como un rectángulo a cuadritos.
 
-No se recortó el fondo a mano a propósito: los bordes están suavizados contra
-el damero, así que cualquier recorte deja un halo gris alrededor de la silueta,
-que sobre fondo violeta se nota más que el damero mismo. La solución es
-re-exportar desde el original con transparencia real (PNG-32 / RGBA).
+La transparencia se reconstruyó en vez de recortar a mano. El arte es oscuro y
+saturado y el fondo es gris claro desaturado, así que se separan por saturación
+y luminancia; el fondo se toma sólo donde está **conectado al borde** de la
+imagen, para no perforar zonas claras interiores. Los píxeles del borde, que
+están mezclados con el gris del damero, se des-premultiplican
+(`F = (C - (1-a)·B) / a`) en lugar de dejarlos como están: por eso no queda el
+halo gris que deja un recorte directo. Verificado componiendo sobre violeta,
+sobre blanco y sobre negro, con zoom ×4 en los bordes.
 
-## Qué pasa mientras tanto
+Quedó 72% transparente el logo y 63% la mascota, con menos del 0,2% de píxeles
+de borde suave — consistente con arte de color plano y contorno marcado.
 
-Nada se rompe. `mascot()` (en `js/ui.js`) se saca sola del DOM si la imagen no
-carga, así que la pantalla de carga muestra el círculo rúnico —exactamente lo
-que se veía antes— en vez del ícono de imagen rota. El logo del header es un
-caldero dibujado en SVG inline, que además es el favicon.
-
-Cuando lleguen los archivos con alfa, ponerlos acá con estos nombres alcanza:
-la mascota aparece sola en las cargas de pantalla completa, y reemplazar el
-SVG del header por `logo.png` es cambiar un elemento en `index.html`.
+Si en algún momento aparecen los originales con alfa real (exportados en
+PNG-32 desde la fuente), conviene reemplazarlos: la reconstrucción es muy
+buena, pero parte de una imagen que ya perdió información.

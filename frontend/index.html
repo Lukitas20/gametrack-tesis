@@ -11,16 +11,10 @@
     <link rel="stylesheet" href="/css/tokens.css" />
     <link rel="stylesheet" href="/css/base.css" />
     <link rel="stylesheet" href="/css/components.css" />
-    <!-- El caldero, dibujado en vectores en vez de un PNG escalado: a 16px
-         un raster del logo real se empasta, y el humo entrelazado del arte
-         original desaparece igual. Acá va una sola voluta en vez de dos.
-         Los colores son literales (un data: URI no ve las variables de la
-         página) y usan el violeta levantado, que se sostiene tanto sobre una
-         pestaña clara como oscura. -->
-    <link
-      rel="icon"
-      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 10.5C13 7 19.5 5.5 17 1.5' fill='none' stroke='%23108890' stroke-width='2.2' stroke-linecap='round'/%3E%3Cpath d='M25.5 4.2l1 2.1 2.1 1-2.1 1-1 2.1-1-2.1-2.1-1 2.1-1z' fill='%23d8a040'/%3E%3Cellipse cx='16' cy='20' rx='10.5' ry='8.5' fill='%238b6ea8'/%3E%3Cellipse cx='16' cy='13' rx='11.5' ry='3' fill='%238b6ea8'/%3E%3Cellipse cx='16' cy='12.6' rx='8.5' ry='2' fill='%23108890'/%3E%3Cpath d='M16 17.6l2.3 2.7-2.3 2.7-2.3-2.7z' fill='%23d8a040'/%3E%3C/svg%3E"
-    />
+    <!-- El logo real. El apple-touch va sobre el violeta de marca porque iOS
+         ignora la transparencia y compondría el caldero sobre negro. -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/brand/favicon-32.png" />
+    <link rel="apple-touch-icon" href="/assets/brand/apple-touch-icon.png" />
     <style>
       /* El tema guardado se aplica antes de pintar para no ver un destello
          del tema equivocado al cargar. */
@@ -45,32 +39,20 @@
   </head>
   <body>
     <header class="app-header">
-      <!-- El caldero va inline (no como <img>) para que sus rellenos puedan
-           leer las variables del tema: el violeta de marca desaparece contra
-           el header oscuro y necesita levantarse. `aria-hidden` porque el
-           texto "GameTrack" de al lado ya nombra la marca. -->
+      <!-- El logo real, no un dibujo aproximado: el humo entrelazado ES la G
+           y la T de GameTrack, así que simplificarlo tira justo la idea de la
+           marca. A 36px las dos letras todavía se distinguen. Las medidas van
+           explícitas para que el header no salte mientras carga la imagen, y
+           `aria-hidden` porque el texto "GameTrack" de al lado ya la nombra. -->
       <a class="brand" id="brand-link" href="#/">
-        <svg
+        <img
           class="brand-mark"
-          viewBox="0 0 32 32"
-          width="30"
-          height="30"
+          src="/assets/brand/logo.png"
+          width="36"
+          height="36"
+          alt=""
           aria-hidden="true"
-          focusable="false"
-        >
-          <path
-            d="M16 10.5C13 7 19.5 5.5 17 1.5"
-            fill="none"
-            stroke="var(--brand-teal-ui)"
-            stroke-width="2.2"
-            stroke-linecap="round"
-          />
-          <path d="M25.5 4.2l1 2.1 2.1 1-2.1 1-1 2.1-1-2.1-2.1-1 2.1-1z" fill="var(--brand-gold-ui)" />
-          <ellipse cx="16" cy="20" rx="10.5" ry="8.5" fill="var(--brand-mark-body)" />
-          <ellipse cx="16" cy="13" rx="11.5" ry="3" fill="var(--brand-mark-body)" />
-          <ellipse cx="16" cy="12.6" rx="8.5" ry="2" fill="var(--brand-teal-ui)" />
-          <path d="M16 17.6l2.3 2.7-2.3 2.7-2.3-2.7z" fill="var(--brand-gold-ui)" />
-        </svg>
+        />
         <span>GameTrack</span>
       </a>
       <nav class="main-nav" id="nav" aria-label="Navegación principal"></nav>
