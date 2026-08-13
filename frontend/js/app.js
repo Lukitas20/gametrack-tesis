@@ -34,6 +34,7 @@ import { recommendationsView } from "./views/recommendations.js";
 const THEME_KEY = "gametrack.theme";
 
 const main = document.getElementById("view");
+const brandLink = document.getElementById("brand-link");
 const navSlot = document.getElementById("nav");
 const actionsSlot = document.getElementById("actions");
 const headerSearchSlot = document.getElementById("header-search");
@@ -75,11 +76,21 @@ function isDark() {
  * Navegación
  * ------------------------------------------------------------------ */
 
+/** A dónde lleva "el inicio" según el rol. Antes esta decisión estaba
+ * repetida en tres lugares (la raíz, el cambio de perfil y el ítem de nav);
+ * ahora sale de acá, que es también lo que apunta el logo del header. */
+function homePath() {
+  return isDeveloper() ? "/dev" : "/recomendaciones";
+}
+
 // El catálogo no tiene su propio ítem de nav: se entra por la barra de
 // búsqueda del header (ver renderHeaderSearch), que es persistente y no se
 // reconstruye en cada navegación como esta lista.
+//
+// Tampoco hay ítem de "Inicio": el logo del header ya es el enlace al
+// inicio, que es la convención de cualquier sitio web. Tener los dos era
+// gastar un lugar de la barra en repetir lo que el logo ya hacía.
 const PLAYER_NAV = [
-  ["/recomendaciones", "Inicio"],
   ["/listas", "Mis listas"],
   ["/valoraciones", "Mis valoraciones"],
   ["/perfil", "Perfil"],
@@ -93,6 +104,10 @@ const DEVELOPER_NAV = [
 function renderNav(activePath = null) {
   const path = activePath || window.location.hash.slice(1).split("?")[0] || "/";
   const items = isDeveloper() ? DEVELOPER_NAV : PLAYER_NAV;
+
+  // El logo apunta al inicio del rol actual en vez de a "/", así la URL que
+  // queda es la canónica (`#/recomendaciones`) y no una que redirige.
+  brandLink.setAttribute("href", `#${homePath()}`);
 
   clear(navSlot);
   for (const [href, label] of items) {
@@ -191,7 +206,7 @@ function accountMenu() {
             try {
               const user = await login(account.username, DEMO_PASSWORD);
               toast(`Ahora sos ${user.username}`);
-              navigate(user.role === "desarrollador" ? "/dev" : "/recomendaciones");
+              navigate(homePath());
             } catch (error) {
               toast(error.message, "error");
             }
@@ -338,12 +353,20 @@ function view(loader) {
   };
 }
 
-route("/", view(async () => {
-  // La raíz manda a cada rol a su lugar.
-  if (!isLoggedIn()) return accountsView();
-  navigate(isDeveloper() ? "/dev" : "/recomendaciones", { replace: true });
-  return h("div");
-}));
+// La raíz manda a cada rol a su lugar. La rama con sesión NO va envuelta en
+// `view()` a propósito: `view` siempre monta lo que devuelve el handler, y
+// como `navigate(..., { replace: true })` resuelve la ruta destino sin
+// esperar, el `<div>` vacío que se devolvía acá se montaba ENCIMA de la
+// vista recién renderizada y dejaba la pantalla en blanco hasta que la
+// petición de la vista destino terminaba. Sin envoltorio no hay nada que
+// pisar: redirige y punto.
+route("/", async (context) => {
+  if (!isLoggedIn()) {
+    await view(async () => accountsView())(context);
+    return;
+  }
+  navigate(homePath(), { replace: true });
+});
 
 route("/cuentas", view(async () => accountsView()));
 route("/catalogo", view(catalogView));
