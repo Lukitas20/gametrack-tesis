@@ -92,11 +92,41 @@ def _dedupe_names(names: list[str]) -> list[str]:
     return result
 
 
+# Meses en español, resueltos a mano. `datetime.strptime` con %b depende del
+# locale del proceso, y las fichas se piden con `l=spanish` (ver
+# STEAM_STORE_BASE), así que Steam contesta "21 AGO 2012": con los patrones en
+# inglés no parseaba ninguna fecha y TODO el catálogo quedaba sin año.
+_MESES_ES = {
+    "ene": 1, "feb": 2, "mar": 3, "abr": 4, "may": 5, "jun": 6,
+    "jul": 7, "ago": 8, "sep": 9, "set": 9, "oct": 10, "nov": 11, "dic": 12,
+}
+
+_FECHA_ES = re.compile(
+    r"^(?:(\d{1,2})\s+)?([A-Za-zÁÉÍÓÚÑáéíóúñ]{3,})\.?,?\s+(\d{4})$"
+)
+
+
 def _parse_release_date(raw: str) -> date | None:
-    """Steam no tiene un formato único de fecha; se prueban los habituales."""
+    """Steam no tiene un formato único de fecha; se prueban los habituales.
+
+    El día es opcional a propósito: para los juegos viejos Steam a veces sólo
+    publica mes y año ("AGO 2012"), y quedarse con el 1 de ese mes es mucho
+    más útil que descartar la fecha entera.
+    """
     raw = (raw or "").strip()
     if not raw:
         return None
+
+    match = _FECHA_ES.match(raw)
+    if match:
+        dia, mes_txt, anio = match.groups()
+        mes = _MESES_ES.get(mes_txt[:3].lower())
+        if mes:
+            try:
+                return date(int(anio), mes, int(dia or 1))
+            except ValueError:
+                pass
+
     for pattern in ("%d %b, %Y", "%b %d, %Y", "%d %B, %Y", "%B %d, %Y", "%Y"):
         try:
             return datetime.strptime(raw, pattern).date()

@@ -147,9 +147,25 @@ def test_parse_traduce_los_generos_al_espanol() -> None:
     assert steam_service.parse_steam_game(HALF_LIFE)["genres"] == ["Acción", "Aventura"]
 
 
+# Los casos en espanol son los que importan de verdad: las fichas se piden con
+# `l=spanish`, asi que Steam SIEMPRE contesta asi en produccion. Esta tabla
+# tenia solo formatos en ingles, y por eso los 6.430 juegos del catalogo
+# quedaron sin anio hasta que alguien lo miro. El dia opcional tambien es real:
+# para los juegos viejos Steam a veces publica solo mes y anio.
 @pytest.mark.parametrize(
     ("raw", "expected_year"),
-    [("16 Nov, 2004", 2004), ("Nov 16, 2004", 2004), ("2004", 2004), ("", None), ("proximamente", None)],
+    [
+        ("21 AGO 2012", 2012),
+        ("14 DIC 2011", 2011),
+        ("AGO 2012", 2012),
+        ("1 ENE 2020", 2020),
+        ("16 Nov, 2004", 2004),
+        ("Nov 16, 2004", 2004),
+        ("2004", 2004),
+        ("", None),
+        ("proximamente", None),
+        ("30 FEB 2020", None),
+    ],
 )
 def test_parse_tolera_los_formatos_de_fecha_de_steam(raw: str, expected_year: int | None) -> None:
     data = {**HALF_LIFE, "release_date": {"date": raw}}
