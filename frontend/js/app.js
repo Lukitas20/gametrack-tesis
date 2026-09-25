@@ -26,7 +26,7 @@ import { catalogView } from "./views/catalog.js";
 import { developerGameView, developerView } from "./views/developer.js";
 import { gameView } from "./views/game.js";
 import { listsView } from "./views/lists.js";
-import { friendsView } from "./views/friends.js";
+import { friendsView } from "./views/friends.js?v=2";
 import { quizView, startNewQuiz } from "./views/quiz.js";
 import { profileView } from "./views/profile.js";
 import { ratingsView } from "./views/ratings.js";

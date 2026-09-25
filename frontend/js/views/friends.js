@@ -56,7 +56,7 @@ export async function friendsView() {
           h("div", { class: "friend-list" }, data.incoming.map(request => h("article", { class: "friend-row" },
             person(request.user), h("div", { class: "row", style: { gap: "8px" } },
               action("Aceptar", () => api.acceptFriend(request.id), true),
-              action("Rechazar", () => api.cancelFriendRequest(request.id))))),
+              action("Rechazar", () => api.cancelFriendRequest(request.id)))))),
           !data.incoming.length ? h("p", { class: "muted" }, "No hay solicitudes pendientes.") : null),
         h("section", { class: "section" }, h("h2", null, `Solicitudes enviadas · ${data.outgoing.length}`),
           h("div", { class: "friend-list" }, data.outgoing.map(request => h("article", { class: "friend-row" },

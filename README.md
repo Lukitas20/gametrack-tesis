@@ -616,6 +616,15 @@ coincidencias, y se pueden excluir resultados anteriores para explorar otros jue
 
 ## Tests
 
+Desde la raíz, validar la sintaxis de todos los módulos del frontend (requiere Node.js):
+
+```powershell
+node frontend/scripts/check-syntax.mjs
+```
+
+La comprobación usa el modo módulo explícito, igual que el navegador, y falla
+si cualquier vista contiene un error que impediría arrancar la aplicación.
+
 ```powershell
 cd backend
 .\.venv\Scripts\python.exe -m pytest
