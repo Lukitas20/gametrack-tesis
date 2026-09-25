@@ -26,6 +26,7 @@ import { catalogView } from "./views/catalog.js";
 import { developerGameView, developerView } from "./views/developer.js";
 import { gameView } from "./views/game.js";
 import { listsView } from "./views/lists.js";
+import { friendsView } from "./views/friends.js";
 import { quizView, startNewQuiz } from "./views/quiz.js";
 import { profileView } from "./views/profile.js";
 import { ratingsView } from "./views/ratings.js";
@@ -87,11 +88,11 @@ function homePath() {
 // búsqueda del header (ver renderHeaderSearch), que es persistente y no se
 // reconstruye en cada navegación como esta lista.
 //
-// Tampoco hay ítem de "Inicio": el logo del header ya es el enlace al
-// inicio, que es la convención de cualquier sitio web. Tener los dos era
-// gastar un lugar de la barra en repetir lo que el logo ya hacía.
+// "Para vos" mantiene visible el acceso al recomendador desde cualquier vista.
 const PLAYER_NAV = [
+  ["/recomendaciones", "Para vos"],
   ["/listas", "Mis listas"],
+  ["/amigos", "Amigos"],
   ["/valoraciones", "Mis valoraciones"],
   ["/perfil", "Perfil"],
 ];
@@ -331,16 +332,23 @@ function renderActions() {
  * ------------------------------------------------------------------ */
 
 /** Envuelve un handler de vista: muestra carga, captura errores y monta. */
+let navigationRevision = 0;
+
 function view(loader) {
   return async (context) => {
+    const revision = navigationRevision;
+    const ownerId = state.user?.id ?? null;
+    const isCurrent = () => revision === navigationRevision && (state.user?.id ?? null) === ownerId;
     // Es el loader de cada cambio de pantalla (incluida la ficha de un
     // juego, que puede tardar un par de segundos si hay que enriquecerla
     // desde Steam): el lugar con más chances de que alguien lo vea.
     main.replaceChildren(magicLoader("Cargando…"));
     try {
       const node = await loader(context);
+      if (!isCurrent()) return;
       main.replaceChildren(node);
     } catch (error) {
+      if (!isCurrent()) return;
       console.error(error);
       main.replaceChildren(
         emptyState(
@@ -362,7 +370,7 @@ function view(loader) {
 // pisar: redirige y punto.
 route("/", async (context) => {
   if (!isLoggedIn()) {
-    await view(async () => accountsView())(context);
+    await view(recommendationsView)(context);
     return;
   }
   navigate(homePath(), { replace: true });
@@ -372,6 +380,7 @@ route("/cuentas", view(async () => accountsView()));
 route("/catalogo", view(catalogView));
 route("/recomendaciones", view(recommendationsView));
 route("/listas", view(listsView));
+route("/amigos", view(friendsView));
 route("/valoraciones", view(ratingsView));
 route("/que-jugamos", view(quizView));
 route("/perfil", view(profileView));
@@ -390,6 +399,7 @@ setNotFound(
 );
 
 setNavigateHook((path) => {
+  navigationRevision += 1;
   renderNav(path);
   syncHeaderSearch();
   closeMenu();
@@ -414,7 +424,7 @@ async function boot() {
   await restore();
 
   if (!isLoggedIn() && !window.location.hash) {
-    navigate("/cuentas", { replace: true });
+    navigate("/recomendaciones", { replace: true });
   }
   start();
 }

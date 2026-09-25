@@ -13,6 +13,7 @@ from app.models.enums import (
     UserRole,
 )
 from app.models.game import Game, Genre, Tag, game_genres, game_tags
+from app.models.friendship import Friendship
 from app.models.game_list import GameList, GameListItem
 from app.models.interaction import Rating, Review, ReviewAspect
 from app.models.steamspy import SteamSpySync
@@ -20,6 +21,7 @@ from app.models.user import User, UserPreference
 
 __all__ = [
     "Aspect",
+    "Friendship",
     "Game",
     "GameList",
     "GameListItem",

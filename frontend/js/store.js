@@ -10,13 +10,13 @@ export const DEMO_ACCOUNTS = [
     username: "jugador.demo",
     label: "Cuenta Demo Jugador",
     role: "jugador",
-    note: "Sin valoraciones: arranque en frío real. Valorá juegos para ver cómo cambian las recomendaciones.",
+    note: "Recomendaciones según tus géneros y valoraciones. Probá IA local y compará estrategias.",
   },
   {
-    username: "tester.demo",
-    label: "Cuenta de Testing",
+    username: "nuevo.demo",
+    label: "Jugador nuevo",
     role: "jugador",
-    note: "Géneros elegidos y 10 juegos ya valorados: recomendaciones de contenido/híbridas desde el primer login.",
+    note: "Perfil del dataset demo sin valoraciones iniciales: permite probar el arranque en frío.",
   },
   {
     username: "dev.demo",

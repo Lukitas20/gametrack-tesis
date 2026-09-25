@@ -79,10 +79,17 @@ export const api = {
   reviews: (id, limit = 10) => request(`/games/${id}/reviews`, { auth: false, params: { limit } }),
 
   // --- Recomendaciones ---
-  recommendations: (strategy = "auto", limit = 12) =>
-    request("/recommendations", { params: { strategy, limit } }),
+  recommendations: (strategy = "auto", limit = 12, discovery = "balanced") =>
+    request("/recommendations", { params: { strategy, limit, discovery } }),
   quizSuggest: (payload) =>
-    request("/quiz/suggest", { method: "POST", body: payload, auth: false }),
+    request("/quiz/suggest", { method: "POST", body: payload }),
+
+  // --- Amigos y solicitudes ---
+  friends: () => request("/friends"),
+  requestFriend: (username) => request("/friends/requests", { method: "POST", body: { username } }),
+  acceptFriend: (id) => request(`/friends/requests/${id}/accept`, { method: "POST" }),
+  cancelFriendRequest: (id) => request(`/friends/requests/${id}`, { method: "DELETE" }),
+  removeFriend: (id) => request(`/friends/${id}`, { method: "DELETE" }),
 
   // --- Interacciones ---
   myRatings: () => request("/me/ratings"),

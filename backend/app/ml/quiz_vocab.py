@@ -124,19 +124,15 @@ COMPANY_FILTERS: dict[str, frozenset[str]] = {
 
 # --- Duración: compromiso vs. sesión ---------------------------------------
 #
-# "¿Cuánto tiempo tenés?" pregunta por la sesión de hoy, pero la mediana de
-# horas de los reseñadores (`Game.median_review_hours`) mide compromiso
-# total. Para un juego finito son lo mismo a efectos del filtro: si la
-# mediana de terminar The Witcher 3 es 53 h, no es para una tarde. Para un
-# juego-servicio se invierte: CS2 acumula 164 h de mediana justamente porque
-# cada sesión es corta y la gente vuelve — es EXACTAMENTE lo que jugás una
-# tarde. La distinción, entonces, exime del filtro de duración a los juegos
-# de sesión; su "duración" no existe como concepto.
+# La mediana de horas registradas al reseñar NO mide duración de campaña ni
+# de sesión. Se usa sólo como aproximación al compromiso, con una nota de
+# incertidumbre en cada resultado. Los juegos con señales de partidas o
+# servicio quedan exentos porque acumulan horas entre muchas sesiones.
 
 # Etiquetas comunitarias que marcan un juego-servicio de sesión. Deliberada-
 # mente NO incluyen "multiplayer" ni "co-op" a secas: It Takes Two es
-# cooperativo y finito, Portal 2 tiene co-op y campaña. Sí incluyen
-# free-to-play: el modelo de negocio de sesión infinita.
+# cooperativo y finito, Portal 2 tiene co-op y campaña. Tampoco free-to-play:
+# un precio gratuito no prueba que el juego sea un servicio.
 SERVICE_MARKERS: frozenset[str] = frozenset(
     {
         "massively-multiplayer",
@@ -144,7 +140,6 @@ SERVICE_MARKERS: frozenset[str] = frozenset(
         "moba",
         "battle-royale",
         "e-sports",
-        "free-to-play",
     }
 )
 
@@ -155,22 +150,14 @@ _SINGLEPLAYER_MARKERS = frozenset({"un-jugador", "singleplayer"})
 def is_session_based(tag_slugs: set[str]) -> bool:
     """¿Es un juego de sesión (servicio) en vez de una obra que se termina?
 
-    Dos señales, cualquiera alcanza:
-
-    1. **No tiene modo de un jugador.** Un juego sin campaña no tiene "tiempo
-       de completarlo": sus horas son acumulación de sesiones. Cubre CS2,
-       Dota, Apex y todo el multijugador puro, incluso ANTES de la ingesta
-       de SteamSpy (la categoría "Un jugador" viene de la tienda).
-    2. **La comunidad lo marcó como servicio** (MOBA, battle royale, MMO,
-       e-sports, free-to-play). Cubre los híbridos con campaña testimonial.
-
-    El costo de un falso positivo es leve (un juego largo se cuela en "una
-    tarde" y el ranking decide); el de un falso negativo es el bug de CS2
-    excluido de "una tarde". Por eso la regla es generosa.
+    Exige una señal positiva: etiquetas de servicio, o JcJ sin modo de un
+    jugador. La ausencia de metadatos, el cooperativo y el precio gratuito
+    no bastan para afirmar que un juego se organiza en partidas.
     """
-    if not tag_slugs & _SINGLEPLAYER_MARKERS:
-        return True
-    return bool(tag_slugs & SERVICE_MARKERS)
+    return bool(tag_slugs & SERVICE_MARKERS) or (
+        not tag_slugs & _SINGLEPLAYER_MARKERS
+        and bool(tag_slugs & MOOD_REQUIREMENTS["competir"])
+    )
 
 
 def passes_time_budget(
@@ -178,9 +165,11 @@ def passes_time_budget(
 ) -> bool:
     """¿Entra el juego en el presupuesto de tiempo del usuario?
 
-    Sin presupuesto, o sin dato de duración, pasa (comportamiento decidido y
-    fijado por golden test: la falta de dato no excluye). Con dato, el juego
-    de sesión pasa siempre; el finito, si su compromiso entra en la franja.
+    Sin presupuesto, o sin dato de duración, pasa este filtro numérico. El
+    asistente declara por separado la incertidumbre y ofrece esos juegos
+    como alternativas; su modo estricto exige el dato. Con dato, el juego
+    de sesión pasa siempre; el resto, si la mediana entra en la franja.
+    Esta regla es una heurística de compromiso, no una estimación de duración.
     """
     if max_hours is None or median_hours is None:
         return True

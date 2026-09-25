@@ -131,6 +131,7 @@ export const ASPECT_LABEL = {
 
 export const STRATEGY_LABEL = {
   auto: "Automático",
+  ia_local: "IA local",
   hibrido: "Híbrido",
   contenido: "Contenido",
   colaborativo: "Colaborativo",
@@ -138,6 +139,7 @@ export const STRATEGY_LABEL = {
 };
 
 export const SOURCE_LABEL = {
+  ia_local: "Modelo entrenado localmente",
   hibrido: "Híbrido",
   contenido: "Basado en contenido",
   colaborativo: "Filtrado colaborativo",

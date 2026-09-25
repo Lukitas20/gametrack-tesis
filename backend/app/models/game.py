@@ -134,9 +134,9 @@ class Game(Base):
     # pero la duración operativa es ``median_review_hours``.
     playtime_hours: Mapped[int | None] = mapped_column(Integer)
     # Mediana de horas jugadas por los reseñadores de Steam al momento de
-    # reseñar (``Review.hours_at_review``). Es la medida de COMPROMISO de un
-    # juego finito ("cuánto lleva terminarlo"); para un juego-servicio mide
-    # otra cosa (acumulación de sesiones) y el filtro de duración lo exime
+    # reseñar (``Review.hours_at_review``). Orienta el compromiso acumulado,
+    # pero no mide duración de campaña ni de sesión. Para juegos-servicio
+    # el filtro de tiempo no interpreta esa acumulación como duración
     # (ver ``app.ml.quiz_vocab.is_session_based``). Nula con menos de
     # MIN_HOURS_SAMPLES muestras: una mediana de 2 reseñas no significa nada.
     median_review_hours: Mapped[float | None] = mapped_column(Float)

@@ -28,10 +28,24 @@ def get_current_user(
     if not payload or not payload.get("sub"):
         raise unauthorized
 
-    user = get_user(db, int(payload["sub"]))
+    try:
+        user_id = int(payload["sub"])
+    except (TypeError, ValueError):
+        raise unauthorized
+    user = get_user(db, user_id)
     if user is None or not user.is_active:
         raise unauthorized
     return user
+
+
+def get_optional_current_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+    db: Session = Depends(get_db),
+) -> User | None:
+    """Admite visitas anónimas; un token enviado igual debe ser válido."""
+    if credentials is None:
+        return None
+    return get_current_user(credentials, db)
 
 
 def require_developer(user: User = Depends(get_current_user)) -> User:

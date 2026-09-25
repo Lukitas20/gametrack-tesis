@@ -231,6 +231,51 @@ def test_analizar_texto_vacio_es_rechazado(client: TestClient, data: dict) -> No
     assert client.post("/api/v1/reviews/analyze", json={"content": ""}).status_code == 422
 
 
+# --- Recomendaciones --------------------------------------------------------
+
+
+def test_recomendaciones_explican_estrategia_y_aportes(client: TestClient, data: dict) -> None:
+    response = client.get(
+        "/api/v1/recommendations", headers=auth(client, "jugadora"),
+        params={"strategy": "colaborativo", "discovery": "explore"},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["strategy"] == "colaborativo"
+    assert payload["effective_strategy"] == "popularidad"
+    assert payload["discovery"] == "explore"
+    assert "no tiene evidencia suficiente" in payload["profile_hint"]
+    assert payload["cold_start"] is True
+    assert payload["items"]
+    for item in payload["items"]:
+        assert item["signals"]
+        assert item["score"] == pytest.approx(sum(item["components"].values()), abs=1e-8)
+
+
+def test_recomendaciones_validan_descubrimiento(client: TestClient, data: dict) -> None:
+    headers = auth(client, "jugadora")
+    assert client.get(
+        "/api/v1/recommendations", headers=headers, params={"discovery": "inventado"}
+    ).status_code == 422
+    assert client.get("/api/v1/recommendations", headers=headers).json()["discovery"] == "balanced"
+
+
+def test_cambiar_valoracion_actualiza_el_perfil_recomendado(client: TestClient, data: dict) -> None:
+    headers = auth(client, "jugadora")
+    payload = {"game_id": data["largo"].id, "score": 5}
+    assert client.post("/api/v1/ratings", headers=headers, json=payload).status_code == 201
+    params = {"strategy": "contenido", "discovery": "familiar", "limit": 1}
+    positive = client.get("/api/v1/recommendations", headers=headers, params=params).json()
+    assert positive["items"][0]["game"]["id"] == data["incognito"].id
+
+    payload["score"] = 1
+    assert client.post("/api/v1/ratings", headers=headers, json=payload).status_code == 201
+    negative = client.get("/api/v1/recommendations", headers=headers, params=params).json()
+    assert negative["history_size"] == 1
+    assert negative["items"][0]["game"]["id"] == data["breve"].id
+    assert "valoraste bien" not in negative["items"][0]["reason"]
+
+
 # --- Frontend ---------------------------------------------------------------
 
 

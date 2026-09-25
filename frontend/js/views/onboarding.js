@@ -86,11 +86,10 @@ export function coldStartNotice(response) {
     h(
       "div",
       null,
-      h("strong", null, "Arranque en frío. "),
-      `Todavía no valoraste ningún juego (${response.history_size} de ${3} necesarios para el filtrado colaborativo), `,
-      hasPreferences
-        ? "así que las sugerencias salen de los géneros que elegiste, por similitud de contenido."
-        : "y tampoco declaraste preferencias, así que se recurre al piso: los mejor valorados del catálogo.",
+      h("strong", null, "Empecemos por tus gustos. "),
+      response.profile_hint || (response.history_size
+        ? `Ya valoraste ${response.history_size} juegos. Cada opinión ayuda a afinar las sugerencias.`
+        : "Elegí tus géneros o valorá juegos que conozcas para personalizar tus sugerencias."),
       " ",
       h(
         "button",

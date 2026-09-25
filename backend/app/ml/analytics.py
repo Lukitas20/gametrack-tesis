@@ -494,20 +494,30 @@ def aspect_scores_by_game(
     if not result:
         return result
 
-    # La mejor cita positiva de cada juego, para mostrarla como evidencia:
-    # ordenado por score primero se queda con la más positiva por juego.
+    # Una cita representativa del agregado, no siempre la más positiva.
+    # Exigimos la misma polaridad y minimizamos la distancia al score medio.
+    # Si no hay una cita que la respalde, queda sin evidencia textual: un
+    # balance negativo no se justifica con un elogio aislado, ni uno mixto
+    # con una opinión extrema.
     evidence_rows = db.execute(
-        select(ReviewAspect.game_id, ReviewAspect.evidence)
+        select(ReviewAspect.game_id, ReviewAspect.evidence, ReviewAspect.score,
+               ReviewAspect.sentiment, ReviewAspect.id)
         .where(
             ReviewAspect.game_id.in_(result.keys()),
             ReviewAspect.aspect == aspect,
-            ReviewAspect.sentiment == Sentiment.POSITIVE,
             ReviewAspect.evidence.is_not(None),
         )
-        .order_by(ReviewAspect.score.desc())
     )
-    for game_id, evidence in evidence_rows:
-        if result[game_id]["evidence"] is None:
+    best: dict[int, tuple] = {}
+    for game_id, evidence, score, sentiment, aspect_id in evidence_rows:
+        if not evidence or not evidence.strip():
+            continue
+        average = result[game_id]["score"]
+        if sentiment != label_from_score(average):
+            continue
+        key = (abs(score - average), aspect_id)
+        if game_id not in best or key < best[game_id]:
+            best[game_id] = key
             result[game_id]["evidence"] = evidence
     return result
 

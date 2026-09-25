@@ -6,8 +6,7 @@
  */
 
 import { api } from "../api.js";
-import { gameGrid, requiresLogin } from "../components.js";
-import { navigate } from "../router.js";
+import { gameGrid, gameCard, saveToListButton, starRating } from "../components.js";
 import { isDeveloper, isLoggedIn } from "../store.js";
 import {
   SOURCE_LABEL,
@@ -17,35 +16,78 @@ import {
   h,
   icon,
   initials,
+  openModal,
+  modalHead,
   spinnerBlock,
   toast,
 } from "../ui.js";
-import { coldStartNotice } from "./onboarding.js";
+import { coldStartNotice, openOnboarding } from "./onboarding.js";
+import { startNewQuiz } from "./quiz.js";
 
-const STRATEGIES = ["auto", "hibrido", "contenido", "colaborativo", "popularidad"];
-const COMPARABLE = ["hibrido", "contenido", "colaborativo", "popularidad"];
+const STRATEGIES = ["auto", "ia_local", "hibrido", "contenido", "colaborativo", "popularidad"];
+const COMPARABLE = ["ia_local", "hibrido", "contenido", "colaborativo", "popularidad"];
 
 /** Explicación de cada estrategia, para que la demo se sostenga sola. */
 const STRATEGY_NOTE = {
   auto: "Elige la estrategia según cuánto historial tenga el usuario.",
+  ia_local: "Factores latentes aprendidos de valoraciones en esta PC. Usa tus notas actuales y se apoya en contenido cuando faltan datos.",
   hibrido:
-    "Suma ponderada de contenido (40 %) y colaborativo (60 %), cada uno normalizado a [0,1].",
+    "Combina afinidad de contenido y patrones de valoraciones. El aporte colaborativo depende de la evidencia disponible.",
   contenido:
-    "TF-IDF sobre géneros, etiquetas, desarrollador y descripción, con similitud coseno contra los juegos que valoraste alto.",
+    "Compara géneros y etiquetas comunitarias ponderadas por votos. Aprende de tus valoraciones positivas y negativas.",
   colaborativo:
     "Filtrado ítem-ítem sobre la matriz usuario-ítem centrada por usuario. Necesita historial.",
   popularidad:
-    "Media bayesiana: un 5,0 con dos votos no supera a un 4,6 con doscientos. Es el piso que responde siempre.",
+    "Valoración general con penalización por poca evidencia. Evita sobrevalorar juegos con muy pocas reseñas.",
 };
+
+const DISCOVERY = [
+  ["familiar", "Ir a lo seguro", "Prioriza la afinidad con tu perfil."],
+  ["balanced", "Un poco de todo", "Equilibra afinidad y variedad entre las sugerencias."],
+  ["explore", "Más variedad", "Reduce la repetición de juegos parecidos dentro de la selección."],
+];
+
+function discoveryHero(guest = false) {
+  return h("section", { class: "discovery-hero" },
+    h("div", { class: "discovery-hero-copy" },
+      h("p", { class: "eyebrow" }, "Tu próxima partida empieza acá"),
+      h("h1", null, guest ? "Menos buscar. Más jugar." : "Encontrá tu próximo favorito."),
+      h("p", { class: "discovery-lead" }, guest
+        ? "Descubrí juegos a tu medida. Contanos qué tenés ganas de jugar hoy o armá un perfil con tus gustos."
+        : "Tus gustos cambian. Tus recomendaciones también. Descubrí qué jugar a partir de lo que disfrutás."),
+      h("div", { class: "discovery-actions" },
+        h("button", { class: "btn btn-primary", onClick: startNewQuiz }, icon("sparkles", 17), "¿Qué jugamos hoy?"),
+        guest
+          ? h("a", { class: "btn", href: "#/cuentas" }, "Personalizar mi perfil")
+          : h("button", { class: "btn", onClick: () => openOnboarding() }, icon("heart", 15), "Ajustar mis gustos")),
+      h("p", { class: "discovery-caption" }, "4 preguntas · Tu ánimo, tu tiempo y con quién jugás")),
+    h("div", { class: "discovery-hero-art", "aria-hidden": "true" },
+      h("img", { src: "/assets/brand/mascota.png", alt: "", width: "220", height: "220" }),
+      h("span", { class: "discovery-art-note" }, "Una recomendación con motivos")));
+}
+
+function personalCard(item, index, onRated) {
+  return h("article", { class: "recommendation-card" },
+    gameCard(item.game, { rank: index + 1, reason: item.reason, source: item.source }),
+    item.signals?.length ? h("ul", { class: "recommendation-signals" },
+      item.signals.slice(0, 3).map(signal => h("li", null, signal))) : null,
+    h("div", { class: "recommendation-actions" },
+      saveToListButton(item.game),
+      h("button", { class: "btn btn-ghost btn-sm", onClick: () => openModal(close => h("div", null,
+        modalHead(`¿Qué te pareció ${item.game.name}?`, "Tu valoración actualiza las próximas recomendaciones.", close),
+        starRating(item.game.id, { onChange: () => { close(); onRated(); } }))) },
+      icon("star", 14), "Ya lo jugué")));
+}
 
 export async function recommendationsView({ query } = { query: new URLSearchParams() }) {
   if (!isLoggedIn()) {
-    return h(
-      "div",
-      null,
-      h("div", { class: "view-head" }, h("h1", null, "Recomendaciones")),
-      requiresLogin("Las recomendaciones son personalizadas."),
-    );
+    return h("div", null, discoveryHero(true),
+      h("div", { class: "discovery-steps" },
+        [["01", "Elegí tu momento", "Usá el asistente sin iniciar sesión."],
+         ["02", "Entendé la sugerencia", "Conocé los motivos y qué dicen las reseñas."],
+         ["03", "Hacelo tuyo", "Guardá favoritos y valorá juegos para afinar tu perfil."]].map(([n, title, copy]) =>
+          h("section", null, h("span", { class: "eyebrow" }, n), h("h2", null, title), h("p", null, copy)))),
+      h("a", { class: "btn", href: "#/catalogo" }, icon("search", 15), "Explorar el catálogo"));
   }
 
   if (isDeveloper()) {
@@ -66,10 +108,31 @@ export async function recommendationsView({ query } = { query: new URLSearchPara
   const requested = query.get("estrategia");
   let strategy = STRATEGIES.includes(requested) ? requested : "auto";
   let comparing = query.get("comparar") === "1";
+  let discovery = DISCOVERY.some(([key]) => key === query.get("variedad")) ? query.get("variedad") : "balanced";
+  let requestVersion = 0;
 
   const body = h("div");
   const meta = h("div", { class: "row", style: { gap: "var(--s-2)" } });
   const note = h("p", { class: "muted", style: { fontSize: "var(--fs-sm)", marginTop: "var(--s-3)" } });
+  const profileHint = h("p", { class: "discovery-profile-hint" });
+  const modelNote = h("p", { class: "local-model-note" });
+  function describeModel(model = {}) {
+    if (["ready", "stale"].includes(model.status)) {
+      modelNote.textContent = `IA local · Entrenada con ${model.ratings} valoraciones de ${model.users} jugadores y ${model.games} juegos. `
+        + (model.data_label === "demo" ? "Datos sintéticos de demostración; todavía no miden gustos de jugadores reales. " : "Datos declarados como observados. ")
+        + (!model.automatic_eligible ? "Disponible para comparar en IA local; aún no habilitado en automático porque no superó la validación frente a la referencia. " : "")
+        + (model.status === "stale" ? "Tus notas actuales ya se usan; hay cambios pendientes de incorporar al entrenamiento general." : "");
+    } else {
+      modelNote.textContent = "El modelo local todavía no está disponible para estos datos. Podés seguir descubriendo juegos por tus gustos, contenido y popularidad.";
+    }
+  }
+  const varietyNote = h("p", { class: "discovery-control-note" });
+  const variety = h("div", { class: "segmented", role: "group", "aria-label": "Variedad de recomendaciones" },
+    DISCOVERY.map(([key, label]) => h("button", { onClick: () => {
+      discovery = key;
+      syncControls();
+      if (comparing) loadComparison(); else load();
+    } }, label)));
 
   const segmented = h(
     "div",
@@ -104,30 +167,41 @@ export async function recommendationsView({ query } = { query: new URLSearchPara
       },
     },
     icon("chart", 15),
-    "Comparar las cuatro",
+    "Comparar estrategias",
   );
 
   function syncControls() {
+    [...variety.children].forEach((button, index) => button.setAttribute("aria-pressed", String(DISCOVERY[index][0] === discovery)));
+    varietyNote.textContent = DISCOVERY.find(([key]) => key === discovery)[2];
     [...segmented.children].forEach((button, index) => {
       button.setAttribute("aria-pressed", String(!comparing && STRATEGIES[index] === strategy));
     });
     compareButton.setAttribute("aria-pressed", String(comparing));
     note.textContent = comparing
-      ? "Mismo usuario, mismo momento, cuatro estrategias. Las diferencias entre columnas son el aporte de cada señal."
+      ? "Mismo perfil y mismo momento: compará el modelo local y las otras estrategias."
       : STRATEGY_NOTE[strategy];
+    const params = new URLSearchParams();
+    if (strategy !== "auto") params.set("estrategia", strategy);
+    if (comparing) params.set("comparar", "1");
+    if (discovery !== "balanced") params.set("variedad", discovery);
+    window.history.replaceState(null, "", `#/recomendaciones${params.size ? `?${params}` : ""}`);
   }
 
   async function load() {
+    const version = ++requestVersion;
     body.replaceChildren(spinnerBlock("Calculando recomendaciones…"));
     meta.replaceChildren();
     try {
-      const response = await api.recommendations(strategy, 12);
+      const response = await api.recommendations(strategy, 12, discovery);
+      if (version !== requestVersion) return;
+      describeModel(response.local_model);
+      profileHint.textContent = response.profile_hint || "Una selección a partir de tus gustos y valoraciones.";
       const parts = [
         h(
           "span",
           { class: "chip chip-accent" },
           icon("sparkles", 11),
-          SOURCE_LABEL[response.items[0]?.source] || "—",
+          SOURCE_LABEL[response.effective_strategy || response.items[0]?.source] || "—",
         ),
         h("span", { class: "chip" }, `${response.history_size} juegos valorados`),
       ];
@@ -147,36 +221,33 @@ export async function recommendationsView({ query } = { query: new URLSearchPara
           ),
         );
       } else {
-        blocks.push(
-          gameGrid(
-            response.items.map((item) => item.game),
-            (_game, index) => ({
-              rank: index + 1,
-              reason: response.items[index].reason,
-              source: response.items[index].source,
-            }),
-          ),
-        );
+        blocks.push(h("div", { class: "recommendation-grid" }, response.items.map((item, index) =>
+          personalCard(item, index, () => { if (comparing) loadComparison(); else load(); }))));
         blocks.push(componentsTable(response));
       }
       body.replaceChildren(...blocks);
     } catch (error) {
+      if (version !== requestVersion) return;
       toast(error.message, "error");
       body.replaceChildren(emptyState("No se pudo calcular", error.message));
     }
   }
 
   async function loadComparison() {
-    body.replaceChildren(spinnerBlock("Calculando las cuatro estrategias…"));
+    const version = ++requestVersion;
+    body.replaceChildren(spinnerBlock("Comparando estrategias…"));
     meta.replaceChildren();
     try {
       const responses = await Promise.all(
-        COMPARABLE.map((key) => api.recommendations(key, 6)),
+        COMPARABLE.map((key) => api.recommendations(key, 6, discovery)),
       );
+      if (version !== requestVersion) return;
+      describeModel(responses[0]?.local_model);
+      profileHint.textContent = "Explorá cómo cambia la selección con cada estrategia. Todas usan el mismo perfil y ajuste de variedad.";
 
       const columns = COMPARABLE.map((key, index) => {
         const response = responses[index];
-        const effective = response.items[0]?.source;
+        const effective = response.effective_strategy || response.items[0]?.source;
         return h(
           "section",
           { class: "card", style: { minWidth: "0" } },
@@ -191,7 +262,7 @@ export async function recommendationsView({ query } = { query: new URLSearchPara
                 "p",
                 { class: "card-sub" },
                 effective && effective !== key
-                  ? `degradó a ${SOURCE_LABEL[effective]}`
+                  ? `Usó ${SOURCE_LABEL[effective]} por la evidencia disponible`
                   : SOURCE_LABEL[key] || "—",
               ),
             ),
@@ -204,8 +275,7 @@ export async function recommendationsView({ query } = { query: new URLSearchPara
                 "li",
                 {
                   class: "row",
-                  style: { gap: "var(--s-3)", cursor: "pointer", alignItems: "center" },
-                  onClick: () => navigate(`/juego/${item.game.id}`),
+                  style: { gap: "var(--s-3)", alignItems: "center" },
                 },
                 h(
                   "span",
@@ -226,8 +296,9 @@ export async function recommendationsView({ query } = { query: new URLSearchPara
                   "span",
                   { style: { flex: "1", minWidth: "0" } },
                   h(
-                    "span",
+                    "a",
                     {
+                      href: `#/juego/${item.game.id}`,
                       style: {
                         display: "block",
                         fontSize: "var(--fs-sm)",
@@ -242,7 +313,7 @@ export async function recommendationsView({ query } = { query: new URLSearchPara
                   h(
                     "span",
                     { class: "muted tnum", style: { fontSize: "var(--fs-xs)" } },
-                    `score ${item.score.toFixed(3)}`,
+                    `Índice ${item.score.toFixed(3)}`,
                   ),
                 ),
               ),
@@ -259,13 +330,13 @@ export async function recommendationsView({ query } = { query: new URLSearchPara
           const shared = [...sets[i]].filter((id) => sets[j].has(id)).length;
           overlapRows.push([
             `${STRATEGY_LABEL[COMPARABLE[i]]} vs ${STRATEGY_LABEL[COMPARABLE[j]]}`,
-            `${shared} de 6`,
+            `${shared} · selecciones de ${sets[i].size} y ${sets[j].size}`,
           ]);
         }
       }
 
       body.replaceChildren(
-        h("div", { class: "grid grid-4" }, columns),
+        h("div", { class: "strategy-comparison-grid" }, columns),
         h(
           "section",
           { class: "card", style: { marginTop: "var(--s-5)" } },
@@ -273,7 +344,7 @@ export async function recommendationsView({ query } = { query: new URLSearchPara
           h(
             "p",
             { class: "card-sub", style: { marginBottom: "var(--s-3)" } },
-            "Títulos en común dentro del top 6. Cuanto menor el solape, más aporta cada señal por su cuenta.",
+            "Títulos en común entre selecciones de hasta 6 juegos. Un menor solape indica selecciones diferentes; no demuestra mayor calidad.",
           ),
           h(
             "div",
@@ -294,6 +365,7 @@ export async function recommendationsView({ query } = { query: new URLSearchPara
         ),
       );
     } catch (error) {
+      if (version !== requestVersion) return;
       toast(error.message, "error");
       body.replaceChildren(emptyState("No se pudo comparar", error.message));
     }
@@ -309,25 +381,29 @@ export async function recommendationsView({ query } = { query: new URLSearchPara
   return h(
     "div",
     null,
+    discoveryHero(),
+    modelNote,
     h(
       "div",
       { class: "view-head" },
       h(
         "div",
         null,
-        h("p", { class: "eyebrow" }, "Inicio"),
-        h("h1", null, "Para vos"),
-        note,
+        h("p", { class: "eyebrow" }, "Tu selección personal"),
+        h("h2", null, "Para vos"),
+        profileHint,
       ),
       meta,
     ),
     h(
       "div",
-      { class: "filter-bar" },
-      segmented,
-      h("span", { class: "spacer" }),
-      compareButton,
+      { class: "discovery-controls" },
+      h("div", null, h("p", { class: "discovery-control-label" }, "¿Cuánta variedad buscás?"), variety, varietyNote),
+      h("a", { class: "btn btn-ghost", href: "#/catalogo" }, icon("star", 14), "Valorar más juegos"),
     ),
+    h("details", { class: "recommendation-lab", open: comparing || strategy !== "auto" },
+      h("summary", null, icon("chart", 15), "Cómo recomienda GameTrack · comparar estrategias"),
+      h("div", { class: "filter-bar" }, segmented, compareButton), note),
     body,
     sections,
   );
@@ -369,6 +445,7 @@ function componentsTable(response) {
     "details",
     { class: "table-view", style: { marginTop: "var(--s-6)" } },
     h("summary", null, "Ver el aporte de cada estrategia por juego"),
+    h("p", { class: "card-sub" }, "Los aportes suman el índice de afinidad. No es una probabilidad de que te guste. La variedad también influye en el orden de la selección."),
     h(
       "div",
       { class: "table-wrap" },
@@ -382,7 +459,7 @@ function componentsTable(response) {
             "tr",
             null,
             h("th", null, "Juego"),
-            h("th", { class: "num" }, "Score final"),
+            h("th", { class: "num" }, "Índice de afinidad"),
             keys.map((key) => h("th", { class: "num" }, key)),
           ),
         ),

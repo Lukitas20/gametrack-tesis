@@ -9,6 +9,7 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.core.config import settings
 from app.db.base import Base
 from app.ml.recommender import RecommenderEngine, invalidate_engine
 from app.models import Game, Genre, Rating, RecommendationSource, Tag, User, UserRole
@@ -268,3 +269,137 @@ def test_catalogo_sin_ningun_juego_enriquecido_no_rompe(db: Session) -> None:
 
     assert engine.game_ids == []
     assert engine.recommend(user_id=None, preferred_genres=["accion"], limit=5) == []
+
+
+def test_valoracion_negativa_no_se_convierte_en_preferencia(db: Session, catalog) -> None:
+    user = User(username="no-me-gusto", role=UserRole.PLAYER)
+    db.add(user)
+    db.flush()
+    _rate(db, user, catalog["rpg-uno"], 1.0)
+    db.commit()
+
+    engine = RecommenderEngine(db)
+    results = engine.recommend(user.id, limit=3, discovery="familiar")
+    assert all(engine.game_names[item.game_id].startswith("Estrategia") for item in results)
+    assert all("valoraste bien" not in item.reason for item in results)
+    assert all(any("negativas" in signal for signal in item.signals) for item in results)
+
+
+def test_explicacion_solo_cita_juegos_que_gustaron(db: Session, catalog) -> None:
+    user = User(username="gustos-mixtos", role=UserRole.PLAYER)
+    db.add(user)
+    db.flush()
+    _rate(db, user, catalog["rpg-uno"], 1.0)
+    _rate(db, user, catalog["estrategia-uno"], 5.0)
+    db.commit()
+
+    engine = RecommenderEngine(db)
+    results = engine.recommend(user.id, limit=5, discovery="familiar")
+    assert results[0].reason == "Se parece a Estrategia Uno, que valoraste bien"
+    assert all("RPG Uno, que valoraste bien" not in item.reason for item in results)
+
+
+def test_una_sola_coincidencia_no_justifica_colaborativo(db: Session, catalog) -> None:
+    current = User(username="actual", role=UserRole.PLAYER)
+    other = User(username="otra-persona", role=UserRole.PLAYER)
+    db.add_all([current, other])
+    db.flush()
+    for user in (current, other):
+        _rate(db, user, catalog["rpg-uno"], 5.0)
+        _rate(db, user, catalog["estrategia-uno"], 1.0)
+    _rate(db, other, catalog["rpg-dos"], 5.0)
+    db.commit()
+
+    engine = RecommenderEngine(db)
+    assert engine._collaborative_scores(current.id) is None
+    results = engine.recommend(current.id, strategy="hibrido", limit=2)
+    assert all(item.source is RecommendationSource.CONTENT for item in results)
+    assert all("compartidos" not in item.reason for item in results)
+
+
+def test_evidencia_colaborativa_crece_con_usuarios_independientes(db: Session, catalog) -> None:
+    current = User(username="evidencia", role=UserRole.PLAYER)
+    db.add(current)
+    db.flush()
+    _rate(db, current, catalog["rpg-uno"], 5.0)
+    _rate(db, current, catalog["estrategia-uno"], 1.0)
+    strengths = []
+    for index in range(10):
+        other = User(username=f"evidencia-{index}", role=UserRole.PLAYER)
+        db.add(other)
+        db.flush()
+        _rate(db, other, catalog["rpg-uno"], 5.0)
+        _rate(db, other, catalog["rpg-dos"], 5.0)
+        _rate(db, other, catalog["estrategia-uno"], 1.0)
+        if index in (1, 9):
+            db.commit()
+            engine = RecommenderEngine(db)
+            _, evidence, _ = engine._collaborative_evidence(current.id)
+            strengths.append(evidence[engine._game_index[catalog["rpg-dos"].id]])
+    assert 0.0 < strengths[0] < strengths[1] < 1.0
+
+
+def test_descubrir_aporta_variedad_sin_alterar_el_indice(db: Session, catalog) -> None:
+    for slug, game in catalog.items():
+        game.avg_rating = 4.6 if slug.startswith("rpg") else 4.3
+        game.ratings_count = 100
+    db.commit()
+    engine = RecommenderEngine(db)
+
+    familiar = engine.recommend(None, limit=3, discovery="familiar")
+    explore = engine.recommend(None, limit=3, discovery="explore")
+    assert all(engine.game_names[item.game_id].startswith("RPG") for item in familiar)
+    assert engine.game_names[explore[1].game_id].startswith("Estrategia")
+    all_scores = {item.game_id: item.score for item in engine.recommend(None, limit=6, discovery="familiar")}
+    assert all(item.score == all_scores[item.game_id] for item in explore)
+    assert explore == engine.recommend(None, limit=3, discovery="explore")
+    excluded = {explore[0].game_id}
+    assert not excluded & {item.game_id for item in engine.recommend(None, exclude=excluded)}
+
+
+@pytest.mark.parametrize("strategy", ["auto", "contenido", "colaborativo", "hibrido", "popularidad"])
+def test_aportes_ponderados_suman_el_indice(db: Session, populated, strategy) -> None:
+    user = User(username="aportes", role=UserRole.PLAYER)
+    db.add(user)
+    db.flush()
+    _rate(db, user, populated["games"]["rpg-uno"], 5.0)
+    _rate(db, user, populated["games"]["estrategia-uno"], 1.0)
+    db.commit()
+    results = RecommenderEngine(db).recommend(user.id, strategy=strategy)
+    assert results
+    for item in results:
+        assert item.score == pytest.approx(sum(item.components.values()), abs=1e-8)
+        assert 0.0 <= item.score <= 1.0
+        assert all(0.0 <= value <= 1.0 for value in item.components.values())
+        assert item.reason == item.signals[0]
+
+
+def test_asistente_conserva_compatibilidad_y_aportes(db: Session, catalog) -> None:
+    engine = RecommenderEngine(db)
+    results = engine.suggest_by_mood(["rpg"], limit=3, exclude={catalog["rpg-uno"].id})
+    assert results
+    assert all(item.game_id != catalog["rpg-uno"].id for item in results)
+    for item in results:
+        assert item.score == pytest.approx(sum(item.components.values()), abs=1e-8)
+
+
+def test_hibrido_sin_peso_colaborativo_no_atribuye_patrones(
+    db: Session, populated: dict, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """La explicación debe describir los canales que realmente aportaron."""
+    monkeypatch.setattr(settings, "REC_COLLAB_WEIGHT", 0.0)
+    user = User(username="solo-contenido", role=UserRole.PLAYER)
+    db.add(user)
+    db.flush()
+    _rate(db, user, populated["games"]["rpg-uno"], 5.0)
+    _rate(db, user, populated["games"]["estrategia-uno"], 1.0)
+    db.commit()
+
+    engine = RecommenderEngine(db)
+    assert engine._collaborative_evidence(user.id) is not None
+    results = engine.recommend(user.id, strategy="hibrido", discovery="familiar")
+    assert results
+    for item in results:
+        assert item.source is RecommendationSource.CONTENT
+        assert item.components["colaborativo"] == 0.0
+        assert all("Patrones de valoración" not in signal for signal in item.signals)

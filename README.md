@@ -20,6 +20,20 @@ Prototipo funcional (MVP) con dos caras:
   análisis basado en aspectos (ABSA) sobre **jugabilidad, gráficos, historia y
   optimización**.
 
+## IA local y amigos
+
+La estrategia **IA local** aprende factores de juegos a partir de las valoraciones
+de GameTrack, entrenando en CPU y sin API de modelos. **Amigos** permite enviar y
+aceptar solicitudes; **¿Qué jugamos?** cruza los gustos de hasta cinco participantes.
+Ver [implementación, datos, entrenamiento y resultados](IA_LOCAL_Y_AMIGOS.md).
+El modelo demo todavía no supera la referencia de validación: está disponible
+para comparar, y su incorporación automática está condicionada a esa evaluación.
+
+```powershell
+cd backend
+.\.venv\Scripts\python.exe scripts/train_local_model.py --data-label demo
+```
+
 ## Stack
 
 | Capa | Tecnología |
@@ -263,10 +277,10 @@ lugar de fallar:
 
 | Estrategia | Cómo funciona | Cuándo se usa |
 |-----------|---------------|---------------|
-| **Contenido** | TF-IDF (unigramas + bigramas) sobre géneros, etiquetas, desarrollador y descripción; similitud coseno | Desde la 1.ª valoración, o con sólo las preferencias del onboarding |
-| **Colaborativo** | Filtrado ítem-ítem sobre la matriz usuario-ítem centrada por usuario, 20 vecinos | Con historial suficiente (≥ 3 valoraciones) |
-| **Híbrido** | Suma ponderada de ambas, normalizadas a [0,1] (40 % contenido / 60 % colaborativo, configurable) | Caso general |
-| **Popularidad** | Media bayesiana, para que un 5,0 con dos votos no supere a un 4,6 con doscientos | Piso: responde siempre |
+| **Contenido** | TF-IDF sobre géneros y etiquetas comunitarias ponderadas por votos; perfil firmado: notas >3 atraen, <3 alejan | Con preferencias o valoraciones que aporten una señal |
+| **Colaborativo** | Filtrado ítem-ítem centrado por usuario, hasta 20 vecinos; mínimo de coevaluadores y atenuación por evidencia | Con variación en las notas y relaciones respaldadas por otros usuarios |
+| **Híbrido** | Mezcla en escala [0,1]; el peso colaborativo configurado se reduce según la evidencia de cada candidato | En automático, desde 3 valoraciones y con evidencia colaborativa disponible |
+| **Popularidad** | Valoración agregada menos penalización por escasez de reseñas | Respaldo cuando faltan señales personales |
 
 Decisiones que vale la pena justificar:
 
@@ -284,6 +298,23 @@ Decisiones que vale la pena justificar:
 
 El motor se entrena una vez y se cachea; se reconstruye solo cuando cambian
 los datos.
+
+El parámetro `discovery=familiar|balanced|explore` controla la diversidad mediante
+MMR: penaliza la similitud con juegos ya seleccionados dentro de un conjunto
+acotado de candidatos. No cambia el índice de afinidad publicado: el orden también
+depende de la variedad. `components` contiene aportes ponderados que suman `score`;
+ninguno de esos valores es una probabilidad de satisfacción. `signals` explica la
+evidencia y `effective_strategy` informa qué estrategia pudo utilizarse.
+
+La portada prioriza el asistente y la selección personal. Se pueden guardar
+juegos en listas, valorarlos desde una sugerencia y comparar estrategias en un
+panel desplegable. El asistente permite editar respuestas, excluir resultados ya
+mostrados y pedir coincidencias estrictas (`allow_relaxation=false`). Las
+excepciones se informan por juego. Las horas registradas por reseñadores se
+presentan como una referencia de compromiso, no como duración de campaña.
+
+Ver [notas de mejora y validación](MEJORAS_RECOMENDACION.md) para límites y próximos
+pasos de evaluación de la tesis.
 
 ```powershell
 # Comparar las estrategias entre sí sobre el mismo usuario

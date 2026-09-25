@@ -68,6 +68,8 @@ class Settings(BaseSettings):
     # Cantidad mínima de ratings de un usuario para salir del cold start.
     REC_COLD_START_THRESHOLD: int = 3
     REC_DEFAULT_LIMIT: int = 10
+    # Artefacto entrenado offline con scripts/train_local_model.py.
+    LOCAL_MODEL_PATH: str = str(DATA_DIR / "generated" / "local_model.npz")
 
     model_config = SettingsConfigDict(
         env_file=BASE_DIR / ".env",

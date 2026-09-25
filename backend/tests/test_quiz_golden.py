@@ -567,15 +567,17 @@ def test_juego_servicio_queda_exento_del_presupuesto() -> None:
     assert quiz_vocab.is_session_based(trackmania)
 
 
-def test_coop_finito_sin_un_jugador_es_falso_positivo_aceptado() -> None:
-    """It Takes Two no tiene modo de un jugador, así que la regla lo trata
-    como juego de sesión y lo exime del filtro de duración. Es el falso
-    positivo asumido del diseño: su costo es leve (un juego finito se cuela
-    en una franja corta y el ranking decide) y el beneficio es no repetir el
-    bug de CS2 excluido de "una tarde". Si este trade-off se revisa, este
-    test es el lugar donde discutirlo."""
+def test_coop_finito_no_se_exime_del_tiempo_por_falta_de_un_jugador() -> None:
+    """Cooperativo no equivale a servicio: no inferir partidas por ausencia
+    de una etiqueta. It Takes Two también tiene compromiso de campaña."""
     it_takes_two = {"cooperativo", "co-op", "split-screen", "local-co-op"}
-    assert quiz_vocab.is_session_based(it_takes_two)
+    assert not quiz_vocab.is_session_based(it_takes_two)
+    assert not quiz_vocab.passes_time_budget(20, it_takes_two, 15)
+
+
+@pytest.mark.parametrize("tags", [set(), {"free-to-play"}, {"multiplayer"}])
+def test_sin_evidencia_de_partidas_no_se_exime_del_tiempo(tags: set[str]) -> None:
+    assert not quiz_vocab.is_session_based(tags)
 
 
 def test_finito_con_campania_no_es_servicio() -> None:
@@ -630,6 +632,11 @@ def test_escasez_relaja_en_orden_y_lo_declara(client: TestClient) -> None:
     slugs = pick_slugs(body)
 
     assert body["relaxed"] == ["la duración", "con quién jugás"]
+    # Apex cumple todo y AoE2 sólo relaja tiempo: aunque los populares
+    # puntúen más, no deben desplazar estas coincidencias más cercanas.
+    assert slugs[:2] == ["apex-legends", "age-of-empires-ii-definitive-edition"]
+    assert body["picks"][0]["relaxed_criteria"] == []
+    assert body["picks"][1]["relaxed_criteria"] == ["la duración"]
     for slug in slugs:
         assert GAME_TAGS[slug] & {"jcj", "jcj-en-linea", "pvp"}, (
             f"{slug} no es JcJ: la relajación soltó el ánimo, que es lo único innegociable"
