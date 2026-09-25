@@ -47,6 +47,7 @@ class GameDetail(GameSummary):
     tags: list[TagOut]
     # Para armar el link directo a Steam en la ficha pendiente.
     steam_app_id: int | None
+    steam_sync_status: str | None = None
 
 
 class GamePage(BaseModel):

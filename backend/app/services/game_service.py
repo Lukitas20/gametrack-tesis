@@ -14,6 +14,15 @@ SORT_FIELDS = {
 }
 
 
+def visible_catalog_clause():
+    """Oculta sólo productos confirmados no-juego, conservando los datos."""
+    from app.models.steam_catalog import SteamCatalogEntry
+    return ~select(SteamCatalogEntry.appid).where(
+        SteamCatalogEntry.appid == Game.steam_app_id,
+        SteamCatalogEntry.status == "non_game",
+    ).exists()
+
+
 def _enriched_only(statement: Select) -> Select:
     """Sólo juegos con ficha completa (ver ``Game.is_enriched``).
 
@@ -21,7 +30,10 @@ def _enriched_only(statement: Select) -> Select:
     una ficha pendiente (sólo AppID + nombre) se vería rota ahí. En el
     catálogo y el buscador sí aparecen, a propósito.
     """
-    return statement.where(or_(Game.steam_app_id.is_(None), Game.steam_synced_at.is_not(None)))
+    return statement.where(
+        visible_catalog_clause(),
+        or_(Game.steam_app_id.is_(None), Game.steam_synced_at.is_not(None)),
+    )
 
 
 def get_game(db: Session, game_id: int) -> Game | None:
@@ -40,6 +52,7 @@ def _apply_filters(
     min_rating: float | None,
     max_playtime: int | None,
 ) -> Select:
+    statement = statement.where(visible_catalog_clause())
     if search:
         pattern = f"%{search.lower()}%"
         statement = statement.where(

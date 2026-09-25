@@ -24,6 +24,7 @@ from app.api.v1.router import api_router
 from app.core.config import FRONTEND_DIR, settings
 from app.db.base import SessionLocal, init_db
 from app.ml.recommender import get_engine
+from app.services.steam_catalog_worker import start_worker, stop_worker
 
 
 @asynccontextmanager
@@ -47,7 +48,11 @@ async def lifespan(app: FastAPI):
         get_engine(db)
     finally:
         db.close()
-    yield
+    start_worker()
+    try:
+        yield
+    finally:
+        stop_worker()
 
 
 app = FastAPI(

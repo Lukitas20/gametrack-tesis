@@ -208,9 +208,14 @@ def ingest_index_entries(
 
         pending_flush += 1
         if pending_flush >= INDEX_CHUNK_SIZE:
+            from app.services.steam_catalog_service import bump_catalog_revision
+            bump_catalog_revision(db)
             db.commit()
             pending_flush = 0
 
+    if pending_flush:
+        from app.services.steam_catalog_service import bump_catalog_revision
+        bump_catalog_revision(db)
     db.commit()
     return report
 
@@ -386,6 +391,8 @@ def enrich_next_batch(
         apply_appdetails(db, game, payload)
         row.status = SYNC_DONE
         report.enriched += 1
+        from app.services.steam_catalog_service import bump_catalog_revision
+        bump_catalog_revision(db)
         db.commit()
 
     return report

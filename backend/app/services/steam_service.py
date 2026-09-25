@@ -18,7 +18,7 @@ import unicodedata
 from datetime import date, datetime, timedelta, timezone
 
 import httpx
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -149,6 +149,10 @@ class SteamUnavailable(RuntimeError):
     catálogo entero durante una caída de Steam.
     """
 
+    def __init__(self, message: str, retry_after_seconds: int = 60):
+        super().__init__(message)
+        self.retry_after_seconds = max(60, min(86400, retry_after_seconds))
+
 
 def get_app_details(steam_app_id: int) -> dict | None:
     """Ficha de un juego en la tienda de Steam.
@@ -163,19 +167,55 @@ def get_app_details(steam_app_id: int) -> dict | None:
             params={"appids": steam_app_id, "l": "spanish"},
         )
     except httpx.HTTPError as error:
-        raise SteamUnavailable(f"No se pudo contactar a Steam: {error}") from error
+        # Nunca persistir la URL ni los parámetros de una excepción HTTP.
+        raise SteamUnavailable("No se pudo contactar a Steam") from error
 
     if response.status_code != 200:
-        raise SteamUnavailable(f"Steam respondió {response.status_code}")
+        retry = response.headers.get("Retry-After", "60")
+        delay = int(retry) if retry.isdecimal() else 60
+        raise SteamUnavailable(f"Steam respondió {response.status_code}", delay)
 
     try:
-        payload = response.json().get(str(steam_app_id), {})
+        response_data = response.json()
     except ValueError as error:  # respuesta que no es JSON (portal cautivo, proxy)
         raise SteamUnavailable("Steam respondió algo que no es JSON") from error
 
-    if not payload.get("success"):
+    if not isinstance(response_data, dict):
+        raise SteamUnavailable("Steam devolvió una ficha con formato inválido")
+    payload = response_data.get(str(steam_app_id))
+    if not isinstance(payload, dict) or not isinstance(payload.get("success"), bool):
+        raise SteamUnavailable("Steam devolvió una ficha con formato inválido")
+    if payload["success"] is False:
         return None
-    return payload.get("data")
+    data = payload.get("data")
+    if not isinstance(data, dict) or not isinstance(data.get("type"), str) or not data["type"].strip():
+        raise SteamUnavailable("Steam devolvió una ficha con formato inválido")
+    if data["type"] == "game":
+        if not isinstance(data.get("name"), str) or not data["name"].strip():
+            raise SteamUnavailable("Steam devolvió un juego sin nombre válido")
+        for key in ("platforms", "release_date", "metacritic"):
+            if data.get(key) is not None and not isinstance(data[key], dict):
+                raise SteamUnavailable("Steam devolvió una ficha con formato inválido")
+        for key in ("genres", "categories"):
+            value = data.get(key)
+            if value is not None and (not isinstance(value, list) or any(
+                not isinstance(item, dict) or not isinstance(item.get("description", ""), str)
+                for item in value
+            )):
+                raise SteamUnavailable("Steam devolvió una ficha con formato inválido")
+        for key in ("developers", "publishers"):
+            value = data.get(key)
+            if value is not None and (not isinstance(value, list) or any(not isinstance(item, str) for item in value)):
+                raise SteamUnavailable("Steam devolvió una ficha con formato inválido")
+        for key in ("short_description", "header_image"):
+            if data.get(key) is not None and not isinstance(data[key], str):
+                raise SteamUnavailable("Steam devolvió una ficha con formato inválido")
+        if not isinstance((data.get("release_date") or {}).get("date", ""), str):
+            raise SteamUnavailable("Steam devolvió una fecha con formato inválido")
+        score = (data.get("metacritic") or {}).get("score")
+        if score is not None and (type(score) is not int or not 0 <= score <= 100):
+            raise SteamUnavailable("Steam devolvió una puntuación con formato inválido")
+    return data
 
 
 _SEARCH_APPID_RE = re.compile(r'data-ds-appid="(\d+)"')
@@ -375,10 +415,14 @@ def get_app_reviews(
 
     if response.status_code != 200:
         return []
-    payload = response.json()
-    if payload.get("success") != 1:
+    try:
+        payload = response.json()
+    except ValueError:
         return []
-    return payload.get("reviews", [])
+    if not isinstance(payload, dict) or payload.get("success") != 1:
+        return []
+    reviews = payload.get("reviews", [])
+    return [entry for entry in reviews if isinstance(entry, dict)] if isinstance(reviews, list) else []
 
 
 def get_review_totals(steam_app_id: int) -> tuple[int, int] | None:
@@ -410,13 +454,16 @@ def get_review_totals(steam_app_id: int) -> tuple[int, int] | None:
     if response.status_code != 200:
         return None
     try:
-        summary = response.json().get("query_summary") or {}
+        payload = response.json()
     except ValueError:
         return None
 
+    if not isinstance(payload, dict) or not isinstance(payload.get("query_summary"), dict):
+        return None
+    summary = payload["query_summary"]
     total = summary.get("total_reviews")
     positive = summary.get("total_positive")
-    if total is None or positive is None:
+    if type(total) is not int or type(positive) is not int or not 0 <= positive <= total:
         return None
     return int(total), int(positive)
 
@@ -522,7 +569,46 @@ def get_game_by_steam_app_id(db: Session, steam_app_id: int) -> Game | None:
     return db.scalar(select(Game).where(Game.steam_app_id == steam_app_id))
 
 
-def import_reviews(db: Session, game: Game, steam_app_id: int) -> int:
+def _catalog_entry(db: Session, game: Game):
+    from app.models.steam_catalog import SteamCatalogEntry
+
+    entry = db.get(SteamCatalogEntry, game.steam_app_id)
+    if entry is None:
+        entry = SteamCatalogEntry(
+            appid=game.steam_app_id,
+            status="ready" if game.is_enriched else "pending",
+            attempts=0, priority=0, last_seen_at=datetime.now(timezone.utc),
+        )
+        db.add(entry)
+    return entry
+
+
+def _record_unavailable(db: Session, entry, message: str, retry_after_seconds: int = 0) -> None:
+    now = datetime.now(timezone.utc)
+    entry.status = "unavailable"
+    entry.last_attempt_at = now
+    entry.attempts = (entry.attempts or 0) + 1
+    entry.last_error = message
+    entry.next_attempt_at = now + timedelta(minutes=min(24 * 60, 5 * 2 ** min(entry.attempts - 1, 9)))
+    entry.next_attempt_at = max(entry.next_attempt_at, now + timedelta(seconds=retry_after_seconds))
+    db.commit()
+
+
+def queue_game_refresh(db: Session, game: Game, *, priority: int = 100):
+    """Encola sin red y sin commit; respeta el backoff de intentos fallidos."""
+    if game.steam_app_id is None:
+        return None
+    entry = _catalog_entry(db, game)
+    if entry.status == "non_game":
+        return entry
+    entry.priority = max(entry.priority or 0, priority)
+    if entry.status == "ready":
+        entry.status = "pending"
+        entry.next_attempt_at = None
+    return entry
+
+
+def import_reviews(db: Session, game: Game, steam_app_id: int, *, commit: bool = True) -> int:
     """Trae reseñas reales de Steam nuevas para un juego y las analiza con el
     mismo módulo NLP que las reseñas escritas en GameTrack.
 
@@ -535,9 +621,16 @@ def import_reviews(db: Session, game: Game, steam_app_id: int) -> int:
     ``recommendationid`` (``steam_review_id``), así que las que ya estén en
     la base se descartan antes de crear nada.
     """
-    raw_reviews = get_app_reviews(steam_app_id)
-    if not raw_reviews:
+    # Presupuesto persistente por juego, no por pedido: los refrescos no
+    # pueden hacer crecer indefinidamente el corpus. No borrar muestras
+    # antiguas ni contar las reseñas escritas por usuarios de GameTrack.
+    imported = db.scalar(select(func.count(Review.id)).where(
+        Review.game_id == game.id, Review.source == "steam"
+    )) or 0
+    remaining = max(0, settings.STEAM_REVIEWS_IMPORT_LIMIT - imported)
+    if remaining == 0:
         return 0
+    raw_reviews = get_app_reviews(steam_app_id, num=remaining)
 
     existing_ids = {
         row[0]
@@ -547,19 +640,24 @@ def import_reviews(db: Session, game: Game, steam_app_id: int) -> int:
             )
         ).all()
     }
-    new_entries = [
-        entry
-        for entry in raw_reviews
-        if entry.get("recommendationid") is not None
-        and str(entry["recommendationid"]) not in existing_ids
-    ]
+    new_entries = []
+    for entry in raw_reviews:
+        review_id = entry.get("recommendationid")
+        content = entry.get("review")
+        if review_id is None or str(review_id) in existing_ids or not isinstance(content, str) or len(content.strip()) < 10:
+            continue
+        existing_ids.add(str(review_id))
+        new_entries.append(entry)
+        if len(new_entries) >= remaining:
+            break
     if not new_entries:
         return 0
 
     steam_ids = [
         author_id
         for entry in new_entries
-        if (author_id := (entry.get("author") or {}).get("steamid"))
+        if isinstance(entry.get("author"), dict)
+        and (author_id := entry["author"].get("steamid"))
     ]
     profiles = get_player_summaries_batch(steam_ids)
 
@@ -569,9 +667,11 @@ def import_reviews(db: Session, game: Game, steam_app_id: int) -> int:
         if len(text) < 10:
             continue
 
-        author = entry.get("author") or {}
+        author = entry.get("author") if isinstance(entry.get("author"), dict) else {}
         profile = profiles.get(author.get("steamid"), {})
         playtime_minutes = author.get("playtime_at_review") or 0
+        if not isinstance(playtime_minutes, (int, float)) or playtime_minutes < 0:
+            playtime_minutes = 0
 
         review = Review(
             user_id=None,
@@ -595,7 +695,10 @@ def import_reviews(db: Session, game: Game, steam_app_id: int) -> int:
         # Las horas de los reseñadores recién importados mueven la mediana:
         # es la fuente de duración del filtro "¿cuánto tiempo tenés?".
         recompute_median_review_hours(db, game.id)
-        db.commit()
+        if commit:
+            from app.services.steam_catalog_service import bump_catalog_revision
+            bump_catalog_revision(db)
+            db.commit()
     return created
 
 
@@ -637,121 +740,111 @@ def import_game(db: Session, steam_app_id: int) -> Game | None:
     game.genres = [_get_or_create(db, Genre, name) for name in genres]
     game.tags = [_get_or_create(db, Tag, name) for name in tags]
 
+    entry = _catalog_entry(db, game)
+    entry.status = "ready"
+    entry.last_attempt_at = datetime.now(timezone.utc)
+    entry.next_attempt_at = entry.last_attempt_at + timedelta(minutes=settings.STEAM_SYNC_TTL_MINUTES)
+    entry.attempts = 0
+    entry.last_error = None
+    db.flush()
+    import_reviews(db, game, steam_app_id, commit=False)
+    from app.services.steam_catalog_service import bump_catalog_revision
+    bump_catalog_revision(db)
     db.commit()
     db.refresh(game)
-
-    import_reviews(db, game, steam_app_id)
+    invalidate_engine()
     return game
 
 
 def refresh_game(db: Session, game: Game) -> bool:
-    """Vuelve a pedir la ficha de Steam de un juego ya importado (o de una
-    ficha pendiente sin enriquecer todavía) y trae las reseñas nuevas que
-    haya desde la última vez.
+    """Refresco de fondo que conserva la ficha y todas sus interacciones.
 
-    A diferencia de ``import_game``, esto sí puede repetirse: actualiza la
-    ficha existente en lugar de crear una, y ``import_reviews`` ya se ocupa
-    de no duplicar reseñas. Se usa desde ``maybe_refresh`` para mantener el
-    catálogo al día sin depender de un proceso aparte sondeando Steam.
-
-    Devuelve ``False`` si el juego dejó de existir: una ficha pendiente
-    (``get_app_list`` mezcla DLC, bandas sonoras y software con juegos, ver
-    ``get_app_list``) que al pedir su detalle resulta no ser un juego se
-    borra en vez de quedar eternamente pendiente. Un juego que ya estaba
-    enriquecido nunca se borra por esto — sólo se deja de actualizar — para
-    no tirar evidencia real (reseñas, valoraciones) por una falla puntual de
-    Steam.
-
-    Que Steam no conteste (``SteamUnavailable``) **no** cuenta como "no es
-    un juego" y se propaga sin borrar nada: correr una limpieza mientras
-    Steam está caído borraría el catálogo entero.
+    False significa exclusivamente que una respuesta válida identifica un
+    producto de otro tipo. Una ficha inaccesible queda unavailable y se
+    reintenta; no se inventa una fecha de sincronización exitosa.
     """
     if game.steam_app_id is None:
         return True
-
-    was_pending = not game.is_enriched
-    data = get_app_details(game.steam_app_id)
-
-    if data and data.get("type") == "game":
-        parsed = parse_steam_game(data)
-        genres = parsed.pop("genres", [])
-        tags = parsed.pop("tags", [])
-        # El nombre y el slug son la identidad pública del juego (URLs,
-        # referencias del recomendador): no se pisan aunque Steam les haga
-        # un pequeño retoque de redacción.
-        parsed.pop("name", None)
-        parsed.pop("slug", None)
-        for field, value in parsed.items():
-            setattr(game, field, value)
-        game.genres = [_get_or_create(db, Genre, name) for name in genres]
-        # Steam sólo conoce sus propias categorías (metadata de plataforma).
-        # Las etiquetas comunitarias que trajo la ingesta de SteamSpy
-        # describen tono y jugabilidad, y son el corpus del modelo de
-        # contenido: reemplazar la lista entera las borraría junto con sus
-        # votos, y encima en los juegos más vistos, que son los que más se
-        # refrescan (``maybe_refresh`` corre al abrir cualquier ficha vencida
-        # y sobre los tres resultados del asistente).
-        community = [tag for tag in game.tags if tag.kind == "community"]
-        game.tags = community + [_get_or_create(db, Tag, name) for name in tags]
-    elif was_pending:
-        db.delete(game)
+    entry = _catalog_entry(db, game)
+    try:
+        data = get_app_details(game.steam_app_id)
+    except SteamUnavailable as error:
+        _record_unavailable(db, entry, "No se pudo obtener una ficha válida de Steam", error.retry_after_seconds)
+        raise
+    if data is None:
+        _record_unavailable(db, entry, "La ficha no está disponible públicamente en Steam")
+        return True
+    if not isinstance(data, dict) or not isinstance(data.get("type"), str) or not data["type"].strip():
+        _record_unavailable(db, entry, "Steam devolvió una ficha con formato inválido")
+        raise SteamUnavailable("Steam devolvió una ficha con formato inválido")
+    if data["type"] != "game":
+        entry.status = "non_game"
+        entry.last_attempt_at = datetime.now(timezone.utc)
+        entry.next_attempt_at = None
+        entry.last_error = "La tienda identifica este producto como otro tipo de aplicación"
+        from app.services.steam_catalog_service import bump_catalog_revision
+        bump_catalog_revision(db)
         db.commit()
         invalidate_engine()
         return False
 
-    # Los totales reales van antes de importar reseñas: es lo que usa
-    # `recompute_game_aggregates` para medir popularidad de verdad.
+    parsed = parse_steam_game(data)
+    genres = parsed.pop("genres", [])
+    tags = parsed.pop("tags", [])
+    # Preservar URLs y votos comunitarios al refrescar categorías de Steam.
+    parsed.pop("name", None)
+    parsed.pop("slug", None)
+    for field, value in parsed.items():
+        setattr(game, field, value)
+    game.genres = [_get_or_create(db, Genre, name) for name in genres]
+    community = [tag for tag in game.tags if tag.kind == "community"]
+    platform_tags = [_get_or_create(db, Tag, name) for name in tags]
+    game.tags = list(dict.fromkeys(community + platform_tags))
+
     totals = get_review_totals(game.steam_app_id)
     if totals is not None:
         game.steam_total_reviews, game.steam_positive_reviews = totals
 
-    import_reviews(db, game, game.steam_app_id)
-
-    game.steam_synced_at = datetime.now(timezone.utc)
+    import_reviews(db, game, game.steam_app_id, commit=False)
+    recompute_game_aggregates(db, game.id)
+    now = datetime.now(timezone.utc)
+    game.steam_synced_at = now
+    entry.status = "ready"
+    entry.last_attempt_at = now
+    entry.next_attempt_at = now + timedelta(minutes=settings.STEAM_SYNC_TTL_MINUTES)
+    entry.attempts = 0
+    entry.last_error = None
+    entry.priority = 0
+    from app.services.steam_catalog_service import bump_catalog_revision
+    bump_catalog_revision(db)
     db.commit()
     db.refresh(game)
-    # Los géneros, etiquetas o la descripción pudieron haber cambiado: el
-    # contenido que ve el filtrado basado en contenido ya no es el mismo.
     invalidate_engine()
     return True
 
 
 def maybe_refresh(db: Session, game: Game) -> bool:
-    """Refresca un juego de Steam si hace más de ``STEAM_SYNC_TTL_MINUTES``
-    que no se sincroniza, o si es una ficha pendiente que todavía no se
-    enriqueció ni una vez (no espera al TTL en ese caso).
+    """Devuelve datos locales al instante y prioriza el trabajo de fondo.
 
-    Esto es lo que hace que el catálogo se sienta "en tiempo real" sin pagar
-    el costo de golpear la API de Steam en cada vista de cada juego: como
-    mucho se refresca una vez por ventana, y sólo los juegos que alguien
-    efectivamente está mirando (no hay un barrido de fondo sobre todo el
-    catálogo). Si Steam no responde, el juego sigue sirviéndose con los
-    datos que ya tenía en vez de romper el pedido.
-
-    Devuelve ``False`` si el juego se borró durante el refresco (ver
-    ``refresh_game``) — quien llama debe tratarlo como si ya no existiera.
+    No realiza pedidos HTTP desde una ficha, el buscador o el asistente.
+    False indica una clasificación non_game previamente confirmada.
     """
     if game.steam_app_id is None:
         return True
-
+    from app.models.steam_catalog import SteamCatalogEntry
+    entry = db.get(SteamCatalogEntry, game.steam_app_id)
+    if entry is not None and entry.status == "non_game":
+        return False
     ttl = timedelta(minutes=settings.STEAM_SYNC_TTL_MINUTES)
     if game.steam_synced_at is not None:
         last_sync = game.steam_synced_at
         if last_sync.tzinfo is None:
             last_sync = last_sync.replace(tzinfo=timezone.utc)
-        if datetime.now(timezone.utc) - last_sync < ttl:
+        if datetime.now(timezone.utc) - last_sync < ttl and (entry is None or entry.status == "ready"):
             return True
-
-    try:
-        return refresh_game(db, game)
-    except Exception:
-        # El refresco es una mejora sobre la respuesta, no la respuesta en sí:
-        # si Steam devuelve algo inesperado (o no responde), la página se
-        # sirve igual con los datos que el juego ya tenía. `get_db` cierra la
-        # sesión al terminar el request, lo que descarta cualquier cambio a
-        # medio aplicar que no haya llegado a `commit()`.
-        db.rollback()
-        return True
+    queue_game_refresh(db, game)
+    db.commit()
+    return True
 
 
 def link_steam_account(

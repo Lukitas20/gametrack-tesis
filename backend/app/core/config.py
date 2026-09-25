@@ -8,6 +8,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field
 
 # backend/  -> raíz del proyecto Python (config.py está en backend/app/core/)
 BASE_DIR = Path(__file__).resolve().parents[2]
@@ -48,11 +49,16 @@ class Settings(BaseSettings):
     STEAM_REVIEWS_BASE: str = "https://store.steampowered.com/appreviews"
     # Cuántas reseñas reales se traen al importar un juego nuevo.
     STEAM_REVIEWS_IMPORT_LIMIT: int = 100
-    # Cada cuánto se refresca un juego de Steam ya importado (ficha, géneros,
-    # etiquetas y reseñas nuevas) al volver a visitarlo. No hay un proceso
-    # aparte sondeando el catálogo: es perezoso, sólo se refresca lo que
-    # alguien efectivamente mira (ver ``steam_service.maybe_refresh``).
+    # Ventana de vigencia de fichas. Las visitas priorizan la cola y el
+    # worker de catálogo procesa las fichas vencidas en segundo plano.
     STEAM_SYNC_TTL_MINUTES: int = 360
+
+    # El catálogo se mantiene mientras la aplicación local está abierta.
+    STEAM_CATALOG_WORKER_ENABLED: bool = True
+    STEAM_CATALOG_PAGE_SIZE: int = Field(default=10000, ge=1, le=50000)
+    STEAM_CATALOG_INTERVAL_MINUTES: int = Field(default=60, ge=1)
+    STEAM_CATALOG_DETAIL_BATCH_SIZE: int = Field(default=5, ge=1, le=100)
+    STEAM_CATALOG_REQUEST_DELAY_SECONDS: float = Field(default=2.0, ge=1, le=300)
 
     # --- Frontend / CORS ---------------------------------------------------
     CORS_ORIGINS: list[str] = [

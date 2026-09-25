@@ -66,12 +66,13 @@ def _require_game(db: Session, game_id: int) -> Game:
     game = get_game(db, game_id)
     if game is None:
         raise HTTPException(status_code=404, detail="El juego no existe")
-    # Si viene de Steam y hace rato que no se sincroniza (o es una ficha
-    # pendiente que nunca se enriqueció), se refresca acá: es el punto por
-    # el que pasan la ficha, los similares y las reseñas. Si resultó no ser
-    # un juego de verdad (DLC, banda sonora), maybe_refresh ya lo borró.
+    # Servir la copia local y encolar el refresco evita que la disponibilidad
+    # de Steam determine la latencia de una ficha o sus reseñas.
     if not steam_service.maybe_refresh(db, game):
         raise HTTPException(status_code=404, detail="El juego no existe")
+    from app.models.steam_catalog import SteamCatalogEntry
+    entry = db.get(SteamCatalogEntry, game.steam_app_id) if game.steam_app_id else None
+    game.steam_sync_status = entry.status if entry else ("ready" if game.steam_app_id else None)
     return game
 
 

@@ -66,8 +66,10 @@ sí solos mayor precisión ni satisfacción de usuarios. Antes de afirmar una me
 Las horas de reseñadores son tiempo acumulado, no duración de campaña ni sesión.
 Las etiquetas y el análisis de sentimiento tienen errores; la evidencia textual
 ayuda a inspeccionarlos. Una cantidad mínima de valoraciones no garantiza que
-existan vecinos colaborativos útiles. La matriz usuario-juego todavía es densa:
-conviene medir memoria antes de aumentar mucho los usuarios y el catálogo.
+existan vecinos colaborativos útiles. La actualización posterior del catálogo
+reemplazó la matriz densa por CSR/CSC; ver [CATALOGO_STEAM.md](CATALOGO_STEAM.md).
+Conviene medir también la memoria de metadatos y la latencia del quiz antes de
+aumentar mucho los usuarios y el catálogo.
 
 Prioridades para una siguiente etapa: feedback persistente «no me interesa»
 separado de una valoración, exclusión opcional de biblioteca Steam realmente

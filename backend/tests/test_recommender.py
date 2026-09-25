@@ -6,13 +6,18 @@ opuestos, de modo que cada estrategia tenga una respuesta verificable.
 
 import numpy as np
 import pytest
-from sqlalchemy import create_engine
+from datetime import datetime, timezone
+from scipy.sparse import issparse
+from sqlalchemy import create_engine, func, select, update
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import settings
 from app.db.base import Base
-from app.ml.recommender import RecommenderEngine, invalidate_engine
-from app.models import Game, Genre, Rating, RecommendationSource, Tag, User, UserRole
+from app.ml.recommender import RecommenderEngine, get_engine, invalidate_engine
+from app.models import (
+    Game, Genre, Rating, RecommendationSource, SteamCatalogEntry,
+    SteamCatalogSync, Tag, User, UserRole,
+)
 
 # Tres RPG narrativos y tres estrategias, dos mundos sin superposición.
 CATALOG = [
@@ -403,3 +408,115 @@ def test_hibrido_sin_peso_colaborativo_no_atribuye_patrones(
         assert item.source is RecommendationSource.CONTENT
         assert item.components["colaborativo"] == 0.0
         assert all("Patrones de valoración" not in signal for signal in item.signals)
+
+
+def test_matrices_grandes_guardan_solo_valoraciones_observadas(db, populated, monkeypatch):
+    """Agregar juegos no valorados no reserva una matriz usuarios × juegos."""
+    engine = object.__new__(RecommenderEngine)
+    engine.game_ids = list(range(1, 100_001))
+    engine._game_index = {game_id: i for i, game_id in enumerate(engine.game_ids)}
+    original_zeros = np.zeros
+
+    def reject_dense_catalog(shape, *args, **kwargs):
+        if isinstance(shape, tuple) and len(shape) == 2 and np.prod(shape) >= 1_000_000:
+            pytest.fail("Se intentó reservar una matriz densa usuarios × catálogo")
+        return original_zeros(shape, *args, **kwargs)
+
+    monkeypatch.setattr(np, "zeros", reject_dense_catalog)
+    engine._build_collaborative_model(db)
+    matrices = [engine.matrix, engine._centered_sparse, engine._observed]
+    assert all(issparse(matrix) for matrix in matrices)
+    assert engine.matrix.shape == (10, 100_000)
+    assert engine.matrix.nnz == engine._observed.nnz == 60
+    allocated = sum(array.nbytes for matrix in matrices
+                    for array in (matrix.data, matrix.indices, matrix.indptr))
+    # CSR/CSC necesitan además punteros por fila/columna: O(notas + U + G).
+    assert allocated < 64 * 60 + 8 * (100_000 + 10 + 3)
+    np.testing.assert_allclose(engine.user_means, 3.5)
+
+
+def test_sparse_preserva_predicciones_y_evidencia_conocidas(db, populated):
+    current = User(username="regresion-sparse", role=UserRole.PLAYER)
+    db.add(current)
+    db.flush()
+    _rate(db, current, populated["games"]["rpg-uno"], 5.0)
+    _rate(db, current, populated["games"]["estrategia-uno"], 1.0)
+    db.commit()
+    engine = RecommenderEngine(db)
+    predictions, evidence, neighbours = engine._collaborative_evidence(current.id)
+    # Diez co-valoradores con desviación ±1.5, más ±2 del usuario actual.
+    weight = np.sqrt(22.5 / 26.5) * (10.0 / 15.0)
+    for slug, expected in [("rpg-dos", 5.0), ("rpg-tres", 5.0),
+                           ("estrategia-dos", 1.0), ("estrategia-tres", 1.0)]:
+        index = engine._game_index[populated["games"][slug].id]
+        assert predictions[index] == pytest.approx(expected)
+        assert evidence[index] == pytest.approx(weight / (weight + 1.0))
+        assert neighbours[index] == 1
+    personal, _ = engine.personal_scores(current.id, [])
+    assert personal[engine._game_index[populated["games"]["rpg-uno"].id]] == 1.0
+    assert personal[engine._game_index[populated["games"]["estrategia-uno"].id]] == 0.0
+
+
+def test_cache_no_reentrena_por_stubs_y_no_escribe_estado(db, catalog):
+    first = get_engine(db)
+    db.add(Game(steam_app_id=123456, name="Sólo indexado", slug="solo-indexado"))
+    db.commit()
+    assert get_engine(db) is first
+    assert db.scalar(select(func.count()).select_from(SteamCatalogSync)) == 0
+
+
+def test_cache_detecta_revision_de_otro_proceso(db, catalog):
+    db.add(SteamCatalogSync(id=1, revision=0))
+    db.commit()
+    first = get_engine(db)
+    game_id = catalog["rpg-uno"].id
+    # Una sesión independiente simula la escritura del worker: no llama al
+    # invalidator en memoria del servidor ni cambia cantidades de filas.
+    with Session(db.get_bind()) as worker:
+        worker.execute(update(Game).where(Game.id == game_id).values(name="Nombre actualizado"))
+        worker.execute(update(SteamCatalogSync).where(SteamCatalogSync.id == 1).values(revision=1))
+        worker.commit()
+    with Session(db.get_bind()) as request:
+        rebuilt = get_engine(request)
+        assert rebuilt is not first
+        assert rebuilt.game_names[game_id] == "Nombre actualizado"
+
+
+def test_cache_no_mezcla_bases_con_igual_url_y_contadores(db, catalog):
+    first = get_engine(db)
+    other_engine = create_engine("sqlite://")
+    Base.metadata.create_all(other_engine)
+    try:
+        with Session(other_engine) as other:
+            other.add_all(Game(name=f"Otra base {i}", slug=f"otra-{i}") for i in range(len(catalog)))
+            other.commit()
+            second = get_engine(other)
+            assert second is not first
+            assert all(name.startswith("Otra base") for name in second.game_names.values())
+    finally:
+        other_engine.dispose()
+
+
+def test_non_game_se_excluye_sin_perder_historial(db, populated):
+    game = populated["games"]["rpg-uno"]
+    game.steam_app_id = 123456
+    game.steam_synced_at = datetime.now(timezone.utc)
+    db.add(SteamCatalogEntry(appid=123456, status="non_game", last_seen_at=datetime.now(timezone.utc)))
+    db.commit()
+    engine = RecommenderEngine(db)
+    assert game.id not in engine.game_ids
+    assert game.id not in {item.game_id for item in engine.recommend(None)}
+    assert engine.similar_games(game.id) == []
+    assert db.scalar(select(func.count(Rating.id)).where(Rating.game_id == game.id)) == 10
+
+
+def test_ficha_enriquecida_se_incorpora_sin_reiniciar(db, catalog):
+    pending = Game(steam_app_id=123456, name="Pendiente", slug="pendiente")
+    db.add(pending)
+    db.commit()
+    first = get_engine(db)
+    pending.genres = catalog["rpg-uno"].genres[:]
+    db.commit()
+    second = get_engine(db)
+    assert second is not first
+    assert pending.id in second.game_ids

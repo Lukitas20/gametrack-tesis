@@ -7,6 +7,7 @@ respuestas fijas con la forma real de su API.
 from datetime import datetime, timedelta, timezone
 
 import pytest
+import httpx
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, func, select, update
 from sqlalchemy.orm import Session, sessionmaker
@@ -16,7 +17,8 @@ from app.core.security import hash_password
 from app.db.base import Base
 from app.db.database import get_db
 from app.main import app
-from app.models import Game, Review, Tag, User, UserRole, game_tags
+from app.models import Game, Rating, Review, Tag, User, UserRole, game_tags
+from app.models.steam_catalog import SteamCatalogEntry, SteamCatalogSync
 from app.services import steam_service
 
 PASSWORD = "demo1234"
@@ -93,6 +95,7 @@ def no_review_network(monkeypatch):
     """Por defecto, importar un juego no trae reseñas de Steam: los tests que
     sí quieren probar esa parte pisan este mock explícitamente."""
     monkeypatch.setattr(steam_service, "get_app_reviews", lambda *a, **k: [])
+    monkeypatch.setattr(steam_service, "get_review_totals", lambda *_: None)
 
 
 # Forma real de la respuesta de store.steampowered.com/appreviews/{appid}.
@@ -389,11 +392,9 @@ def test_refresh_enriquece_una_ficha_pendiente(db: Session, monkeypatch) -> None
     assert game.reviews_count == 2
 
 
-def test_refresh_borra_una_ficha_pendiente_que_no_es_un_juego(db: Session, monkeypatch) -> None:
-    """GetAppList/SteamSpy mezclan DLC, bandas sonoras y software con
-    juegos: si al pedir la ficha Steam dice que no es un juego, no tiene
-    sentido dejarla pendiente para siempre."""
-    monkeypatch.setattr(steam_service, "get_app_details", lambda _: None)
+def test_refresh_conserva_una_ficha_confirmada_no_juego(db: Session, monkeypatch) -> None:
+    """Una clasificación explícita retira del catálogo, sin destruir datos."""
+    monkeypatch.setattr(steam_service, "get_app_details", lambda _: {"type": "dlc"})
 
     game = Game(steam_app_id=99999, slug="no-es-un-juego", name="DLC Cualquiera")
     db.add(game)
@@ -403,7 +404,9 @@ def test_refresh_borra_una_ficha_pendiente_que_no_es_un_juego(db: Session, monke
     result = steam_service.refresh_game(db, game)
 
     assert result is False
-    assert db.get(Game, game_id) is None
+    assert db.get(Game, game_id) is not None
+    assert db.get(SteamCatalogEntry, 99999).status == "non_game"
+    assert game.steam_synced_at is None
 
 
 def test_refresh_no_borra_una_ficha_pendiente_si_steam_no_responde(
@@ -431,6 +434,10 @@ def test_refresh_no_borra_una_ficha_pendiente_si_steam_no_responde(
         steam_service.refresh_game(db, game)
 
     assert db.get(Game, game_id) is not None
+    entry = db.get(SteamCatalogEntry, 730)
+    assert entry.status == "unavailable"
+    assert entry.next_attempt_at is not None
+    assert game.steam_synced_at is None
 
 
 def test_refresh_no_borra_las_etiquetas_comunitarias(db: Session, monkeypatch) -> None:
@@ -485,12 +492,15 @@ def test_refresh_no_borra_un_juego_ya_enriquecido_si_steam_falla(
     steam_service.refresh_game(db, game)
     assert game.is_enriched is True
     game_id = game.id
+    previous_sync = game.steam_synced_at
 
     monkeypatch.setattr(steam_service, "get_app_details", lambda _: None)
     result = steam_service.refresh_game(db, game)
 
     assert result is True
     assert db.get(Game, game_id) is not None
+    assert game.steam_synced_at == previous_sync
+    assert db.get(SteamCatalogEntry, 220).status == "unavailable"
 
 
 def test_refresh_no_duplica_resenas_ya_importadas(db: Session, monkeypatch) -> None:
@@ -514,6 +524,105 @@ def test_refresh_no_duplica_resenas_ya_importadas(db: Session, monkeypatch) -> N
     assert second_count == first_count
 
 
+def test_success_false_reintenta_sin_convertir_el_stub_en_juego_completo(db, monkeypatch):
+    monkeypatch.setattr(steam_service, "get_app_details", lambda _: None)
+    game = Game(steam_app_id=333, slug="temporal", name="Temporal")
+    db.add(game)
+    db.commit()
+    assert steam_service.refresh_game(db, game) is True
+    entry = db.get(SteamCatalogEntry, 333)
+    assert entry.status == "unavailable"
+    previous_retry = entry.next_attempt_at
+    assert game.steam_synced_at is None
+    assert steam_service.maybe_refresh(db, game) is True
+    assert entry.next_attempt_at == previous_retry, "abrir una ficha no saltea el backoff"
+    assert entry.priority == 100
+
+
+def test_no_juego_conserva_valoraciones_y_resenas_pero_se_oculta_del_catalogo(db, user, monkeypatch):
+    from app.services.game_service import list_games, list_home_section
+    game = Game(steam_app_id=333, slug="no-juego", name="No juego", steam_synced_at=datetime.now(timezone.utc))
+    db.add(game)
+    db.flush()
+    rating = Rating(user_id=user.id, game_id=game.id, score=4)
+    review = Review(user_id=user.id, game_id=game.id, content="Mi reseña propia del juego")
+    db.add_all([rating, review])
+    db.commit()
+    monkeypatch.setattr(steam_service, "get_app_details", lambda _: {"type": "dlc"})
+    assert steam_service.refresh_game(db, game) is False
+    assert db.get(Rating, rating.id) is not None
+    assert db.get(Review, review.id) is not None
+    assert list_games(db)[0] == 0
+    assert list_home_section(db, "popularidad") == []
+    assert db.get(SteamCatalogSync, 1).revision >= 1
+
+
+def test_presupuesto_resenas_es_persistente_y_no_cuenta_aportes_propios(db, user, monkeypatch):
+    monkeypatch.setattr(steam_service.settings, "STEAM_REVIEWS_IMPORT_LIMIT", 2)
+    monkeypatch.setattr(steam_service, "get_player_summaries_batch", lambda _: {})
+    game = Game(slug="presupuesto", name="Presupuesto", steam_app_id=444)
+    db.add(game)
+    db.flush()
+    own = Review(user_id=user.id, game_id=game.id, content="Reseña escrita en nuestra aplicación")
+    first = Review(game_id=game.id, source="steam", steam_review_id="old", content="Reseña importada anteriormente")
+    db.add_all([own, first])
+    db.commit()
+    fetched = []
+    def fetch(_, num):
+        fetched.append(num)
+        return RAW_REVIEWS["reviews"]
+    monkeypatch.setattr(steam_service, "get_app_reviews", fetch)
+    assert steam_service.import_reviews(db, game, 444) == 1
+    assert steam_service.import_reviews(db, game, 444) == 0
+    assert fetched == [1]
+    assert db.get(Review, own.id) is not None
+    assert db.scalar(select(func.count(Review.id)).where(Review.game_id == game.id)) == 3
+    # Bajar el límite tampoco borra las reseñas que ya estaban.
+    monkeypatch.setattr(steam_service.settings, "STEAM_REVIEWS_IMPORT_LIMIT", 0)
+    assert steam_service.import_reviews(db, game, 444) == 0
+    assert db.get(Review, first.id) is not None
+
+
+def test_resenas_repetidas_en_la_misma_respuesta_no_se_duplican(db, monkeypatch):
+    monkeypatch.setattr(steam_service, "get_app_reviews", lambda *a, **k: [RAW_REVIEWS["reviews"][0]] * 3)
+    monkeypatch.setattr(steam_service, "get_player_summaries_batch", lambda _: {})
+    game = Game(slug="duplicados", name="Duplicados", steam_app_id=555)
+    db.add(game)
+    db.commit()
+    assert steam_service.import_reviews(db, game, 555) == 1
+
+
+@pytest.mark.parametrize("payload", [
+    [], {}, {"220": []}, {"220": {"success": 1}},
+    {"220": {"success": True}},
+    {"220": {"success": True, "data": {"type": "game", "name": "X", "genres": ["mal"]}}},
+    {"220": {"success": True, "data": {"type": "game", "name": "X", "release_date": {"date": 2}}}},
+])
+def test_detalle_invalido_es_reintentable_y_no_ausencia_confirmada(monkeypatch, payload):
+    client = httpx.Client(transport=httpx.MockTransport(lambda _: httpx.Response(200, json=payload)))
+    monkeypatch.setattr(steam_service, "_http_client", lambda: client)
+    with client, pytest.raises(steam_service.SteamUnavailable):
+        steam_service.get_app_details(220)
+
+
+@pytest.mark.parametrize("status", [403, 429, 500])
+def test_estado_http_no_es_producto_inexistente(monkeypatch, status):
+    client = httpx.Client(transport=httpx.MockTransport(lambda _: httpx.Response(status)))
+    monkeypatch.setattr(steam_service, "_http_client", lambda: client)
+    with client, pytest.raises(steam_service.SteamUnavailable):
+        steam_service.get_app_details(220)
+
+
+def test_error_red_no_expone_parametros_remotos(monkeypatch):
+    def unavailable(_):
+        raise httpx.ConnectError("request failed?key=private-credential")
+    client = httpx.Client(transport=httpx.MockTransport(unavailable))
+    monkeypatch.setattr(steam_service, "_http_client", lambda: client)
+    with client, pytest.raises(steam_service.SteamUnavailable) as error:
+        steam_service.get_app_details(220)
+    assert "private-credential" not in str(error.value)
+
+
 # --- Fichas pendientes: maybe_refresh (perezoso, con TTL) --------------------
 
 
@@ -535,17 +644,19 @@ def test_maybe_refresh_ignora_juegos_que_no_son_de_steam(db: Session, monkeypatc
     assert called is False
 
 
-def test_maybe_refresh_enriquece_una_ficha_pendiente_sin_esperar_el_ttl(
+def test_maybe_refresh_encola_una_ficha_pendiente_sin_red(
     db: Session, monkeypatch
 ) -> None:
-    monkeypatch.setattr(steam_service, "get_app_details", lambda _: HALF_LIFE)
+    monkeypatch.setattr(steam_service, "get_app_details", lambda _: pytest.fail("GET no debe llamar a Steam"))
 
     game = Game(steam_app_id=220, slug="half-life-2", name="Half-Life 2")
     db.add(game)
     db.commit()
 
     assert steam_service.maybe_refresh(db, game) is True
-    assert game.is_enriched is True
+    assert game.is_enriched is False
+    assert db.get(SteamCatalogEntry, 220).status == "pending"
+    assert db.get(SteamCatalogEntry, 220).priority == 100
 
 
 def test_maybe_refresh_no_pega_a_steam_si_esta_fresco(db: Session, monkeypatch) -> None:
@@ -571,8 +682,8 @@ def test_maybe_refresh_no_pega_a_steam_si_esta_fresco(db: Session, monkeypatch) 
     assert called is False
 
 
-def test_maybe_refresh_vuelve_a_pegar_a_steam_pasado_el_ttl(db: Session, monkeypatch) -> None:
-    monkeypatch.setattr(steam_service, "get_app_details", lambda _: HALF_LIFE)
+def test_maybe_refresh_encola_sin_alterar_la_fecha_pasado_el_ttl(db: Session, monkeypatch) -> None:
+    monkeypatch.setattr(steam_service, "get_app_details", lambda _: pytest.fail("GET no debe llamar a Steam"))
     monkeypatch.setattr(steam_service.settings, "STEAM_SYNC_TTL_MINUTES", 60)
 
     stale = datetime.now(timezone.utc) - timedelta(minutes=61)
@@ -588,7 +699,8 @@ def test_maybe_refresh_vuelve_a_pegar_a_steam_pasado_el_ttl(db: Session, monkeyp
     refreshed = game.steam_synced_at
     if refreshed.tzinfo is None:
         refreshed = refreshed.replace(tzinfo=timezone.utc)
-    assert refreshed > stale
+    assert refreshed == stale
+    assert db.get(SteamCatalogEntry, 220).status == "pending"
 
 
 def test_maybe_refresh_no_rompe_si_steam_explota_de_forma_inesperada(
@@ -615,23 +727,24 @@ def test_maybe_refresh_no_rompe_si_steam_explota_de_forma_inesperada(
 def test_abrir_una_ficha_pendiente_que_no_es_un_juego_da_404(
     client: TestClient, db: Session, monkeypatch
 ) -> None:
-    monkeypatch.setattr(steam_service, "get_app_details", lambda _: None)
+    monkeypatch.setattr(steam_service, "get_app_details", lambda _: {"type": "dlc"})
 
     game = Game(steam_app_id=99999, slug="no-es-un-juego", name="DLC Cualquiera")
     db.add(game)
     db.commit()
     game_id = game.id
+    steam_service.refresh_game(db, game)
 
     response = client.get(f"/api/v1/games/{game_id}")
 
     assert response.status_code == 404
-    assert db.get(Game, game_id) is None
+    assert db.get(Game, game_id) is not None
 
 
-def test_abrir_una_ficha_pendiente_la_enriquece_en_el_momento(
+def test_abrir_una_ficha_pendiente_la_encola_y_devuelve_datos_locales(
     client: TestClient, db: Session, monkeypatch
 ) -> None:
-    monkeypatch.setattr(steam_service, "get_app_details", lambda _: HALF_LIFE)
+    monkeypatch.setattr(steam_service, "get_app_details", lambda _: pytest.fail("GET no debe llamar a Steam"))
 
     game = Game(steam_app_id=220, slug="half-life-2", name="Half-Life 2")
     db.add(game)
@@ -642,26 +755,28 @@ def test_abrir_una_ficha_pendiente_la_enriquece_en_el_momento(
 
     assert response.status_code == 200
     body = response.json()
-    assert body["is_enriched"] is True
-    assert body["description"] == "Gordon Freeman vuelve a City 17."
+    assert body["is_enriched"] is False
+    assert body["description"] is None
+    assert body["steam_sync_status"] == "pending"
 
 
 def test_analitica_de_una_ficha_pendiente_que_no_es_un_juego_da_404(
     client: TestClient, db: Session, developer: User, monkeypatch
 ) -> None:
-    monkeypatch.setattr(steam_service, "get_app_details", lambda _: None)
+    monkeypatch.setattr(steam_service, "get_app_details", lambda _: {"type": "dlc"})
 
     game = Game(steam_app_id=99999, slug="no-es-un-juego", name="DLC Cualquiera")
     db.add(game)
     db.commit()
     game_id = game.id
+    steam_service.refresh_game(db, game)
 
     response = client.get(
         f"/api/v1/analytics/games/{game_id}", headers=auth(client, "desarrolladora")
     )
 
     assert response.status_code == 404
-    assert db.get(Game, game_id) is None
+    assert db.get(Game, game_id) is not None
 
 
 # --- Fichas pendientes: get_app_list (índice vía SteamSpy) ------------------

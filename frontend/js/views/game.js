@@ -65,6 +65,8 @@ export async function gameView({ params, query }) {
   mount(
     container,
     backLink(query),
+    game.steam_sync_status === "unavailable" ? h("p", { class: "notice notice-warn" },
+      "Steam no pudo actualizar esta ficha. Mostramos la última versión guardada y reintentaremos más adelante.") : null,
 
     // --- Hero ---
     h(
@@ -231,16 +233,15 @@ export async function gameView({ params, query }) {
 /**
  * Ficha pendiente: un juego que entró al catálogo por el índice completo de
  * Steam (`scripts/import_steam_appindex.py`) pero todavía no se pudo
- * enriquecer. El backend ya intentó completarla al abrir esta página (ver
- * `steam_service.maybe_refresh`) — si seguimos acá es porque Steam no
- * respondió a tiempo, no porque falte hacer algo más.
+ * enriquecer. Abrirla le da prioridad en la cola; la red se consulta en
+ * segundo plano. El refresco de esta vista no fuerza pedidos a Steam.
  */
 function pendingGameView(game) {
   const steamUrl = game.steam_app_id
     ? `https://store.steampowered.com/app/${game.steam_app_id}`
     : null;
 
-  return h(
+  const pending = h(
     "div",
     { class: "card", style: { textAlign: "center", padding: "var(--s-6)" } },
     h("div", { style: { width: "96px", margin: "0 auto var(--s-4)" } }, cover(game)),
@@ -251,10 +252,9 @@ function pendingGameView(game) {
         class: "muted",
         style: { maxWidth: "440px", margin: "0 auto var(--s-4)" },
       },
-      "Todavía no pudimos traer la ficha completa de este juego desde Steam " +
-        "(géneros, descripción, reseñas). Puede ser una demora puntual, o que " +
-        "este AppID no sea en realidad un juego — Steam mezcla DLC, bandas " +
-        "sonoras y software en su índice.",
+      game.steam_sync_status === "unavailable"
+        ? "Steam no pudo devolver esta ficha. Conservamos el juego en el catálogo y reintentaremos más adelante."
+        : "El juego ya está en el catálogo. Su ficha tiene prioridad para completarse en segundo plano; esta página comprobará si ya está disponible.",
     ),
     h(
       "div",
@@ -263,7 +263,7 @@ function pendingGameView(game) {
         "button",
         { class: "btn btn-primary", onClick: () => resolve() },
         icon("refresh", 15),
-        "Reintentar",
+        "Ver ficha actualizada",
       ),
       steamUrl &&
         h(
@@ -273,6 +273,17 @@ function pendingGameView(game) {
         ),
     ),
   );
+  let checks = 0;
+  setTimeout(async function checkDetail() {
+    if (!pending.isConnected || checks++ >= 12) return;
+    try {
+      const updated = await api.game(game.id);
+      if (!pending.isConnected) return;
+      if (updated.is_enriched) { resolve(); return; }
+    } catch { /* La ficha conserva el estado y el botón para volver a intentar. */ }
+    if (pending.isConnected) setTimeout(checkDetail, 10000);
+  }, 10000);
+  return pending;
 }
 
 /* ------------------------------------------------------------------ *

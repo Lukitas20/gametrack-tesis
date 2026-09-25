@@ -400,11 +400,9 @@ def suggest(
     outcome = run_quiz(db, payload, members=members)
     profile, _, company = _resolve_vocabulary(payload)
 
-    # Enriquece/resincroniza los tres elegidos ahora, mientras el frontend ya
-    # está mostrando el caldero: así, cuando alguien clickee un resultado, la
-    # ficha ya está al día y no dispara un segundo refresco silencioso (con
-    # el loader genérico, no el del caldero) al abrir /juego/:id. Sólo pasa
-    # si hace falta — respeta el mismo TTL que el resto del catálogo.
+    # Prioriza las tres fichas elegidas para el worker, sirviendo los datos
+    # locales sin esperar a Steam. La comprobación de cambios también cubre
+    # otras implementaciones del refresco y clasificaciones concurrentes.
     changed = False
     for candidate in outcome.ranked[:3]:
         game = outcome.games.get(candidate.game_id)
@@ -419,13 +417,11 @@ def suggest(
                          {tag.slug for tag in game.tags}, {genre.slug for genre in game.genres})
                 changed = changed or before != after
 
-    # Una ficha pendiente puede borrarse o cambiar de modalidad al refrescar.
-    # Recalculamos una vez contra esos datos para no serializar juegos borrados
-    # ni justificar resultados con criterios que ya no cumplen. Acotamos las
-    # consultas de red a los tres originales; las nuevas fichas usan su TTL.
+    # Recalcular si cambió la modalidad o la elegibilidad de una ficha. El
+    # mantenimiento conserva todas sus interacciones; no borra el juego.
     if payload.friend_ids:
-        # La red puede demorar: se comprueba también antes de devolver afinidades
-        # que nadie haya revocado una amistad durante el refresco.
+        # Comprobar también antes de devolver afinidades que nadie haya
+        # revocado una amistad durante la consulta.
         members = resolve_group_members(db, user, payload.friend_ids)
     if changed:
         outcome = run_quiz(db, payload, members=members)

@@ -31,12 +31,15 @@ import numpy as np
 from scipy.sparse import csr_matrix, lil_matrix
 from sklearn.feature_extraction.text import TfidfTransformer
 from sklearn.metrics.pairwise import cosine_similarity
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.ml.local_model import load_for_database
-from app.models import Game, Rating, RecommendationSource, Tag, User, game_tags
+from app.models import (
+    Game, Rating, RecommendationSource, SteamCatalogEntry, SteamCatalogSync,
+    Tag, User, game_tags,
+)
 
 # Vecinos considerados al predecir con filtrado colaborativo.
 NEIGHBOURS = 20
@@ -101,6 +104,23 @@ def _normalize(values: np.ndarray) -> np.ndarray:
     return (values - low) / (high - low)
 
 
+def _recommendable_game_filter():
+    """Mismo universo para construir el motor y comprobar su caché.
+
+    Indexar un AppID sin rasgos no modifica el modelo. Un elemento confirmado
+    como DLC/software queda fuera, conservando sus interacciones en la base.
+    """
+    non_game = select(SteamCatalogEntry.appid).where(
+        SteamCatalogEntry.appid == Game.steam_app_id,
+        SteamCatalogEntry.status == "non_game",
+    ).exists()
+    return and_(
+        or_(Game.steam_app_id.is_(None), Game.steam_synced_at.is_not(None),
+            Game.genres.any(), Game.tags.any()),
+        ~non_game,
+    )
+
+
 class RecommenderEngine:
     """Modelos entrenados sobre una foto del catálogo y las interacciones.
 
@@ -120,14 +140,7 @@ class RecommenderEngine:
         games = list(
             db.scalars(
                 select(Game)
-                .where(
-                    or_(
-                        Game.steam_app_id.is_(None),
-                        Game.steam_synced_at.is_not(None),
-                        Game.genres.any(),
-                        Game.tags.any(),
-                    )
-                )
+                .where(_recommendable_game_filter())
                 .order_by(Game.id)
             )
         )
@@ -180,7 +193,8 @@ class RecommenderEngine:
             db.execute(
                 select(game_tags.c.game_id, Tag.slug, game_tags.c.votes)
                 .join(Tag, Tag.id == game_tags.c.tag_id)
-                .where(Tag.kind == "community")
+                .join(Game, Game.id == game_tags.c.game_id)
+                .where(Tag.kind == "community", _recommendable_game_filter())
             ).all()
             if self.config.use_community_tags
             else []
@@ -268,18 +282,21 @@ class RecommenderEngine:
         self._user_index = {user_id: i for i, user_id in enumerate(self.user_ids)}
 
         shape = (len(self.user_ids), len(self.game_ids))
-        self.matrix = np.zeros(shape, dtype=float)
-        self._rated_mask = np.zeros(shape, dtype=bool)
-
+        user_rows, game_columns, scores = [], [], []
         for user_id, game_id, score in rows:
             if game_id not in self._game_index:
                 continue
-            row, column = self._user_index[user_id], self._game_index[game_id]
-            self.matrix[row, column] = score
-            self._rated_mask[row, column] = True
+            user_rows.append(self._user_index[user_id])
+            game_columns.append(self._game_index[game_id])
+            scores.append(score)
 
-        counts = self._rated_mask.sum(axis=1)
-        totals = self.matrix.sum(axis=1)
+        # Almacenar sólo notas observadas evita reservar usuarios × catálogo.
+        # CSR permite leer un historial en O(notas); los ceros ausentes nunca
+        # se tratan como valoraciones negativas ni participan de la media.
+        self.matrix = csr_matrix((scores, (user_rows, game_columns)), shape=shape, dtype=float)
+        self.matrix.sort_indices()
+        counts = np.diff(self.matrix.indptr)
+        totals = np.asarray(self.matrix.sum(axis=1)).ravel()
         # Media de cada usuario sobre lo que efectivamente valoró.
         self.user_means = np.divide(
             totals, counts, out=np.full(len(self.user_ids), 3.0), where=counts > 0
@@ -287,15 +304,20 @@ class RecommenderEngine:
 
         # Centrar por usuario neutraliza que unos puntúen alto y otros bajo:
         # lo que importa es cuánto se aparta cada nota de su propia media.
-        centered = np.where(
-            self._rated_mask, self.matrix - self.user_means[:, np.newaxis], 0.0
-        )
-        self._centered = centered
+        centered = self.matrix.copy()
+        centered.data -= np.repeat(self.user_means, counts)
+        centered.eliminate_zeros()
+        self._centered_sparse = centered.tocsc()
+        # Una nota igual a la media sigue siendo evidencia de co-valoración,
+        # aunque desaparezca de la matriz centrada por valer cero.
+        observed = self.matrix.astype(np.int32)
+        observed.data.fill(1)
+        self._observed = observed.tocsc()
 
-        # Las similitudes se consultan sólo contra el historial del usuario.
-        # Evita materializar una matriz densa catálogo × catálogo al entrenar.
-        self._centered_sparse = csr_matrix(centered)
-        self._observed = csr_matrix(self._rated_mask.astype(np.int32))
+    def _history(self, row: int) -> tuple[np.ndarray, np.ndarray]:
+        """Columnas y notas observadas de una persona, sin densificar la fila."""
+        start, end = self.matrix.indptr[row:row + 2]
+        return self.matrix.indices[start:end], self.matrix.data[start:end]
 
     # -- Popularidad -------------------------------------------------------
 
@@ -374,10 +396,10 @@ class RecommenderEngine:
         if user_id not in self._user_index:
             return None
         row = self._user_index[user_id]
-        rated = np.flatnonzero(self._rated_mask[row])
+        rated, ratings = self._history(row)
         if rated.size == 0 or self._tfidf.shape[1] == 0:
             return None
-        weights = (self.matrix[row, rated] - 3.0) / 2.0
+        weights = (ratings - 3.0) / 2.0
         profile = (self._tfidf[rated].multiply(weights[:, np.newaxis])).sum(axis=0)
         profile = np.asarray(profile)
         norm = np.linalg.norm(profile)
@@ -462,7 +484,7 @@ class RecommenderEngine:
         if user_id not in self._user_index:
             return None
         row = self._user_index[user_id]
-        rated = np.flatnonzero(self._rated_mask[row])
+        rated, ratings = self._history(row)
         if rated.size == 0:
             return None
 
@@ -471,39 +493,48 @@ class RecommenderEngine:
         # Pasa con una sola valoración, o cuando alguien puntuó todo igual.
         # Devolver None acá hace que el caso degrade a popularidad en lugar de
         # a un orden arbitrario entre predicciones empatadas.
-        if float(np.abs(self._centered[row, rated]).max()) < 1e-9:
+        deviations = ratings - self.user_means[row]
+        if float(np.abs(deviations).max()) < 1e-9:
             return None
 
-        similarities_to_history = cosine_similarity(
-            self._centered_sparse.T, self._centered_sparse[:, rated].T
-        )
-        shared = (self._observed.T @ self._observed[:, rated]).toarray()
-        similarities_to_history *= shared / (shared + SIMILARITY_SHRINKAGE)
-        similarities_to_history[shared < MIN_SHARED_RATERS] = 0.0
         predictions = np.full(len(self.game_ids), self.user_means[row])
         evidence = np.zeros(len(self.game_ids))
         neighbour_counts = np.zeros(len(self.game_ids), dtype=int)
-        for target in range(len(self.game_ids)):
-            if self._rated_mask[row, target]:
-                continue
-            similarities = similarities_to_history[target]
-            positive = similarities > 0
-            if not positive.any():
-                continue
+        rated_set = set(rated)
+        centered_history = self._centered_sparse[:, rated].T
+        observed_history = self._observed[:, rated]
+        # Incluso un historial grande evita materializar catálogo × historial:
+        # los temporales densos se limitan a un millón de pares por bloque.
+        block_size = min(1024, max(1, 1_000_000 // rated.size))
+        for start in range(0, len(self.game_ids), block_size):
+            end = min(start + block_size, len(self.game_ids))
+            similarities_to_history = cosine_similarity(
+                self._centered_sparse[:, start:end].T, centered_history
+            )
+            shared = (self._observed[:, start:end].T @ observed_history).toarray()
+            similarities_to_history *= shared / (shared + SIMILARITY_SHRINKAGE)
+            similarities_to_history[shared < MIN_SHARED_RATERS] = 0.0
+            for offset, similarities in enumerate(similarities_to_history):
+                target = start + offset
+                if target in rated_set:
+                    continue
+                positive = similarities > 0
+                if not positive.any():
+                    continue
 
-            neighbours = rated[positive]
-            weights = similarities[positive]
-            if weights.size > NEIGHBOURS:
-                top = np.argsort(weights)[::-1][:NEIGHBOURS]
-                neighbours, weights = neighbours[top], weights[top]
+                neighbour_deviations = deviations[positive]
+                weights = similarities[positive]
+                if weights.size > NEIGHBOURS:
+                    top = np.argsort(weights)[::-1][:NEIGHBOURS]
+                    neighbour_deviations, weights = neighbour_deviations[top], weights[top]
 
-            denominator = np.abs(weights).sum()
-            if denominator < 1e-9:
-                continue
-            deviation = float((weights * self._centered[row, neighbours]).sum() / denominator)
-            predictions[target] = np.clip(self.user_means[row] + deviation, 1.0, 5.0)
-            evidence[target] = denominator / (denominator + 1.0)
-            neighbour_counts[target] = len(neighbours)
+                denominator = np.abs(weights).sum()
+                if denominator < 1e-9:
+                    continue
+                deviation = float((weights * neighbour_deviations).sum() / denominator)
+                predictions[target] = np.clip(self.user_means[row] + deviation, 1.0, 5.0)
+                evidence[target] = denominator / (denominator + 1.0)
+                neighbour_counts[target] = len(weights)
 
         if not evidence.any():
             return None
@@ -519,7 +550,8 @@ class RecommenderEngine:
         if user_id not in self._user_index:
             return None
         row = self._user_index[user_id]
-        rated = np.flatnonzero(self._rated_mask[row] & (self.matrix[row] > 3.0))
+        observed, ratings = self._history(row)
+        rated = observed[ratings > 3.0]
         if rated.size == 0:
             return None
         similarities = self._similarity_row(target_index)[rated]
@@ -533,8 +565,8 @@ class RecommenderEngine:
         if self.local_model is None or user_id not in self._user_index:
             return None
         row = self._user_index[user_id]
-        history = [(self.game_ids[i], float(self.matrix[row, i]))
-                   for i in np.flatnonzero(self._rated_mask[row])]
+        observed, ratings = self._history(row)
+        history = [(self.game_ids[i], float(score)) for i, score in zip(observed, ratings)]
         prediction = self.local_model.predict(history)
         if prediction is None:
             return None
@@ -568,9 +600,9 @@ class RecommenderEngine:
             basis = "ia_local"
         if user_id in self._user_index:
             row = self._user_index[user_id]
-            observed = self._rated_mask[row]
-            values[observed] = (self.matrix[row, observed] - 1.0) / 4.0
-            if observed.any() and basis == "popularidad":
+            observed, ratings = self._history(row)
+            values[observed] = (ratings - 1.0) / 4.0
+            if observed.size and basis == "popularidad":
                 basis = "contenido"
         return values, basis
 
@@ -600,7 +632,7 @@ class RecommenderEngine:
         if user_id is not None and user_id in self._user_index:
             row = self._user_index[user_id]
             excluded.update(
-                self.game_ids[i] for i in np.flatnonzero(self._rated_mask[row])
+                self.game_ids[i] for i in self._history(row)[0]
             )
 
         history_content = (
@@ -630,7 +662,7 @@ class RecommenderEngine:
         )
         popularity = np.clip((self.popularity - 1.0) / 4.0, 0.0, 1.0)
         history_size = (
-            int(self._rated_mask[self._user_index[user_id]].sum())
+            self._history(self._user_index[user_id])[0].size
             if user_id in self._user_index
             else 0
         )
@@ -783,7 +815,7 @@ class RecommenderEngine:
                 signals.append(f"Géneros que elegiste: {names}")
             if user_id in self._user_index:
                 row = self._user_index[user_id]
-                if np.any(self._rated_mask[row] & (self.matrix[row] < 3.0)):
+                if np.any(self._history(row)[1] < 3.0):
                     signals.append("Tu perfil también tiene en cuenta las valoraciones negativas")
             if not signals:
                 signals.append("Seleccionado con tu perfil de contenido y los datos disponibles")
@@ -800,20 +832,26 @@ class RecommenderEngine:
 # ---------------------------------------------------------------------------
 
 _engine: RecommenderEngine | None = None
-_fingerprint: tuple[int, int, int, int] | None = None
+_fingerprint: tuple[object, int, int, int, int, int] | None = None
 _lock = threading.Lock()
 
 
-def _current_fingerprint(db: Session) -> tuple[int, int, int, int]:
-    """Huella barata de los datos: cambia cuando hay que reentrenar."""
+def _current_fingerprint(db: Session) -> tuple[object, int, int, int, int, int]:
+    """Detecta cambios útiles, incluso los escritos por un worker separado."""
     try:
         model_modified = Path(settings.LOCAL_MODEL_PATH).stat().st_mtime_ns
     except OSError:
         model_modified = 0
+    bind = db.get_bind()
+    # Identidad real del motor: dos SQLite en memoria pueden tener idéntica
+    # URL y contadores, pero pertenecen a bases y usuarios diferentes.
+    database_identity = getattr(bind, "engine", bind)
     return (
-        db.scalar(select(func.count(Game.id))) or 0,
+        database_identity,
+        db.scalar(select(func.count(Game.id)).where(_recommendable_game_filter())) or 0,
         db.scalar(select(func.count(Rating.id))) or 0,
         db.scalar(select(func.max(Rating.id))) or 0,
+        db.scalar(select(SteamCatalogSync.revision).where(SteamCatalogSync.id == 1)) or 0,
         model_modified,
     )
 

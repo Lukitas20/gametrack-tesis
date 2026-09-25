@@ -12,6 +12,7 @@ from app.api.v1.endpoints import (
     quiz,
     recommendations,
     steam,
+    steam_catalog,
 )
 from app.core.config import settings
 
@@ -27,3 +28,4 @@ api_router.include_router(recommendations.router)
 api_router.include_router(quiz.router)
 api_router.include_router(analytics.router)
 api_router.include_router(steam.router)
+api_router.include_router(steam_catalog.router)

@@ -457,47 +457,22 @@ categorías de Steam ("Un jugador", "Cooperativo") se mapean a etiquetas. Al
 importar se invalida el modelo del recomendador, así que el juego nuevo entra
 en las recomendaciones sin reiniciar nada.
 
-### Sincronización en tiempo real
+### Catálogo local y sincronización de Steam
 
-Un juego importado de Steam no queda congelado: al visitar su ficha, sus
-similares, sus reseñas o su analítica de desarrollador, `steam_service.
-maybe_refresh` chequea cuánto hace que no se sincroniza (`STEAM_SYNC_TTL_MINUTES`,
-6 horas por defecto) y si corresponde vuelve a pedir la ficha y trae las
-reseñas nuevas que hayan aparecido en Steam, sin duplicar las que ya estaban
-(se identifican por `steam_review_id`, el `recommendationid` de Steam). Si
-Steam no responde, la página se sirve igual con los datos que ya había.
+El índice usa la API oficial paginada `IStoreService/GetAppList`, con una clave
+en `backend/.env`. La aplicación conserva cada página y su cursor para retomar
+después de un corte; los recorridos siguientes consultan novedades. Un proceso
+en segundo plano completa fichas y reintenta errores mientras la app está abierta.
 
-No hay un proceso aparte sondeando todo el catálogo: el refresco es perezoso
-y sólo alcanza a los juegos que alguien efectivamente está mirando.
+La interfaz sirve los datos locales y muestra el estado de la sincronización.
+Abrir una ficha la prioriza sin esperar llamadas a Steam. Los fallos no borran
+juegos ni interacciones; los productos confirmados de otro tipo se ocultan.
+Las reseñas de Steam tienen un cupo persistente por juego.
 
-### Índice completo de Steam
-
-Importar juegos de a uno (o incluso el catálogo amplio de abajo) sigue
-siendo un subconjunto de Steam. `scripts/import_steam_appindex.py` cubre el
-resto: que el catálogo y el buscador tengan **todos** los juegos de Steam
-disponibles, no sólo los que alguien importó.
-
-Usa `GetAppList`, el único endpoint de Steam que devuelve el catálogo entero
-(~150-250 mil entradas, mezclado con DLC, bandas sonoras y software: Steam
-no distingue el tipo acá) en un único pedido, sin paginar. Cada entrada se
-guarda como **ficha pendiente**: sólo AppID y nombre, sin géneros,
-descripción ni reseñas (`Game.is_enriched = False`).
-
-```powershell
-python scripts\import_steam_appindex.py               # todo el índice (unos minutos)
-python scripts\import_steam_appindex.py --limit 5000   # para probar rápido
-```
-
-La ficha completa recién se pide la primera vez que alguien abre ese juego
-en la aplicación: mismo mecanismo que la sincronización en tiempo real de
-arriba (`steam_service.maybe_refresh`), que no espera al TTL cuando el
-juego nunca se sincronizó. Si al pedir la ficha resulta que el AppID no era
-en realidad un juego, la ficha pendiente se borra en ese momento en vez de
-quedar esperando para siempre.
-
-Las fichas pendientes aparecen en el catálogo y el buscador (con el chip
-"Ficha pendiente" en el frontend), pero no participan del recomendador:
-sin géneros, etiquetas ni reseñas no hay nada que comparar.
+Ver [activación, configuración, comandos y límites](CATALOGO_STEAM.md). El índice
+público y las fichas completas tienen coberturas distintas: los juegos sin rasgos
+todavía no participan del recomendador. No se garantiza disponibilidad instantánea
+de todo lo que existe o existió en Steam.
 
 ### Catálogo compartido por el equipo
 
@@ -610,12 +585,13 @@ aparece con **historia +1,00 y optimización −0,38**, respaldado por la cita
 
 ### Asistente "¿Qué jugamos hoy?"
 
-Tres preguntas (tiempo disponible, ánimo, con quién) que se traducen a filtros
-del catálogo y devuelven tres títulos. La API filtra por una etiqueta a la vez,
-así que se consulta cada etiqueta candidata por separado y se intersecan los
-resultados; si la intersección queda corta, se relajan los criterios en orden y
-**se avisa cuál se soltó**, en lugar de devolver una lista vacía o fingir que el
-filtro se aplicó.
+Combina ánimo, tiempo orientativo, compañía y aspecto prioritario para proponer
+hasta tres juegos, considerando afinidad de contenido, popularidad, evidencia de
+reseñas y diversidad. Permite incluir hasta cuatro amigos con amistad aceptada
+y equilibrar sus gustos, manteniendo la modalidad cooperativa u online requerida.
+Las coincidencias exactas tienen prioridad; si faltan, puede ofrecer alternativas
+indicando qué criterios se flexibilizaron. El modo estricto devuelve únicamente
+coincidencias, y se pueden excluir resultados anteriores para explorar otros juegos.
 
 ### Decisiones de visualización
 

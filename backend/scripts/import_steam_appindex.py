@@ -1,40 +1,22 @@
 #!/usr/bin/env python
-"""Importa el índice casi completo de Steam como fichas pendientes.
+"""Sincroniza el índice oficial IStoreService/GetAppList de forma reanudable.
 
-A diferencia de ``seed_from_steam.py`` (que trae la ficha completa y las
-reseñas de un puñado de juegos populares), esto usa el índice de SteamSpy
-(steamspy.com/api.php?request=all) para crear una fila liviana por cada
-AppID: sólo nombre y AppID, sin géneros, descripción ni reseñas todavía.
+Requiere STEAM_API_KEY en backend/.env. Crea fichas livianas y una cola para
+completarlas. Conserva el cursor después de cada página, y retoma sin borrar
+las fichas ni las interacciones existentes. No usa un índice alternativo.
 
-Steam mismo tenía un endpoint para esto (``GetAppList``), pero Valve lo dio
-de baja — confirmado contra ``ISteamWebAPIUtil.GetSupportedAPIList``, que ya
-no lo lista, y contra la propia URL, que devuelve 404. SteamSpy es la
-alternativa: un índice comunitario no oficial, no de Valve, que pagina de a
-1000 juegos por pedido (unos ~85-90 mil en total). Al ser un tercero puede
-estar más lento o caído en cualquier momento; el script se corta con lo que
-haya juntado hasta ahí en vez de fallar todo.
+    python scripts/import_steam_appindex.py
+    python scripts/import_steam_appindex.py --limit-pages 5
+    python scripts/import_steam_appindex.py --page-size 1000 --delay 2
 
-Eso es lo que hace que el catálogo y el buscador cubran casi todo Steam
-desde el primer momento: cada ficha pendiente se completa sola
-(``steam_service.maybe_refresh``) la primera vez que alguien la abre en la
-aplicación, y si resulta no ser un juego de verdad (el índice mezcla DLC,
-bandas sonoras y software) se descarta en ese momento en vez de quedar
-pendiente para siempre.
-
-Es puramente aditivo: no toca los juegos que ya tienen ficha completa (del
-dataset curado, de RAWG o ya importados de Steam), y correrlo de nuevo sólo
-agrega los AppIDs nuevos que hayan aparecido desde la última vez.
-
-Uso:
-    python scripts/import_steam_appindex.py                # todo el índice (~10-15 min)
-    python scripts/import_steam_appindex.py --limit 5000    # para probar rápido
-    python scripts/import_steam_appindex.py --max-pages 5   # ídem, por páginas
-    python scripts/import_steam_appindex.py --delay 3        # más pausa entre páginas
+``import_stub_catalog`` se conserva para importar listas locales antiguas;
+el comando principal usa exclusivamente la sincronización oficial.
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 from typing import Any
@@ -53,12 +35,13 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1]
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
-from sqlalchemy import func, select  # noqa: E402
+from sqlalchemy import select  # noqa: E402
 from sqlalchemy.orm import Session  # noqa: E402
 
 from app.db.base import SessionLocal, init_db  # noqa: E402
 from app.models import Game  # noqa: E402
 from app.services import steam_service  # noqa: E402
+from app.services.steam_catalog_service import sync_catalog  # noqa: E402
 
 CHUNK_SIZE = 2000
 
@@ -117,43 +100,29 @@ def main() -> int:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
-        "--limit", type=int, default=None, help="tope de fichas nuevas a crear (para pruebas)"
-    )
-    parser.add_argument(
-        "--max-pages",
+        "--limit-pages", "--max-pages", dest="max_pages",
         type=int,
         default=None,
-        help="tope de páginas de SteamSpy a pedir, 1000 juegos c/u (para pruebas)",
+        help="tope de páginas; otro llamado continúa desde el checkpoint guardado",
     )
     parser.add_argument(
-        "--delay", type=float, default=1.5, help="segundos entre páginas de SteamSpy"
+        "--delay", type=float, default=2.0, help="segundos entre páginas del índice oficial"
     )
+    parser.add_argument("--page-size", type=int, default=None, help="entradas por página (máximo 50000)")
     args = parser.parse_args()
-
-    print("Pidiendo el índice de Steam a SteamSpy (steamspy.com, no es un servicio de Valve)...")
-    apps = steam_service.get_app_list(delay=args.delay, max_pages=args.max_pages)
-    if not apps:
-        print("No se pudo contactar a SteamSpy. Reintentá en unos minutos.")
-        return 1
-    print(f"{len(apps)} entradas recibidas (juegos, DLC, software y bandas sonoras mezclados).")
-
     db = SessionLocal()
     try:
         init_db()
-        created, skipped = import_stub_catalog(db, apps, limit=args.limit)
-        total = db.scalar(select(func.count(Game.id))) or 0
-
-        print()
-        print("Índice de Steam importado:")
-        print(f"  fichas pendientes nuevas: {created}")
-        print(f"  salteadas (ya existían, o sin nombre/AppID): {skipped}")
-        print(f"  juegos totales en el catálogo: {total}")
-        print()
-        print(
-            "Cada ficha se completa sola (géneros, descripción, reseñas) la "
-            "primera vez que alguien la abre en la aplicación."
-        )
-        return 0
+        result = sync_catalog(db, max_pages=args.max_pages, page_size=args.page_size, delay=args.delay)
+        print(json.dumps(result, ensure_ascii=False, indent=2, default=str))
+        if result.get("busy"):
+            print("Ya hay otro proceso actualizando este catálogo. Esperá a que termine.")
+            return 2
+        if result["partial"] and result["status"] == "running":
+            print("Importación parcial guardada. Ejecutá de nuevo para continuar.")
+        return 1 if result["status"] in ("error", "disabled") else 0
+    except ValueError as exc:
+        parser.error(str(exc))
     finally:
         db.close()
 

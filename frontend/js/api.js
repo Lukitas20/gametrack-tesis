@@ -73,6 +73,7 @@ export const api = {
   genres: () => request("/genres", { auth: false }),
   tags: (minGames = 3) => request("/tags", { auth: false, params: { min_games: minGames } }),
   games: (params) => request("/games", { auth: false, params }),
+  steamCatalogStatus: () => request("/steam/catalog/status", { auth: false }),
   home: (limit = 8) => request("/home", { auth: false, params: { limit } }),
   game: (id) => request(`/games/${id}`, { auth: false }),
   similar: (id, limit = 6) => request(`/games/${id}/similar`, { auth: false, params: { limit } }),

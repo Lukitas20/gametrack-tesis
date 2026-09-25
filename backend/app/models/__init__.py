@@ -17,6 +17,7 @@ from app.models.friendship import Friendship
 from app.models.game_list import GameList, GameListItem
 from app.models.interaction import Rating, Review, ReviewAspect
 from app.models.steamspy import SteamSpySync
+from app.models.steam_catalog import SteamCatalogEntry, SteamCatalogSync
 from app.models.user import User, UserPreference
 
 __all__ = [
@@ -34,6 +35,8 @@ __all__ = [
     "ReviewAspect",
     "Sentiment",
     "SteamSpySync",
+    "SteamCatalogEntry",
+    "SteamCatalogSync",
     "Tag",
     "User",
     "UserPreference",

@@ -1530,3 +1530,7 @@ tr.clickable:hover td {
 @media (prefers-reduced-motion: reduce) {
   .quiz-option, .game-card { transition: none; }
 }
+.catalog-sync-notice { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px; margin-bottom: 24px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.catalog-sync-notice p { margin: 6px 0 0; }
+.catalog-sync-notice button { flex-shrink: 0; }
+@media (max-width: 640px) { .catalog-sync-notice { flex-direction: column; align-items: stretch; } }
