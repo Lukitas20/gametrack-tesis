@@ -13,6 +13,7 @@ from app.db.types import enum_column
 from app.models.enums import UserRole
 
 if TYPE_CHECKING:
+    from app.models.steam_auth import SteamIdentity
     from app.models.game import Game, Genre
     from app.models.game_list import GameList
     from app.models.interaction import Rating, Review
@@ -39,6 +40,13 @@ class User(Base):
     steam_id: Mapped[str | None] = mapped_column(String(20), unique=True, index=True)
     steam_username: Mapped[str | None] = mapped_column(String(100))
     steam_avatar_url: Mapped[str | None] = mapped_column(Text)
+    steam_identity: Mapped[SteamIdentity | None] = relationship(
+        "SteamIdentity", uselist=False, cascade="all, delete-orphan"
+    )
+
+    @property
+    def steam_verified(self) -> bool:
+        return self.steam_identity is not None and self.steam_identity.steam_id == self.steam_id
 
     role: Mapped[UserRole] = mapped_column(
         enum_column(UserRole), default=UserRole.PLAYER, index=True

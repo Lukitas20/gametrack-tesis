@@ -12,7 +12,7 @@
 import { api } from "../api.js";
 import { cover, saveToListButton } from "../components.js";
 import { navigate } from "../router.js";
-import { isLoggedIn, isDeveloper, state } from "../store.js";
+import { isLoggedIn, isDeveloper, state, displayName } from "../store.js";
 import { cauldronLoader, h, icon, mount, toast } from "../ui.js";
 
 /**
@@ -37,8 +37,10 @@ export function startNewQuiz() {
 const QUESTIONS = [
   {
     key: "tiempo",
+    label: "Tiempo", symbol: "clock",
     title: "¿Cuánto querés dedicarle?",
-    note: "Las horas de los reseñadores orientan el compromiso; no miden cuánto dura una partida ni garantizan completar el juego.",
+    note: "Elegí el compromiso que buscás, desde algo breve hasta una aventura sin apuro.",
+    help: "Las horas son una referencia basada en reseñadores, no la duración de una partida ni del juego completo.",
     options: [
       { emoji: "☕", title: "Algo corto", note: "Referencia de hasta 15 h", maxPlaytime: 15 },
       { emoji: "🛋️", title: "Varias sesiones", note: "Referencia de hasta 40 h", maxPlaytime: 40 },
@@ -47,7 +49,8 @@ const QUESTIONS = [
   },
   {
     key: "animo",
-    title: "¿Cómo venís de ánimo?",
+    label: "Ánimo", symbol: "heart",
+    title: "¿Qué tenés ganas de vivir?",
     note: "Buscamos juegos que acompañen lo que tenés ganas de hacer hoy.",
     // El frontend manda la CLAVE del ánimo; qué significa (etiquetas
     // comunitarias votadas, géneros de respaldo, requisitos duros) lo
@@ -62,7 +65,8 @@ const QUESTIONS = [
   },
   {
     key: "compania",
-    title: "¿Solo o con gente?",
+    label: "Compañía", symbol: "user",
+    title: "¿Con quién jugamos?",
     note: "Buscamos modos de juego que coincidan con tu plan.",
     // También por clave: el backend une las categorías de la tienda (en
     // español) con las etiquetas comunitarias equivalentes de SteamSpy (en
@@ -75,7 +79,8 @@ const QUESTIONS = [
   },
   {
     key: "prioridad",
-    title: "¿Qué es lo que más te importa?",
+    label: "Prioridad", symbol: "sparkles",
+    title: "¿Qué hace que un juego te encante?",
     note: "También tenemos en cuenta lo que cuentan las reseñas sobre ese aspecto.",
     options: [
       { emoji: "📖", title: "La historia", note: "Guion, personajes, ritmo", aspect: "historia" },
@@ -88,24 +93,30 @@ const QUESTIONS = [
 ];
 
 function progress(step) {
-  return h(
-    "div",
-    { class: "quiz-progress", role: "progressbar", "aria-label": "Progreso del asistente", "aria-valuemin": "1", "aria-valuemax": String(QUESTIONS.length), "aria-valuenow": String(step + 1) },
-    QUESTIONS.map((_question, index) => h("span", { dataset: { on: String(index <= step) }, "aria-hidden": "true" })),
-  );
+  return h("ol", { class: "play-stepper", "aria-label": "Pasos de tu recomendación" },
+    QUESTIONS.map((question, index) => h("li", {
+      class: index < step ? "complete" : index === step ? "current" : "",
+      "aria-current": index === step ? "step" : null,
+    }, h("span", { class: "play-step-number", "aria-hidden": "true" }, index < step ? icon("check", 14) : String(index + 1).padStart(2, "0")),
+    h("span", null, question.label))));
 }
 
-function resultCard(pick, index) {
+function optionIcon(question, option, index) {
+  const symbols = { tiempo: ["clock", "list", "sun"], animo: ["quote", "trending", "sun", "dice"], compania: ["user", "heart", "sparkles"], prioridad: ["quote", "dice", "star", "check", "sparkles"] };
+  return icon(symbols[question.key][index], 25);
+}
+
+function resultCard(pick, index, memberName) {
   const game = pick.game;
   const relaxed = pick.relaxed_criteria || [];
   return h(
     "article",
-    { class: "quiz-result-card" },
+    { class: `quiz-result-card${index === 0 ? " quiz-result-featured" : ""}` },
     h("a", { class: "quiz-result-cover", href: `#/juego/${game.id}?volver=que-jugamos`, "aria-label": `Ver ${game.name}` }, cover(game, { rank: index + 1 })),
     h(
       "div",
       { class: "quiz-result-body" },
-      h("p", { class: "eyebrow" }, relaxed.length ? "Una alternativa" : "Para tu plan"),
+      h("p", { class: "eyebrow quiz-result-kicker" }, icon(index === 0 ? "sparkles" : "dice", 14), `${String(index + 1).padStart(2, "0")} / ${relaxed.length ? "Para explorar" : index === 0 ? "Tu primera propuesta" : "También para vos"}`),
       h(
         "div",
         { class: "row", style: { gap: "var(--s-2)" } },
@@ -132,8 +143,8 @@ function resultCard(pick, index) {
       pick.group_fit ? h("section", { class: "group-fit", "aria-label": "Afinidad de los participantes" },
         h("h3", null, "Cómo encaja con el grupo"),
         pick.group_fit.participants.map(member => h("div", { class: "group-fit-row" },
-          h("span", null, member.username),
-          h("meter", { min: "0", max: "1", value: member.score, "aria-label": `Afinidad estimada de ${member.username}` }),
+          h("span", null, memberName(member)),
+          h("meter", { min: "0", max: "1", value: member.score, "aria-label": `Afinidad estimada de ${memberName(member)}` }),
           h("span", { class: "muted" }, member.basis === "sin_datos" ? "Sin perfil aún"
             : member.score >= 0.7 ? "Alta" : member.score >= 0.4 ? "Media" : "Baja"))),
         h("p", { class: "discovery-control-note" }, "Afinidad estimada según los perfiles disponibles; no garantiza que les guste.")) : null,
@@ -176,8 +187,20 @@ export async function quizView() {
   // Revalidar las amistades al volver, incluso si quedaron resultados en memoria.
   if (lastRun?.friendIds?.some(id => !friends.some(friend => friend.id === id))) lastRun = null;
 
-  function renderGroupPicker(proceed) {
+  function planSummary() {
+    return h("aside", { class: "play-plan", "aria-label": "Resumen de tu plan" },
+      h("div", { class: "play-plan-mark", "aria-hidden": "true" }, icon("dice", 28)),
+      h("p", { class: "eyebrow" }, "HECHO A TU MEDIDA"), h("h2", null, "Tu plan de hoy"),
+      h("p", { class: "play-plan-note" }, "Cada elección nos acerca a tu próxima partida."),
+      h("ul", null, QUESTIONS.map(question => h("li", { class: answers[question.key] ? "chosen" : "" },
+        icon(question.symbol, 17), h("div", null, h("small", null, question.label), h("strong", null, answers[question.key]?.title || "Todavía por elegir")),
+        answers[question.key] && icon("check", 14)))),
+      friendIds.length > 0 && h("p", { class: "play-plan-group" }, icon("user", 15), `Vos + ${friendIds.length} ${friendIds.length === 1 ? "amigo" : "amigos"}`));
+  }
+
+  function renderGroupPicker(proceed, fromResults = false) {
     requestRevision += 1;
+    const previousFriends = [...friendIds], previousStrategy = groupStrategy;
     const count = h("p", { class: "discovery-control-note", role: "status" });
     const options = h("div", { class: "friend-picker" });
     function update() {
@@ -188,104 +211,82 @@ export async function quizView() {
       h("input", { type: "checkbox", checked: friendIds.includes(friend.id), onChange: event => {
         friendIds = event.target.checked ? [...new Set([...friendIds, friend.id])] : friendIds.filter(id => id !== friend.id);
         update();
-      } }), h("span", null, h("strong", null, friend.full_name || friend.username), h("small", null, `@${friend.username}`)))));
+      } }), h("span", null, h("strong", null, displayName(friend))))));
     const strategySelect = h("select", { class: "select", id: "group-strategy", onChange: event => { groupStrategy = event.target.value; } },
       h("option", { value: "balanced", selected: groupStrategy === "balanced" }, "Equilibrar los gustos de todos"),
       h("option", { value: "average", selected: groupStrategy === "average" }, "Priorizar la afinidad promedio"));
     update();
-    mount(container,
-      head("Recomendación cruzada", "¿Quiénes se suman?", "Elegí amigos para tener en cuenta sus gustos. Podés seguir sin seleccionar a nadie."),
-      friendsError ? h("p", { class: "notice notice-warn" }, `No pudimos cargar tus amigos: ${friendsError}`) : null,
-      count, options,
-      !friends.length ? h("p", { class: "muted" }, "Primero necesitás una amistad aceptada para cruzar perfiles.") : null,
-      h("div", { class: "group-strategy-control" }, h("label", { for: "group-strategy" }, "Cómo buscamos un acuerdo"), strategySelect),
-      h("p", { class: "discovery-control-note" }, "Equilibrar reduce el peso de opciones que encajan con algunos pero muy poco con otros. Siempre se conserva un modo de juego compartido."),
-      h("div", { class: "discovery-actions" },
-        h("button", { class: "btn btn-primary", onClick: proceed }, "Continuar", icon("chevron", 14)),
-        h("a", { class: "btn", href: "#/amigos" }, "Gestionar amigos")));
+    mount(container, head("MEJOR EN COMPAÑÍA", "¿Qué jugamos hoy?", "Una buena partida empieza con un buen grupo."), progress(2),
+      h("div", { class: "play-workspace" }, h("section", { class: "play-question-panel" },
+        h("p", { class: "eyebrow" }, "ARMÁ TU GRUPO"), h("h2", { class: "quiz-question-title", tabindex: "-1" }, "¿Quiénes se suman?"),
+        h("p", { class: "play-question-note" }, "Elegí amigos de GameTrack para combinar sus gustos. También podés seguir por tu cuenta."),
+        friendsError && h("p", { class: "notice notice-warn" }, `No pudimos cargar tus amigos: ${friendsError}`),
+        count, options,
+        !friends.length && h("div", { class: "play-empty-group" }, icon("user", 24),
+          h("p", null, "Cuando aceptes amigos en GameTrack, vas a poder invitarlos a esta selección."), h("a", { href: "#/amigos" }, "Ver mis amigos y Steam →")),
+        friends.length > 0 && h("div", { class: "group-strategy-control" }, h("label", { for: "group-strategy" }, "Cómo combinamos los gustos"), strategySelect),
+        h("div", { class: "play-question-actions" },
+          h("button", { class: "btn btn-ghost", onClick: () => {
+            if (fromResults && lastRun) { friendIds = previousFriends; groupStrategy = previousStrategy; showResults(lastRun); }
+            else renderQuestion();
+          } }, icon("arrowLeft", 14), fromResults ? "Cancelar" : "Atrás"),
+          h("button", { class: "btn btn-primary", onClick: proceed }, "Continuar", icon("chevron", 16)))), planSummary()));
+    container.querySelector(".quiz-question-title")?.focus();
   }
 
   function head(eyebrow, title, note) {
-    return h(
-      "div",
-      { class: "view-head" },
-      h(
-        "div",
-        null,
-        h("p", { class: "eyebrow" }, eyebrow),
-        h("h1", null, title),
-        note && h("p", null, note),
-      ),
-    );
+    return h("header", { class: "play-banner" },
+      h("div", null, h("p", { class: "play-eyebrow" }, icon("sparkles", 14), eyebrow),
+        h("h1", null, title), note && h("p", { class: "play-banner-note" }, note)),
+      h("div", { class: "play-banner-art", "aria-hidden": "true" }, h("img", { src: "/assets/brand/mascota.png", alt: "", width: "140", height: "140" })));
   }
 
   function renderQuestion() {
     requestRevision += 1;
     const question = QUESTIONS[step];
-    mount(
-      container,
-      head(`Tu plan · Paso ${step + 1} de ${QUESTIONS.length}`, "¿Qué jugamos hoy?", question.note),
-      progress(step),
-      h("h2", { class: "quiz-question-title", tabindex: "-1" }, question.title),
-      h(
-        "div",
-        { class: "quiz-options" },
-        question.options.map((option) =>
-          h(
-            "button",
-            {
-              class: "quiz-option",
-              "aria-pressed": String(answers[question.key]?.title === option.title),
-              onClick: () => {
-                answers[question.key] = option;
-                if (question.key === "compania" && option.company === "solo") friendIds = [];
-                const proceed = () => {
-                  if (editing) {
-                    editing = false;
-                    excluded = [];
-                    renderResults();
-                  } else if (step < QUESTIONS.length - 1) {
-                    step += 1;
-                    renderQuestion();
-                  } else renderResults();
-                };
-                if (question.key === "compania" && option.company !== "solo" && isLoggedIn() && !isDeveloper()) {
-                  renderGroupPicker(proceed);
-                } else proceed();
-              },
-            },
-            h("div", { class: "quiz-option-emoji" }, option.emoji),
-            h("div", { class: "quiz-option-title" }, option.title),
-            h("div", { class: "quiz-option-note" }, option.note),
-          ),
-        ),
-      ),
-      step > 0 && !editing
-        ? h(
-            "div",
-            { class: "row", style: { marginTop: "var(--s-5)" } },
-            h(
-              "button",
-              {
-                class: "btn btn-ghost btn-sm",
-                onClick: () => {
-                  step -= 1;
-                  renderQuestion();
-                },
-              },
-              icon("arrowLeft", 13),
-              "Atrás",
-            ),
-          )
-        : null,
-    );
+    const summary = h("div", { class: "play-plan-slot" }, planSummary());
+    const options = h("div", { class: "quiz-options", role: "group", "aria-labelledby": "play-question-title" });
+    const proceed = () => {
+      if (editing) { editing = false; excluded = []; renderResults(); }
+      else if (step < QUESTIONS.length - 1) { step += 1; renderQuestion(); }
+      else renderResults();
+    };
+    const next = h("button", { class: "btn btn-primary play-next", disabled: !answers[question.key], onClick: () => {
+      if (!answers[question.key]) return;
+      if (question.key === "compania" && answers.compania.company !== "solo" && isLoggedIn() && !isDeveloper()) renderGroupPicker(proceed);
+      else proceed();
+    } }, editing ? "Actualizar mi selección" : step === QUESTIONS.length - 1 ? "Descubrir mis juegos" : "Continuar", icon(step === QUESTIONS.length - 1 ? "sparkles" : "chevron", 17));
+    question.options.forEach((option, index) => {
+      const button = h("button", { type: "button", class: "quiz-option", "aria-pressed": String(answers[question.key]?.title === option.title), onClick: () => {
+        answers[question.key] = option;
+        if (question.key === "compania" && option.company === "solo") friendIds = [];
+        for (const child of options.children) child.setAttribute("aria-pressed", String(child === button));
+        next.disabled = false;
+        mount(summary, planSummary());
+      } }, h("span", { class: `play-option-icon tone-${index % 4}` }, optionIcon(question, option, index)),
+        h("span", { class: "play-option-copy" }, h("span", { class: "quiz-option-title" }, option.title), h("span", { class: "quiz-option-note" }, option.note)),
+        h("span", { class: "play-option-check", "aria-hidden": "true" }, icon("check", 12)));
+      options.append(button);
+    });
+    mount(container, head("DESCUBRÍ TU PRÓXIMA PARTIDA", "¿Qué jugamos hoy?", "Cuatro elecciones. Una selección para vos."), progress(step),
+      h("div", { class: "play-workspace" }, h("section", { class: "play-question-panel" },
+        h("p", { class: "eyebrow" }, `PASO ${String(step + 1).padStart(2, "0")} / ${question.label.toLocaleUpperCase()}`),
+        h("h2", { class: "quiz-question-title", id: "play-question-title", tabindex: "-1" }, question.title),
+        h("p", { class: "play-question-note" }, question.note), options,
+        question.help && h("p", { class: "play-method-note" }, icon("info", 14), question.help),
+        h("div", { class: "play-question-actions" },
+          h("button", { class: "btn btn-ghost", onClick: () => {
+            if (editing && lastRun) { editing = false; friendIds = [...lastRun.friendIds]; groupStrategy = lastRun.groupStrategy; Object.assign(answers, lastRun.answers); showResults(lastRun); }
+            else if (step > 0) { step -= 1; renderQuestion(); }
+            else navigate("/recomendaciones");
+          } }, icon("arrowLeft", 14), editing ? "Cancelar" : step ? "Atrás" : "Volver al inicio"), next)), summary));
     if (container.isConnected) container.querySelector(".quiz-question-title")?.focus();
   }
 
   async function renderResults() {
     const revision = ++requestRevision;
     const isCurrentRequest = () => isCurrent() && container.isConnected && revision === requestRevision;
-    mount(container, head("Asistente", "¿Qué jugamos hoy?"), cauldronLoader());
+    mount(container, head("PREPARANDO TU SELECCIÓN", "Buscando tu próxima partida…", "Estamos combinando tus elecciones con los juegos del catálogo."), h("div", { class: "play-loading", role: "status" }, cauldronLoader(), h("p", null, "Revisamos afinidad, modos de juego y tus prioridades.")));
 
     try {
       const response = await api.quizSuggest({
@@ -312,11 +313,12 @@ export async function quizView() {
 
   function showResults({ answers: given, response }) {
     Object.assign(answers, given);
+    const memberName = member => displayName(member.id === ownerId ? state.user : friends.find(friend => friend.id === member.id) || member);
     mount(
       container,
       head(
         "Tu selección para hoy",
-        "Tu plan, tus próximos juegos.",
+        response.picks.length ? "Tu próxima partida está acá." : "Ajustemos el plan.",
         "Tocá una respuesta para ajustarla o pedí otras opciones con el mismo plan.",
       ),
       h("div", { class: "quiz-answer-summary", "aria-label": "Editar tus respuestas" },
@@ -324,13 +326,13 @@ export async function quizView() {
           step = index;
           editing = true;
           renderQuestion();
-        } }, given[question.key].emoji, given[question.key].title, icon("chevronDown", 11)))),
+        } }, icon(question.symbol, 14), given[question.key].title, icon("chevronDown", 11)))),
       response.group ? h("section", { class: "group-summary card" },
         h("h2", null, "Una partida para todos"),
-        h("p", null, response.group.members.map(member => member.username).join(" + ")),
-        h("p", { class: "discovery-control-note" }, response.group.notice)) : null,
+        h("p", null, response.group.members.map(memberName).join(" + ")),
+        h("details", { class: "play-group-details" }, h("summary", null, "Cómo elegimos para el grupo"), h("p", { class: "discovery-control-note" }, response.group.notice))) : null,
       isLoggedIn() && !isDeveloper() && given.compania.company !== "solo" ?
-        h("button", { class: "btn btn-sm", onClick: () => renderGroupPicker(() => { excluded = []; renderResults(); }) },
+        h("button", { class: "btn btn-sm", onClick: () => renderGroupPicker(() => { excluded = []; renderResults(); }, true) },
           icon("user", 14), friendIds.length ? "Cambiar el grupo" : "Incluir amigos en la recomendación") : null,
       h("label", { class: "quiz-strict-control" },
         h("input", { type: "checkbox", checked: !allowRelaxation, onChange: event => {
@@ -357,10 +359,10 @@ export async function quizView() {
       response.picks.length
         ? h(
             "div",
-            { style: { display: "grid", gap: "var(--s-3)" } },
-            response.picks.map((pick, index) => resultCard(pick, index)),
+            { class: "play-results-grid" },
+            response.picks.map((pick, index) => resultCard(pick, index, memberName)),
           )
-        : h("p", { class: "muted" }, "No encontramos nada que encaje. Probá con otras respuestas."),
+        : h("div", { class: "play-empty-results" }, icon("search", 30), h("h2", null, "Todavía no encontramos esa combinación"), h("p", null, "Probá cambiar una respuesta arriba o empezar con otro plan.")),
       h(
         "div",
         { class: "row", style: { marginTop: "var(--s-6)" } },

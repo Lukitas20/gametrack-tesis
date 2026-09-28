@@ -1,6 +1,6 @@
 """Integración con Steam: importar juegos y vincular la cuenta."""
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
@@ -10,8 +10,21 @@ from app.models import Game, User
 from app.schemas.game import GameDetail
 from app.schemas.user import SteamLinkRequest, UserResponse
 from app.services import steam_service
+from app.services import steam_profile_service
 
 router = APIRouter(prefix="/steam", tags=["steam"])
+
+
+@router.get("/me/profile")
+def my_steam_profile(response: Response, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    response.headers["Cache-Control"] = "no-store"
+    return steam_profile_service.profile_payload(db, user, steam_profile_service.sync_profile(db, user))
+
+
+@router.post("/me/sync")
+def sync_my_steam_profile(response: Response, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    response.headers["Cache-Control"] = "no-store"
+    return steam_profile_service.profile_payload(db, user, steam_profile_service.sync_profile(db, user, force=True))
 
 
 @router.post(
@@ -45,11 +58,8 @@ def link_steam_account(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> User:
-    """Vincula una cuenta de Steam al usuario autenticado."""
-    try:
-        return steam_service.link_steam_account(db, user, payload.steam_id)
-    except ValueError as error:
-        raise HTTPException(status_code=409, detail=str(error)) from error
+    """El SteamID manual no demuestra propiedad; usar el flujo OpenID."""
+    raise HTTPException(status_code=400, detail="Verificá tu cuenta con Steam desde tu perfil")
 
 
 @router.get("/owned/{steam_id}", response_model=list[dict])

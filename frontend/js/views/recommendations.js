@@ -48,22 +48,20 @@ const DISCOVERY = [
 ];
 
 function discoveryHero(guest = false) {
-  return h("section", { class: "discovery-hero" },
+  return h("section", { class: "discovery-hero play-hero" },
     h("div", { class: "discovery-hero-copy" },
       h("p", { class: "eyebrow" }, "Tu próxima partida empieza acá"),
-      h("h1", null, guest ? "Menos buscar. Más jugar." : "Encontrá tu próximo favorito."),
-      h("p", { class: "discovery-lead" }, guest
-        ? "Descubrí juegos a tu medida. Contanos qué tenés ganas de jugar hoy o armá un perfil con tus gustos."
-        : "Tus gustos cambian. Tus recomendaciones también. Descubrí qué jugar a partir de lo que disfrutás."),
+      h("h1", null, "¿Qué jugamos", h("br"), h("span", null, "hoy?")),
+      h("p", { class: "discovery-lead" }, "Tu tiempo, tus ganas y tu compañía. Encontrá el juego para este momento."),
       h("div", { class: "discovery-actions" },
-        h("button", { class: "btn btn-primary", onClick: startNewQuiz }, icon("sparkles", 17), "¿Qué jugamos hoy?"),
+        h("button", { class: "btn btn-primary", onClick: startNewQuiz }, icon("sparkles", 17), "Encontrar mi próximo juego", icon("chevron", 17)),
         guest
           ? h("a", { class: "btn", href: "#/cuentas" }, "Personalizar mi perfil")
           : h("button", { class: "btn", onClick: () => openOnboarding() }, icon("heart", 15), "Ajustar mis gustos")),
       h("p", { class: "discovery-caption" }, "4 preguntas · Tu ánimo, tu tiempo y con quién jugás")),
     h("div", { class: "discovery-hero-art", "aria-hidden": "true" },
       h("img", { src: "/assets/brand/mascota.png", alt: "", width: "220", height: "220" }),
-      h("span", { class: "discovery-art-note" }, "Una recomendación con motivos")));
+      h("span", { class: "discovery-art-note" }, "Tu plan. Tu próxima aventura.")));
 }
 
 function personalCard(item, index, onRated) {

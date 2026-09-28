@@ -11,6 +11,9 @@
     <link rel="stylesheet" href="/css/tokens.css" />
     <link rel="stylesheet" href="/css/base.css" />
     <link rel="stylesheet" href="/css/components.css" />
+    <link rel="stylesheet" href="/css/auth.css" />
+    <link rel="stylesheet" href="/css/steam-profile.css" />
+    <link rel="stylesheet" href="/css/experience.css" />
     <!-- El logo real. El apple-touch va sobre el violeta de marca porque iOS
          ignora la transparencia y compondría el caldero sobre negro. -->
     <link rel="icon" type="image/png" sizes="32x32" href="/assets/brand/favicon-32.png" />
@@ -44,7 +47,7 @@
            marca. A 36px las dos letras todavía se distinguen. Las medidas van
            explícitas para que el header no salte mientras carga la imagen, y
            `aria-hidden` porque el texto "GameTrack" de al lado ya la nombra. -->
-      <a class="brand" id="brand-link" href="#/">
+      <a class="brand" id="brand-link" href="#/" aria-label="GameTrack">
         <img
           class="brand-mark"
           src="/assets/brand/logo.png"
@@ -62,6 +65,18 @@
 
     <main class="app-main" id="view"></main>
 
-    <script type="module" src="/js/app.js?v=2"></script>
+    <!-- Una versión compartida evita mezclar módulos nuevos con la caché anterior. -->
+    <script type="importmap">
+      { "imports": {
+        "/js/store.js": "/js/store.js?v=ui-20260928",
+        "/js/views/auth.js": "/js/views/auth.js?v=ui-20260928",
+        "/js/views/friends.js": "/js/views/friends.js?v=ui-20260928",
+        "/js/views/quiz.js": "/js/views/quiz.js?v=ui-20260928",
+        "/js/views/recommendations.js": "/js/views/recommendations.js?v=ui-20260928",
+        "/js/views/steam-profile.js": "/js/views/steam-profile.js?v=ui-20260928",
+        "/js/views/steam-friends.js": "/js/views/steam-friends.js?v=ui-20260928"
+      } }
+    </script>
+    <script type="module" src="/js/app.js?v=3"></script>
   </body>
 </html>

@@ -428,7 +428,7 @@ que lo justifica.
 | GET | `/analytics/games/{id}` | **desarrollador** | Sentimiento y aspectos de un juego |
 | POST | `/analytics/process` | **desarrollador** | Correr el NLP sobre las pendientes |
 | POST | `/steam/import/{appid}` | autenticado | Importar un juego desde Steam |
-| POST | `/steam/link` | autenticado | Vincular una cuenta de Steam |
+| POST | `/auth/steam/link` | autenticado | Iniciar vinculación verificada por Steam |
 | GET | `/steam/owned/{steam_id}` | autenticado | Biblioteca de una cuenta de Steam |
 
 Documentación interactiva completa en `/docs`.
@@ -436,6 +436,10 @@ Documentación interactiva completa en `/docs`.
 ---
 
 ## Integración con Steam
+
+El inicio de sesión y registro con Steam ya están disponibles en la pantalla
+de acceso. Ver [flujo, configuración y pruebas de autenticación](ACCESO_STEAM.md).
+Las cuentas previamente vinculadas por SteamID deben verificarse desde Perfil.
 
 Permite ampliar el catálogo más allá del dataset curado y vincular la cuenta de
 un jugador.

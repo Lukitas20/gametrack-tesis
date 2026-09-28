@@ -43,6 +43,8 @@ class Settings(BaseSettings):
     # Steam. La ficha pública de un juego no necesita clave; sí la necesita
     # consultar la biblioteca de un usuario (GetOwnedGames).
     STEAM_API_KEY: str = ""
+    # Origen externo fijo para OpenID (sin barra final). Usar HTTPS al desplegar.
+    PUBLIC_BASE_URL: str = "http://localhost:8000"
     STEAM_API_BASE: str = "https://api.steampowered.com"
     STEAM_STORE_BASE: str = "https://store.steampowered.com/api"
     # Reseñas públicas de un juego: no está bajo /api, es un endpoint aparte.

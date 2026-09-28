@@ -52,6 +52,13 @@ export function isLoggedIn() {
   return Boolean(state.user);
 }
 
+/** El identificador de acceso no tiene por qué ser el nombre visible. */
+export function displayName(user = state.user) {
+  if (!user) return "Mi cuenta";
+  if (user.steam_verified && user.steam_username?.trim()) return user.steam_username.trim();
+  return user.full_name?.trim() || (user.steam_verified && /^steam_\d+$/.test(user.username) ? "Mi cuenta de Steam" : user.username);
+}
+
 export function isDeveloper() {
   return state.user?.role === "desarrollador";
 }
@@ -85,6 +92,25 @@ export async function loadCatalog() {
 
 export async function login(username, password) {
   const data = await api.login(username, password);
+  return acceptSession(data);
+}
+
+export async function register(data) {
+  return acceptSession(await api.register(data));
+}
+
+export async function completeSteamLogin() {
+  return acceptSession(await api.steamSession());
+}
+
+export function loginDestination(user, fallback = "/recomendaciones") {
+  const invite = sessionStorage.getItem("gametrack.invite");
+  sessionStorage.removeItem("gametrack.invite");
+  if (invite && /^[A-Za-z0-9_-]{32,64}$/.test(invite)) return `/invitacion/${invite}`;
+  return user.role === "desarrollador" ? "/dev" : fallback;
+}
+
+async function acceptSession(data) {
   state.token = data.access_token;
   state.user = data.user;
   setToken(state.token);

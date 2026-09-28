@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from app.models.enums import UserRole
 from app.schemas.game import GenreOut
@@ -15,6 +15,21 @@ class UserCreate(BaseModel):
     full_name: str | None = None
     role: UserRole = UserRole.PLAYER
     studio: str | None = None
+
+    @field_validator("password")
+    @classmethod
+    def password_bytes(cls, value: str) -> str:
+        if len(value.encode("utf-8")) > 72:
+            raise ValueError("La contraseña supera el máximo de 72 bytes; probá una frase más corta")
+        return value
+
+    @field_validator("username")
+    @classmethod
+    def trimmed_username(cls, value: str) -> str:
+        value = value.strip()
+        if len(value) < 3:
+            raise ValueError("El usuario debe tener al menos 3 caracteres")
+        return value
 
 
 class UserResponse(BaseModel):
@@ -33,6 +48,7 @@ class UserResponse(BaseModel):
     steam_id: str | None = None
     steam_username: str | None = None
     steam_avatar_url: str | None = None
+    steam_verified: bool = False
 
     # Géneros elegidos en el onboarding (ver User.genres).
     genres: list[GenreOut] = []

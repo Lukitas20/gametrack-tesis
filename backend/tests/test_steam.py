@@ -242,7 +242,7 @@ def test_un_slug_ya_usado_no_rompe_la_importacion(
 # --- Vinculación de cuenta -------------------------------------------------
 
 
-def test_vincular_una_cuenta_de_steam(
+def test_vincular_requiere_verificacion_openid(
     client: TestClient, user: User, monkeypatch
 ) -> None:
     monkeypatch.setattr(
@@ -254,10 +254,9 @@ def test_vincular_una_cuenta_de_steam(
     response = client.post(
         "/api/v1/steam/link", headers=auth(client), json={"steam_id": "76561197960287930"}
     )
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["steam_id"] == "76561197960287930"
-    assert payload["steam_username"] == "gaben"
+    assert response.status_code == 400
+    assert "Steam" in response.json()["detail"]
+    assert user.steam_id is None
 
 
 def test_no_se_puede_vincular_una_cuenta_ya_tomada(
@@ -277,7 +276,8 @@ def test_no_se_puede_vincular_una_cuenta_ya_tomada(
     response = client.post(
         "/api/v1/steam/link", headers=auth(client), json={"steam_id": "76561197960287930"}
     )
-    assert response.status_code == 409
+    assert response.status_code == 400
+    assert user.steam_id is None
 
 
 def test_un_steam_id_mal_formado_es_rechazado(client: TestClient, user: User) -> None:

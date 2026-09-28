@@ -64,6 +64,13 @@ export const api = {
   login: (username, password) =>
     request("/auth/login", { method: "POST", body: { username, password }, auth: false }),
   register: (data) => request("/auth/register", { method: "POST", body: data, auth: false }),
+  steamSession: () => request("/auth/steam/session", { method: "POST", auth: false }),
+  startSteamLink: () => request("/auth/steam/link", { method: "POST" }),
+  steamProfile: () => request("/steam/me/profile"),
+  syncSteamProfile: () => request("/steam/me/sync", { method: "POST" }),
+  createInvite: () => request("/friends/invites", { method: "POST" }),
+  inspectInvite: (token) => request(`/friends/invite/${encodeURIComponent(token)}`, { auth: false }),
+  joinInvite: (token) => request(`/friends/invite/${encodeURIComponent(token)}/join`, { method: "POST" }),
   me: () => request("/auth/me"),
   updateProfile: (data) => request("/auth/me", { method: "PUT", body: data }),
   setPreferences: (genreIds) =>
@@ -114,7 +121,6 @@ export const api = {
     request(`/me/lists/${listId}/items/${gameId}`, { method: "DELETE" }),
 
   // --- Steam ---
-  linkSteam: (steamId) => request("/steam/link", { method: "POST", body: { steam_id: steamId } }),
 
   // --- Analítica (rol desarrollador) ---
   studioAnalytics: (studio) => request("/analytics/studio", { params: { studio } }),

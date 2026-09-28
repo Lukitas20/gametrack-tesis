@@ -12,6 +12,9 @@ import {
 import {
   DEMO_ACCOUNTS,
   DEMO_PASSWORD,
+  completeSteamLogin,
+  displayName,
+  loginDestination,
   isDeveloper,
   isLoggedIn,
   login,
@@ -26,9 +29,10 @@ import { catalogView } from "./views/catalog.js";
 import { developerGameView, developerView } from "./views/developer.js";
 import { gameView } from "./views/game.js";
 import { listsView } from "./views/lists.js";
-import { friendsView } from "./views/friends.js?v=2";
+import { friendsView } from "./views/friends.js";
 import { quizView, startNewQuiz } from "./views/quiz.js";
 import { profileView } from "./views/profile.js";
+import { inviteView } from "./views/invite.js";
 import { ratingsView } from "./views/ratings.js";
 import { recommendationsView } from "./views/recommendations.js";
 
@@ -194,7 +198,7 @@ function accountMenu() {
   const menu = h("div", { class: "menu", role: "menu" });
 
   menu.append(
-    h("div", { class: "menu-label" }, "Cambiar de perfil"),
+    h("div", { class: "menu-label" }, "Perfiles de demostración"),
     ...DEMO_ACCOUNTS.map((account) =>
       h(
         "button",
@@ -232,7 +236,7 @@ function accountMenu() {
       "a",
       { class: "menu-item", href: "#/cuentas", onClick: closeMenu },
       icon("user", 15),
-      "Ver todos los perfiles",
+      "Acceso y registro",
     ),
     h(
       "a",
@@ -271,11 +275,12 @@ function renderActions() {
   const quizButton = h(
     "button",
     {
-      class: "btn btn-sm btn-primary",
+      class: "btn btn-sm btn-primary quiz-launch",
       // Entrar por el encabezado es pedir una recomendación nueva, así que
       // descarta la tirada anterior en vez de volver a mostrarla.
       onClick: startNewQuiz,
       title: "Asistente de decisión",
+      "aria-label": "¿Qué jugamos hoy? Empezar una recomendación",
     },
     icon("dice", 15),
     h("span", { class: "quiz-label" }, "¿Qué jugamos hoy?"),
@@ -295,7 +300,9 @@ function renderActions() {
   const accountButton = h(
     "button",
     {
-      class: "btn btn-sm",
+      class: "btn btn-sm account-trigger",
+      title: isLoggedIn() ? displayName() : "Iniciar sesión",
+      "aria-label": isLoggedIn() ? `Cuenta de ${displayName()}` : "Iniciar sesión",
       "aria-haspopup": "menu",
       onClick: (event) => {
         event.stopPropagation();
@@ -309,17 +316,19 @@ function renderActions() {
     },
     isLoggedIn()
       ? [
-          h(
+          (state.user.steam_verified && state.user.steam_avatar_url) || state.user.avatar_url
+            ? h("img", { class: "avatar account-avatar", src: (state.user.steam_verified && state.user.steam_avatar_url) || state.user.avatar_url, alt: "", onError: event => event.currentTarget.replaceWith(h("span", { class: "avatar account-avatar" }, initials(displayName()))) })
+            : h(
             "span",
             {
               class: "avatar",
               style: { width: "20px", height: "20px", fontSize: "9px" },
             },
-            initials(state.user.username),
+            initials(displayName()),
           ),
-          h("span", { class: "account-trigger-label" }, state.user.username),
+          h("span", { class: "account-trigger-label" }, displayName()),
         ]
-      : [icon("user", 15), "Elegir perfil"],
+      : [icon("user", 15), "Iniciar sesión"],
     icon("chevronDown", 13),
   );
   accountWrap.appendChild(accountButton);
@@ -370,13 +379,13 @@ function view(loader) {
 // pisar: redirige y punto.
 route("/", async (context) => {
   if (!isLoggedIn()) {
-    await view(recommendationsView)(context);
+    navigate("/cuentas", { replace: true });
     return;
   }
   navigate(homePath(), { replace: true });
 });
 
-route("/cuentas", view(async () => accountsView()));
+route("/cuentas", view(async (context) => accountsView(context)));
 route("/catalogo", view(catalogView));
 route("/recomendaciones", view(recommendationsView));
 route("/listas", view(listsView));
@@ -384,6 +393,7 @@ route("/amigos", view(friendsView));
 route("/valoraciones", view(ratingsView));
 route("/que-jugamos", view(quizView));
 route("/perfil", view(profileView));
+route("/invitacion/:token", view(inviteView));
 route("/juego/:id", view(gameView));
 route("/dev", view(developerView));
 route("/dev/juego/:id", view(developerGameView));
@@ -400,6 +410,7 @@ setNotFound(
 
 setNavigateHook((path) => {
   navigationRevision += 1;
+  document.body.classList.toggle("auth-active", path === "/cuentas");
   renderNav(path);
   syncHeaderSearch();
   closeMenu();
@@ -423,8 +434,18 @@ async function boot() {
 
   await restore();
 
+  if (window.location.hash === "#/steam-complete") {
+    try {
+      await completeSteamLogin();
+      history.replaceState(null, "", `#${loginDestination(state.user, "/perfil")}`);
+      toast("¡Listo! Verificamos tu cuenta con Steam.");
+    } catch (error) {
+      history.replaceState(null, "", "#/cuentas?steam_error=expired");
+    }
+  }
+
   if (!isLoggedIn() && !window.location.hash) {
-    navigate("/recomendaciones", { replace: true });
+    history.replaceState(null, "", "#/cuentas");
   }
   start();
 }

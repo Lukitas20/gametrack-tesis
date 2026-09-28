@@ -8,10 +8,12 @@ from app.api.v1.endpoints import (
     health,
     home,
     interactions,
+    invites,
     lists,
     quiz,
     recommendations,
     steam,
+    steam_auth,
     steam_catalog,
 )
 from app.core.config import settings
@@ -19,7 +21,9 @@ from app.core.config import settings
 api_router = APIRouter(prefix=settings.API_V1_PREFIX)
 api_router.include_router(health.router)
 api_router.include_router(auth.router)
+api_router.include_router(steam_auth.router)
 api_router.include_router(friends.router)
+api_router.include_router(invites.router)
 api_router.include_router(games.router)
 api_router.include_router(home.router)
 api_router.include_router(interactions.router)
