@@ -1,0 +1,68 @@
+name: Catálogo Steam (Neon Free)
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 */6 * * *'
+  # Permite probar desde feature/IA antes de integrar en la rama principal.
+  push:
+    branches: [feature/IA]
+    paths:
+      - '.github/workflows/steam-catalog.yml'
+      - 'backend/app/workers/**'
+      - 'backend/app/services/steam_catalog*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: steam-catalog-neon
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    # Activar sólo después de migrar/copiar la base y configurar los secretos.
+    if: vars.STEAM_CATALOG_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+      STEAM_API_KEY: ${{ secrets.STEAM_API_KEY }}
+      DB_AUTO_CREATE: 'false'
+      SQL_ECHO: 'false'
+      STEAM_CATALOG_WORKER_MODE: scheduled
+      STEAM_CATALOG_WORKER_ENABLED: 'true'
+      STEAM_CATALOG_INTERVAL_MINUTES: '360'
+      STEAM_CATALOG_PAGE_SIZE: '1000'
+      STEAM_CATALOG_DETAIL_BATCH_SIZE: '5'
+      STEAM_CATALOG_REQUEST_DELAY_SECONDS: '2'
+      STEAM_CATALOG_REQUESTED_ONLY: 'true'
+      STEAM_REVIEWS_IMPORT_LIMIT: '10'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Comprobar secretos sin mostrarlos
+        run: |
+          python - <<'PY'
+          import os
+          import sys
+          missing = [name for name in ('DATABASE_URL', 'STEAM_API_KEY') if not os.environ.get(name, '').strip()]
+          if missing:
+              print('Faltan secretos: ' + ', '.join(missing))
+              sys.exit(1)
+          PY
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-postgres.txt
+      - name: Instalar dependencias
+        run: python -m pip install -r requirements-postgres.txt --disable-pip-version-check
+      - name: Migrar y actualizar una tanda
+        run: python -m app.workers.steam_catalog_batch --migrate --seconds 360 --max-cycles 60 --max-db-mib 400

@@ -47,13 +47,17 @@ def worker_status(db, *, now: datetime | None = None) -> dict:
     if latest is None:
         latest = db.scalar(select(SteamCatalogWorker)
                            .order_by(SteamCatalogWorker.heartbeat_at.desc()).limit(1))
-    return {"worker_mode": settings.STEAM_CATALOG_WORKER_MODE,
+    scheduled = latest is not None and latest.mode == "scheduled"
+    return {"worker_mode": "scheduled" if scheduled else settings.STEAM_CATALOG_WORKER_MODE,
             "worker_enabled": settings.STEAM_CATALOG_WORKER_ENABLED or active,
             "worker_running": active,
             "worker_heartbeat": latest.heartbeat_at if latest else None,
+            "worker_finished_at": latest.stopped_at if latest else None,
             "worker_error": latest.last_error if latest else None,
-            "interval_minutes": latest.interval_minutes if active else settings.STEAM_CATALOG_INTERVAL_MINUTES,
-            "key_configured": bool(settings.STEAM_API_KEY) or remote_key}
+            "interval_minutes": latest.interval_minutes if active or scheduled else settings.STEAM_CATALOG_INTERVAL_MINUTES,
+            # Entre tandas no hay un proceso vivo. Conservar la configuración
+            # informada por la última ejecución, sin afirmar que sigue activo.
+            "key_configured": bool(settings.STEAM_API_KEY) or remote_key or bool(scheduled and latest.key_configured)}
 
 
 class WorkerPresence:
@@ -143,6 +147,7 @@ def process_details(db, *, limit: int | None = None,
         ids = list(db.scalars(select(Game.id)
             .join(SteamCatalogEntry, SteamCatalogEntry.appid == Game.steam_app_id)
             .where(SteamCatalogEntry.status != "non_game",
+                   SteamCatalogEntry.priority > 0 if settings.STEAM_CATALOG_REQUESTED_ONLY else True,
                    or_(SteamCatalogEntry.next_attempt_at.is_(None),
                        SteamCatalogEntry.next_attempt_at <= now))
             .order_by(SteamCatalogEntry.priority.desc(),

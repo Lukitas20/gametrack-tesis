@@ -1,5 +1,8 @@
 # Catálogo de Steam fuera de esta PC
 
+Para la alternativa **gratis y sin tarjeta**, ver [Neon + GitHub Actions](NEON_GRATIS.md).
+Esa configuración usa tandas programadas y no requiere un servidor Docker permanente.
+
 La API y el sincronizador pueden ejecutarse por separado y compartir PostgreSQL.
 El sincronizador obtiene novedades de Steam y completa fichas; la API sirve los
 datos guardados. El navegador no descarga el catálogo de Steam.

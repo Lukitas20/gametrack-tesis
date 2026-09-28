@@ -66,7 +66,9 @@ class Settings(BaseSettings):
 
     # embedded: demo local; external: proceso independiente con la misma BD.
     STEAM_CATALOG_WORKER_ENABLED: bool = True
-    STEAM_CATALOG_WORKER_MODE: Literal["embedded", "external"] = "embedded"
+    STEAM_CATALOG_WORKER_MODE: Literal["embedded", "external", "scheduled"] = "embedded"
+    # Plan gratuito: completar sólo fichas solicitadas por los usuarios.
+    STEAM_CATALOG_REQUESTED_ONLY: bool = False
     STEAM_CATALOG_PAGE_SIZE: int = Field(default=10000, ge=1, le=50000)
     STEAM_CATALOG_INTERVAL_MINUTES: int = Field(default=60, ge=1)
     STEAM_CATALOG_DETAIL_BATCH_SIZE: int = Field(default=5, ge=1, le=100)

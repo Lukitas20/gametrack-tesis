@@ -22,6 +22,9 @@ Prototipo funcional (MVP) con dos caras:
 
 ## IA local y amigos
 
+Para compartir el catálogo y actualizar Steam con la PC apagada, ver la
+[configuración gratuita sin tarjeta con Neon y GitHub Actions](NEON_GRATIS.md).
+
 La estrategia **IA local** aprende factores de juegos a partir de las valoraciones
 de GameTrack, entrenando en CPU y sin API de modelos. **Amigos** permite enviar y
 aceptar solicitudes; **¿Qué jugamos?** cruza los gustos de hasta cinco participantes.
