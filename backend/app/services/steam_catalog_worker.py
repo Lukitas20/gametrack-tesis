@@ -1,7 +1,6 @@
-"""Mantenimiento local por tandas, con cola durable y pausas interrumpibles.
+"""Mantenimiento por tandas, embebido o independiente de la API.
 
-Se ejecuta mientras la API está abierta. El lock de catálogo compartido con el
-importador evita procesar dos tandas simultáneamente desde procesos distintos.
+La cola, el checkpoint y la presencia del worker residen en la misma base.
 No hay llamadas a Steam desde el endpoint de estado ni desde el buscador.
 """
 from __future__ import annotations
@@ -10,33 +9,104 @@ import logging
 import threading
 import time
 from datetime import datetime, timedelta, timezone
+from uuid import uuid4
 
-from sqlalchemy import or_, select
+from sqlalchemy import delete, or_, select, update
 
 from app.core.config import settings
 from app.db.base import SessionLocal
-from app.models import Game, SteamCatalogEntry, SteamCatalogSync
+from app.models import Game, SteamCatalogEntry, SteamCatalogSync, SteamCatalogWorker
 from app.services import steam_service
 from app.services.steam_catalog_service import catalog_lock, sync_catalog
 
 logger = logging.getLogger(__name__)
 _thread: threading.Thread | None = None
 _stop = threading.Event()
-_heartbeat: datetime | None = None
-_last_error: str | None = None
 _index_retry_at = 0.0
 _details_retry_at = 0.0
+HEARTBEAT_SECONDS = 15
+HEARTBEAT_TTL_SECONDS = 90
+RETRY_MESSAGE = "La sincronización se reintentará; los datos guardados siguen disponibles."
 
 
 def utc(value: datetime) -> datetime:
     return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value
 
 
-def worker_status() -> dict:
-    return {"worker_enabled": settings.STEAM_CATALOG_WORKER_ENABLED,
-            "worker_running": bool(_thread and _thread.is_alive()),
-            "worker_heartbeat": _heartbeat, "worker_error": _last_error,
-            "interval_minutes": settings.STEAM_CATALOG_INTERVAL_MINUTES}
+def worker_status(db, *, now: datetime | None = None) -> dict:
+    """Estado visible desde cualquier API que use la base compartida."""
+    now = now or datetime.now(timezone.utc)
+    cutoff = now - timedelta(seconds=HEARTBEAT_TTL_SECONDS)
+    active_filter = (SteamCatalogWorker.stopped_at.is_(None),
+                     SteamCatalogWorker.heartbeat_at >= cutoff)
+    latest = db.scalar(select(SteamCatalogWorker).where(*active_filter)
+                       .order_by(SteamCatalogWorker.heartbeat_at.desc()).limit(1))
+    active = latest is not None
+    remote_key = bool(db.scalar(select(SteamCatalogWorker.id).where(
+        *active_filter, SteamCatalogWorker.key_configured.is_(True)).limit(1)))
+    if latest is None:
+        latest = db.scalar(select(SteamCatalogWorker)
+                           .order_by(SteamCatalogWorker.heartbeat_at.desc()).limit(1))
+    return {"worker_mode": settings.STEAM_CATALOG_WORKER_MODE,
+            "worker_enabled": settings.STEAM_CATALOG_WORKER_ENABLED or active,
+            "worker_running": active,
+            "worker_heartbeat": latest.heartbeat_at if latest else None,
+            "worker_error": latest.last_error if latest else None,
+            "interval_minutes": latest.interval_minutes if active else settings.STEAM_CATALOG_INTERVAL_MINUTES,
+            "key_configured": bool(settings.STEAM_API_KEY) or remote_key}
+
+
+class WorkerPresence:
+    """Publica presencia durante llamadas lentas sin compartir sesiones SQL."""
+
+    def __init__(self, session_factory, mode: str):
+        self.session_factory = session_factory
+        self.mode = mode
+        self.worker_id = str(uuid4())
+        self.last_error: str | None = None
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+
+    def publish(self, *, now: datetime | None = None) -> None:
+        now = now or datetime.now(timezone.utc)
+        with self.session_factory() as db:
+            row = db.get(SteamCatalogWorker, self.worker_id)
+            if row is None:
+                row = SteamCatalogWorker(id=self.worker_id, mode=self.mode)
+                db.add(row)
+            row.heartbeat_at = now
+            row.stopped_at = None
+            row.key_configured = bool(settings.STEAM_API_KEY)
+            row.interval_minutes = settings.STEAM_CATALOG_INTERVAL_MINUTES
+            row.last_error = self.last_error
+            # La limpieza tiene un límite fijo, también tras reinicios abruptos.
+            obsolete = select(SteamCatalogWorker.id).where(
+                SteamCatalogWorker.heartbeat_at < now - timedelta(days=1),
+                SteamCatalogWorker.id != self.worker_id).limit(100)
+            db.execute(delete(SteamCatalogWorker).where(SteamCatalogWorker.id.in_(obsolete)))
+            db.commit()
+
+    def _publish_loop(self) -> None:
+        while not self._stop.wait(HEARTBEAT_SECONDS):
+            try:
+                self.publish()
+            except Exception as error:
+                # No incluir URLs de conexión ni credenciales en los logs.
+                logger.warning("No se pudo actualizar el estado del worker (%s)", type(error).__name__)
+
+    def start(self) -> None:
+        self.publish()
+        self._thread = threading.Thread(target=self._publish_loop, name="steam-presence", daemon=True)
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._stop.set()
+        if self._thread:
+            self._thread.join()
+        with self.session_factory() as db:
+            db.execute(update(SteamCatalogWorker).where(SteamCatalogWorker.id == self.worker_id)
+                       .values(stopped_at=datetime.now(timezone.utc), last_error=self.last_error))
+            db.commit()
 
 
 def _register_existing(db, limit: int, now: datetime) -> None:
@@ -118,6 +188,8 @@ def run_cycle(*, session_factory=SessionLocal, stop_event=None,
     """Una página de índice y una tanda de fichas; permite alternar ambas tareas."""
     global _index_retry_at
     result = {"index": None, "details": None}
+    if stop_event is not None and stop_event.is_set():
+        return result
     with session_factory() as db:
         state = db.get(SteamCatalogSync, 1)
         due = state is None or state.scan_started_at is not None or state.completed_at is None
@@ -135,22 +207,41 @@ def run_cycle(*, session_factory=SessionLocal, stop_event=None,
     return result
 
 
-def _run() -> None:
-    global _heartbeat, _last_error
-    while not _stop.is_set():
+def run_forever(*, stop_event: threading.Event | None = None,
+                session_factory=SessionLocal, mode: str = "external") -> None:
+    """Loop compartido por el servidor local y el comando independiente."""
+    stop = stop_event or threading.Event()
+    presence = WorkerPresence(session_factory, mode)
+    presence.start()
+    try:
+        while not stop.is_set():
+            try:
+                run_cycle(session_factory=session_factory, stop_event=stop)
+                presence.last_error = None
+            except Exception as error:
+                presence.last_error = RETRY_MESSAGE
+                logger.warning("Sincronización pospuesta (%s)", type(error).__name__)
+            stop.wait(max(10.0, settings.STEAM_CATALOG_REQUEST_DELAY_SECONDS))
+    finally:
         try:
-            run_cycle(stop_event=_stop)
-            _last_error = None
+            presence.stop()
         except Exception as error:
-            _last_error = "La sincronización se reintentará; los datos guardados siguen disponibles."
-            logger.warning("Sincronización pospuesta (%s)", type(error).__name__)
-        _heartbeat = datetime.now(timezone.utc)
-        _stop.wait(max(10.0, settings.STEAM_CATALOG_REQUEST_DELAY_SECONDS))
+            # Si la base está caída, la presencia caduca automáticamente.
+            logger.warning("No se pudo cerrar el estado del worker (%s)", type(error).__name__)
+
+
+def _run() -> None:
+    try:
+        run_forever(stop_event=_stop, mode="embedded")
+    except Exception as error:
+        logger.warning("No se pudo iniciar el worker (%s)", type(error).__name__)
 
 
 def start_worker() -> None:
     global _thread
-    if not settings.STEAM_CATALOG_WORKER_ENABLED or (_thread and _thread.is_alive()):
+    if (not settings.STEAM_CATALOG_WORKER_ENABLED
+            or settings.STEAM_CATALOG_WORKER_MODE != "embedded"
+            or (_thread and _thread.is_alive())):
         return
     _stop.clear()
     _thread = threading.Thread(target=_run, name="steam-catalog", daemon=True)

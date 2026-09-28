@@ -25,17 +25,20 @@ config = context.config
 # real, así que no cuenta como "fijada".
 _configured_url = config.get_main_option("sqlalchemy.url", "") or ""
 if not _configured_url or _configured_url.startswith("driver://"):
-    config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+    # ConfigParser interpreta %. Las contraseñas de URLs pueden estar escapadas.
+    config.set_main_option("sqlalchemy.url", settings.DATABASE_URL.replace("%", "%%"))
 
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # Alembic también se invoca dentro de procesos que ya importaron la app.
+    # Conservar sus loggers: deshabilitarlos ocultaría errores del worker.
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 target_metadata = Base.metadata
 
 # SQLite no soporta ALTER TABLE para casi nada: en modo batch Alembic recrea
 # la tabla y copia los datos. Sin esto, cualquier migración que modifique una
 # columna falla con el motor por defecto del prototipo.
-RENDER_AS_BATCH = settings.is_sqlite
+RENDER_AS_BATCH = config.get_main_option("sqlalchemy.url").startswith("sqlite")
 
 
 def run_migrations_offline() -> None:

@@ -1,0 +1,74 @@
+name: gametrack
+
+x-app: &app
+  image: gametrack:local
+  build: .
+  init: true
+  environment: &environment
+    ENVIRONMENT: production
+    DATABASE_URL: postgresql+psycopg2://gametrack:${POSTGRES_PASSWORD:?Definí POSTGRES_PASSWORD en deploy/.env}@db:5432/gametrack
+    SECRET_KEY: ${SECRET_KEY:?Definí SECRET_KEY en deploy/.env}
+    DB_AUTO_CREATE: "false"
+    STEAM_CATALOG_WORKER_MODE: external
+    STEAM_CATALOG_WORKER_ENABLED: "true"
+    LOCAL_MODEL_PATH: /app/backend/data/generated/local_model.npz
+  volumes:
+    - model-data:/app/backend/data/generated
+  restart: unless-stopped
+
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: gametrack
+      POSTGRES_USER: gametrack
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Definí POSTGRES_PASSWORD en deploy/.env}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gametrack -d gametrack"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  migrate:
+    <<: *app
+    command: ["python", "-m", "alembic", "upgrade", "head"]
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    <<: *app
+    ports:
+      - "${HTTP_BIND:-127.0.0.1}:${HTTP_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 3
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  catalog-worker:
+    <<: *app
+    command: ["python", "-m", "app.workers.steam_catalog"]
+    environment:
+      <<: *environment
+      STEAM_API_KEY: ${STEAM_API_KEY:?Definí STEAM_API_KEY en deploy/.env}
+      STEAM_CATALOG_PAGE_SIZE: ${STEAM_CATALOG_PAGE_SIZE:-10000}
+      STEAM_CATALOG_INTERVAL_MINUTES: ${STEAM_CATALOG_INTERVAL_MINUTES:-60}
+      STEAM_CATALOG_DETAIL_BATCH_SIZE: ${STEAM_CATALOG_DETAIL_BATCH_SIZE:-5}
+      STEAM_CATALOG_REQUEST_DELAY_SECONDS: ${STEAM_CATALOG_REQUEST_DELAY_SECONDS:-2}
+    stop_grace_period: 120s
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  postgres-data:
+  model-data:

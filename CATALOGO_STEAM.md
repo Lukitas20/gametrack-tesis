@@ -1,5 +1,11 @@
 # Catálogo local de Steam
 
+También puede funcionar como **catálogo compartido**, con PostgreSQL y un worker
+independiente de la API. Ver [despliegue y migración al servidor](DESPLIEGUE.md).
+Las secciones siguientes describen el modo local `embedded`; en modo `external`
+las actualizaciones continúan mientras el servicio del servidor esté encendido,
+aunque se cierre la app o se apague esta PC.
+
 GameTrack conserva el catálogo en SQLite y lo actualiza mientras el backend está
 abierto. El índice usa la API oficial `IStoreService/GetAppList/v1`, con clave,
 paginación y cambios desde el último recorrido completo. La descarga del índice

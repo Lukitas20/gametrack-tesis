@@ -45,10 +45,10 @@ cd backend
 | Frontend | HTML5 + CSS propio + JavaScript ES modules |
 | Gráficos | SVG generado a mano (sin librería) |
 
-SQLite es el default para que el prototipo arranque sin instalar ni levantar
-nada. Para usar PostgreSQL alcanza con descomentar `psycopg2-binary` en
-`requirements.txt` y definir `DATABASE_URL` en `backend/.env`; el resto del
-código no cambia.
+SQLite permite ejecutar el prototipo sin levantar otros servicios. Para un
+catálogo compartido, se incluyen PostgreSQL y un sincronizador independiente
+de la API: [despliegue fuera de esta PC](DESPLIEGUE.md). El modo local sigue
+disponible; los datos locales no se trasladan automáticamente al servidor.
 
 El frontend **no tiene paso de compilación**: son módulos ES nativos que sirve
 la propia aplicación FastAPI. Un solo proceso levanta todo, no hay servidor de
