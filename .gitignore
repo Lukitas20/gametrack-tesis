@@ -24,6 +24,7 @@ venv/
 
 # Datos generados por el seed
 backend/data/generated/
+deploy/backups/
 
 # Node / frontend
 node_modules/

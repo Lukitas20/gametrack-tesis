@@ -17,8 +17,8 @@ import time
 import unicodedata
 
 import httpx
-from sqlalchemy import func, insert, select, update
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import func, insert, select, text, update
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -27,6 +27,11 @@ from app.models import Game, SteamCatalogEntry, SteamCatalogSync
 _LOCKS: dict[str, threading.Lock] = {}
 _LOCKS_GUARD = threading.Lock()
 OVERLAP_SECONDS = 300
+# PostgreSQL scopes advisory locks to the database; never derive this key from
+# a hostname or credentials, which can differ between workers on the same DB.
+_POSTGRES_LOCK_ID = int.from_bytes(
+    hashlib.sha256(b"gametrack:steam-catalog").digest()[:8], "big", signed=True
+)
 
 
 class CatalogError(Exception):
@@ -43,13 +48,65 @@ def _utc(value: datetime | None = None) -> datetime:
 
 
 @contextmanager
-def catalog_lock(db: Session):
-    """Exclusión no bloqueante entre worker y CLI, también entre procesos.
+def _postgres_catalog_lock(bind):
+    """Keep one dedicated server session through the importer's commits.
 
-    El archivo sólo identifica la base mediante un hash; el SO libera el
-    bloqueo si se cierra inesperadamente el proceso. No elimina checkpoints.
+    Use a direct PostgreSQL connection or a session-mode pooler. A transaction
+    pooler cannot preserve a session advisory lock across transactions.
+    """
+    connection = None
+    try:
+        connection = bind.engine.connect()
+        # The lock is session scoped; avoid an idle transaction while Steam is
+        # being called, without returning the physical connection to the pool.
+        connection = connection.execution_options(isolation_level="AUTOCOMMIT")
+        acquired = bool(connection.scalar(
+            text("SELECT pg_try_advisory_lock(:lock_id)"),
+            {"lock_id": _POSTGRES_LOCK_ID},
+        ))
+    except SQLAlchemyError:
+        if connection is not None:
+            # Acquisition may have reached PostgreSQL before a network error.
+            # Never put a possibly locked session back in the connection pool.
+            try:
+                connection.invalidate()
+            finally:
+                connection.close()
+        raise CatalogError("No se pudo obtener el bloqueo del catálogo en PostgreSQL.") from None
+
+    try:
+        yield acquired
+    finally:
+        try:
+            if acquired:
+                try:
+                    released = connection.scalar(
+                        text("SELECT pg_advisory_unlock(:lock_id)"),
+                        {"lock_id": _POSTGRES_LOCK_ID},
+                    )
+                    if not released:
+                        connection.invalidate()
+                except SQLAlchemyError:
+                    # Closing the physical session releases its locks, even
+                    # when an explicit unlock cannot be acknowledged.
+                    connection.invalidate()
+        finally:
+            connection.close()
+
+
+@contextmanager
+def catalog_lock(db: Session):
+    """Exclusión no bloqueante entre worker y CLI, también entre máquinas.
+
+    PostgreSQL mantiene el bloqueo en una sesión dedicada. SQLite usa un
+    archivo que sólo identifica la base mediante un hash. Al cerrar el proceso
+    se libera el bloqueo, sin eliminar checkpoints.
     """
     bind = db.get_bind()
+    if bind.dialect.name == "postgresql":
+        with _postgres_catalog_lock(bind) as acquired:
+            yield acquired
+        return
     url = bind.url
     identity = str(url)
     if url.get_backend_name() == "sqlite":
@@ -119,18 +176,20 @@ def bump_catalog_revision(db: Session) -> None:
     ).execution_options(synchronize_session=False))
 
 
-def get_catalog_status(db: Session) -> dict:
-    """Lectura acotada: no carga las fichas ni crea filas de control."""
+def get_catalog_status(db: Session, *, key_configured: bool | None = None) -> dict:
+    """Lectura acotada; el worker remoto puede informar si tiene clave."""
     row = db.execute(select(SteamCatalogSync.__table__).where(SteamCatalogSync.id == 1)).mappings().first()
     result = dict(row) if row else {
         "id": 1, "revision": 0, "status": "idle", "cursor_appid": 0,
         "since": 0, "scan_started_at": None, "completed_at": None,
         "last_error": None, "processed": 0, "created": 0, "updated": 0,
     }
-    result["key_configured"] = bool(settings.STEAM_API_KEY.strip())
+    result["key_configured"] = (
+        bool(settings.STEAM_API_KEY.strip()) if key_configured is None else key_configured
+    )
     if not result["key_configured"]:
         result["status"] = "disabled"
-        result["last_error"] = "Configurá STEAM_API_KEY en backend/.env para sincronizar el índice oficial."
+        result["last_error"] = "Configurá STEAM_API_KEY en el entorno del sincronizador para actualizar el índice oficial."
     result["partial"] = result["scan_started_at"] is not None
     result["entry_counts"] = dict(db.execute(select(
         SteamCatalogEntry.status, func.count()
@@ -284,7 +343,7 @@ def sync_catalog(db: Session, *, max_pages: int | None = None, now: datetime | N
                  page_size: int | None = None, delay: float = 1.0, client=None) -> dict:
     """Sincroniza hasta terminar o alcanzar max_pages; errores son reanudables.
 
-    ``since`` sólo avanza al confirmar la última página. Si la PC se apaga,
+    ``since`` sólo avanza al confirmar la última página. Si el proceso termina,
     el siguiente arranque continúa con el mismo corte temporal y AppID.
     Un límite de páginas deja ``partial=True``, nunca declara éxito completo.
     """
@@ -298,7 +357,7 @@ def sync_catalog(db: Session, *, max_pages: int | None = None, now: datetime | N
         state = db.get(SteamCatalogSync, 1, populate_existing=True)
         if not settings.STEAM_API_KEY.strip():
             state.status = "disabled"
-            state.last_error = "Configurá STEAM_API_KEY en backend/.env para sincronizar el índice oficial."
+            state.last_error = "Configurá STEAM_API_KEY en el entorno del sincronizador para actualizar el índice oficial."
             db.commit()
             return {**get_catalog_status(db), "pages_this_run": 0}
         if state.scan_started_at is None:

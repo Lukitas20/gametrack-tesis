@@ -16,9 +16,10 @@ truststore.inject_into_ssl()
 import sys
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import text
 
 from app.api.v1.router import api_router
 from app.core.config import FRONTEND_DIR, settings
@@ -30,7 +31,8 @@ from app.services.steam_catalog_worker import start_worker, stop_worker
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # El prototipo crea el esquema al arrancar en lugar de usar migraciones.
-    init_db()
+    if settings.DB_AUTO_CREATE:
+        init_db()
     # Precalienta el motor de recomendación: entrenar el TF-IDF y las
     # matrices de similitud del catálogo crece con su tamaño. Mejor pagar ese
     # costo acá, una vez al arrancar, que en el primer pedido de un usuario
@@ -79,6 +81,17 @@ app.add_middleware(
 )
 
 app.include_router(api_router)
+
+
+@app.get("/healthz", include_in_schema=False)
+def healthcheck() -> dict[str, str]:
+    """Disponibilidad del servicio y su conexión, sin revelar configuración."""
+    try:
+        with SessionLocal() as db:
+            db.execute(text("SELECT 1"))
+    except Exception:
+        raise HTTPException(status_code=503, detail="Base de datos no disponible") from None
+    return {"status": "ok"}
 
 
 @app.get("/api", tags=["meta"])

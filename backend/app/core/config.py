@@ -6,9 +6,10 @@ arranca sin necesidad de crear un archivo .env.
 
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field
+from pydantic import Field, field_validator
 
 # backend/  -> raíz del proyecto Python (config.py está en backend/app/core/)
 BASE_DIR = Path(__file__).resolve().parents[2]
@@ -29,6 +30,16 @@ class Settings(BaseSettings):
     #   DATABASE_URL=postgresql+psycopg2://user:pass@localhost:5432/gametrack
     DATABASE_URL: str = f"sqlite:///{BASE_DIR / 'gametrack.db'}"
     SQL_ECHO: bool = False
+    # En servidores, Alembic prepara el esquema antes de iniciar API/worker.
+    DB_AUTO_CREATE: bool = True
+
+    @field_validator("DATABASE_URL", mode="before")
+    @classmethod
+    def normalize_database_url(cls, value: str) -> str:
+        for prefix in ("postgres://", "postgresql://"):
+            if value.startswith(prefix):
+                return "postgresql+psycopg2://" + value[len(prefix):]
+        return value
 
     # --- Seguridad ---------------------------------------------------------
     SECRET_KEY: str = "gametrack-dev-secret-cambiar-en-produccion-32chars"
@@ -55,8 +66,11 @@ class Settings(BaseSettings):
     # worker de catálogo procesa las fichas vencidas en segundo plano.
     STEAM_SYNC_TTL_MINUTES: int = 360
 
-    # El catálogo se mantiene mientras la aplicación local está abierta.
+    # embedded: demo local; external: proceso independiente con la misma BD.
     STEAM_CATALOG_WORKER_ENABLED: bool = True
+    STEAM_CATALOG_WORKER_MODE: Literal["embedded", "external", "scheduled"] = "embedded"
+    # Plan gratuito: completar sólo fichas solicitadas por los usuarios.
+    STEAM_CATALOG_REQUESTED_ONLY: bool = False
     STEAM_CATALOG_PAGE_SIZE: int = Field(default=10000, ge=1, le=50000)
     STEAM_CATALOG_INTERVAL_MINUTES: int = Field(default=60, ge=1)
     STEAM_CATALOG_DETAIL_BATCH_SIZE: int = Field(default=5, ge=1, le=100)

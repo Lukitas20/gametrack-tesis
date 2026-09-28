@@ -18,6 +18,7 @@ from app.models.game_list import GameList, GameListItem
 from app.models.interaction import Rating, Review, ReviewAspect
 from app.models.steamspy import SteamSpySync
 from app.models.steam_catalog import SteamCatalogEntry, SteamCatalogSync
+from app.models.steam_catalog_worker import SteamCatalogWorker
 from app.models.user import User, UserPreference
 from app.models.steam_auth import SteamIdentity, SteamAuthFlow
 from app.models.steam_profile import SteamProfileCache, FriendInvite
@@ -43,6 +44,7 @@ __all__ = [
     "SteamSpySync",
     "SteamCatalogEntry",
     "SteamCatalogSync",
+    "SteamCatalogWorker",
     "Tag",
     "User",
     "UserPreference",

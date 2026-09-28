@@ -16,6 +16,7 @@ import re
 import time
 import unicodedata
 from datetime import date, datetime, timedelta, timezone
+from hashlib import sha256
 
 import httpx
 from sqlalchemy import func, select
@@ -73,6 +74,14 @@ def slugify(text: str) -> str:
     ascii_only = "".join(c for c in normalized if not unicodedata.combining(c))
     slug = re.sub(r"[^a-z0-9]+", "-", ascii_only).strip("-")
     return slug or "juego"
+
+
+def _fit_slug(slug: str, limit: int) -> str:
+    """Shorten a slug without merging distinct names sharing a long prefix."""
+    if len(slug) <= limit:
+        return slug
+    suffix = "-" + sha256(slug.encode("utf-8")).hexdigest()[:12]
+    return slug[:limit - len(suffix)].rstrip("-") + suffix
 
 
 def _dedupe_names(names: list[str]) -> list[str]:
@@ -537,14 +546,14 @@ def parse_steam_game(data: dict) -> dict:
 
     name = (data.get("name") or "").strip()
     return {
-        "name": name,
-        "slug": slugify(name),
+        "name": name[:200],
+        "slug": _fit_slug(slugify(name), 120),
         # La descripción corta viene sin HTML; la larga lo trae y ensuciaría
         # tanto la vista como el corpus TF-IDF del recomendador.
         "description": (data.get("short_description") or "").strip() or None,
         "released": _parse_release_date((data.get("release_date") or {}).get("date", "")),
-        "developer": ", ".join(data.get("developers") or []) or None,
-        "publisher": ", ".join(data.get("publishers") or []) or None,
+        "developer": ", ".join(data.get("developers") or [])[:120] or None,
+        "publisher": ", ".join(data.get("publishers") or [])[:120] or None,
         "platforms": platforms,
         "background_image": data.get("header_image") or None,
         "metacritic": (data.get("metacritic") or {}).get("score"),
@@ -559,7 +568,14 @@ def _get_or_create(db: Session, model, name: str):
     existing = db.scalar(select(model).where(model.slug == slug))
     if existing:
         return existing
-    created = model(slug=slug, name=name)
+    # Preserve existing IDs/slugs, including legacy SQLite data. New rows must
+    # respect VARCHAR limits: PostgreSQL enforces them, SQLite does not.
+    bounded_slug = _fit_slug(slug, 60)
+    if bounded_slug != slug:
+        existing = db.scalar(select(model).where(model.slug == bounded_slug))
+        if existing:
+            return existing
+    created = model(slug=bounded_slug, name=name[:60])
     db.add(created)
     db.flush()
     return created
@@ -644,7 +660,11 @@ def import_reviews(db: Session, game: Game, steam_app_id: int, *, commit: bool =
     for entry in raw_reviews:
         review_id = entry.get("recommendationid")
         content = entry.get("review")
-        if review_id is None or str(review_id) in existing_ids or not isinstance(content, str) or len(content.strip()) < 10:
+        if (
+            review_id is None or not 1 <= len(str(review_id)) <= 32
+            or str(review_id) in existing_ids
+            or not isinstance(content, str) or len(content.strip()) < 10
+        ):
             continue
         existing_ids.add(str(review_id))
         new_entries.append(entry)
@@ -682,7 +702,7 @@ def import_reviews(db: Session, game: Game, steam_app_id: int, *, commit: bool =
             hours_at_review=round(playtime_minutes / 60, 1),
             helpful_count=entry.get("votes_up") or 0,
             source="steam",
-            author_name=profile.get("personaname") or "Jugador de Steam",
+            author_name=(profile.get("personaname") or "Jugador de Steam")[:120],
             steam_review_id=str(entry["recommendationid"]),
         )
         db.add(review)
@@ -729,8 +749,12 @@ def import_game(db: Session, steam_app_id: int) -> Game | None:
 
     # El slug es único: si el juego ya está en el catálogo por otra fuente
     # (el dataset local, RAWG) se le adosa el AppID en lugar de fallar.
-    if db.scalar(select(Game).where(Game.slug == parsed["slug"])):
-        parsed["slug"] = f"{parsed['slug']}-{steam_app_id}"
+    base_slug = parsed["slug"]
+    collision = 0
+    while db.scalar(select(Game.id).where(Game.slug == parsed["slug"])) is not None:
+        collision += 1
+        suffix = f"-{steam_app_id}" + (f"-{collision}" if collision > 1 else "")
+        parsed["slug"] = base_slug[:120 - len(suffix)].rstrip("-") + suffix
 
     game = Game(**parsed, steam_app_id=steam_app_id, steam_synced_at=datetime.now(timezone.utc))
     # El juego entra a la sesión antes de asociarle géneros y etiquetas:
@@ -861,7 +885,7 @@ def link_steam_account(
     if fetch_profile:
         profile = get_player_summary(steam_id)
         if profile:
-            user.steam_username = profile.get("personaname")
+            user.steam_username = (profile.get("personaname") or "")[:100] or None
             user.steam_avatar_url = profile.get("avatarfull")
 
     db.commit()
