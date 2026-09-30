@@ -1,6 +1,7 @@
 /* Detalle de juego: valorar, guardar en lista y publicar reseña. */
 
 import { api } from "../api.js";
+import { personalScorePanel } from "./gametrack-score.js?v=score-1";
 import {
   aspectChip,
   cover,
@@ -47,8 +48,13 @@ export async function gameView({ params, query }) {
     return h("div", null, emptyState("No encontramos el juego", error.message));
   }
 
-  if (!game.is_enriched) return pendingGameView(game);
+  if (!game.is_enriched) {
+    const pending = pendingGameView(game);
+    pending.append(personalScorePanel(id));
+    return pending;
+  }
 
+  const scorePanel = personalScorePanel(id);
   const [similar, reviews] = await Promise.all([
     api.similar(id, 6).catch(() => []),
     api.reviews(id, 12).catch(() => []),
@@ -143,6 +149,7 @@ export async function gameView({ params, query }) {
       h(
         "aside",
         { class: "sticky-side" },
+        scorePanel,
         h(
           "section",
           { class: "card" },
@@ -164,7 +171,7 @@ export async function gameView({ params, query }) {
                 "div",
                 null,
                 h("p", { class: "label", style: { marginBottom: "var(--s-2)" } }, "Tu valoración"),
-                starRating(game.id, { onChange: () => refreshRatings() }),
+                starRating(game.id, { onChange: async () => { await refreshRatings(); scorePanel.refresh(); } }),
                 h(
                   "div",
                   { class: "row", style: { marginTop: "var(--s-4)" } },

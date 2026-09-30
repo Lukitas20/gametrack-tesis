@@ -89,6 +89,8 @@ export const api = {
   // --- Recomendaciones ---
   recommendations: (strategy = "auto", limit = 12, discovery = "balanced") =>
     request("/recommendations", { params: { strategy, limit, discovery } }),
+  discovery: (mode = "affinity", friendId = null) => request("/recommendations/discovery", { params: { mode, friend_id: friendId, limit: 8 } }),
+  gameTrackScore: (id) => request(`/recommendations/game/${id}/score`),
   quizSuggest: (payload) =>
     request("/quiz/suggest", { method: "POST", body: payload }),
 

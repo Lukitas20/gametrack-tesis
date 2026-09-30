@@ -30,13 +30,19 @@ import { developerGameView, developerView } from "./views/developer.js";
 import { gameView } from "./views/game.js";
 import { listsView } from "./views/lists.js";
 import { friendsView } from "./views/friends.js";
-import { quizView, startNewQuiz } from "./views/quiz.js";
+import { quizView } from "./views/quiz.js";
 import { profileView } from "./views/profile.js";
 import { inviteView } from "./views/invite.js";
 import { ratingsView } from "./views/ratings.js";
 import { recommendationsView } from "./views/recommendations.js";
+import { createHeaderSearch } from "./header-search.js?v=search-1";
+import { initMotion } from "./motion.js?v=score-1";
 
 const THEME_KEY = "gametrack.theme";
+const MOTION_KEY = "gametrack.motion";
+let motionPaused = localStorage.getItem(MOTION_KEY) === "paused";
+document.body.classList.toggle("motion-paused", motionPaused);
+document.addEventListener("visibilitychange", () => document.body.classList.toggle("page-hidden", document.hidden));
 
 const main = document.getElementById("view");
 const brandLink = document.getElementById("brand-link");
@@ -88,22 +94,21 @@ function homePath() {
   return isDeveloper() ? "/dev" : "/recomendaciones";
 }
 
-// El catálogo no tiene su propio ítem de nav: se entra por la barra de
-// búsqueda del header (ver renderHeaderSearch), que es persistente y no se
-// reconstruye en cada navegación como esta lista.
-//
-// "Para vos" mantiene visible el acceso al recomendador desde cualquier vista.
+// Accesos persistentes a las secciones del jugador.
 const PLAYER_NAV = [
-  ["/recomendaciones", "Para vos"],
-  ["/listas", "Mis listas"],
-  ["/amigos", "Amigos"],
-  ["/valoraciones", "Mis valoraciones"],
-  ["/perfil", "Perfil"],
+  ["/recomendaciones", "Inicio", "sparkles"],
+  ["/que-jugamos", "¿Qué jugamos?", "dice"],
+  ["/catalogo", "Catálogo", "search"],
+  ["/listas", "Mis listas", "list"],
+  ["/amigos", "Amigos", "user"],
+  ["/valoraciones", "Valoraciones", "star"],
+  ["/perfil", "Mi perfil", "heart"],
 ];
 
 const DEVELOPER_NAV = [
-  ["/dev", "Panel"],
-  ["/perfil", "Perfil"],
+  ["/dev", "Panel", "chart"],
+  ["/catalogo", "Catálogo", "search"],
+  ["/perfil", "Mi perfil", "user"],
 ];
 
 function renderNav(activePath = null) {
@@ -115,17 +120,18 @@ function renderNav(activePath = null) {
   brandLink.setAttribute("href", `#${homePath()}`);
 
   clear(navSlot);
-  for (const [href, label] of items) {
+  for (const [href, label, symbol] of items) {
     const isActive = path === href || (href !== "/" && path.startsWith(`${href}/`));
     navSlot.appendChild(
       h(
         "a",
         {
-          class: "nav-link",
+          class: `nav-link${href === "/que-jugamos" ? " nav-play" : ""}`,
+          title: label,
           href: `#${href}`,
           "aria-current": isActive ? "page" : null,
         },
-        label,
+        icon(symbol, 19), h("span", { class: "nav-label" }, label),
       ),
     );
   }
@@ -141,31 +147,11 @@ function renderNav(activePath = null) {
  * dispara una navegación. Este input se crea una sola vez y sobrevive.
  */
 let headerSearchInput = null;
-let headerSearchTimer = null;
+let headerSearch = null;
 
 function renderHeaderSearch() {
-  headerSearchInput = h("input", {
-    type: "search",
-    placeholder: "Buscar juegos…",
-    "aria-label": "Buscar juegos",
-    onFocus: () => {
-      if (currentPath() !== "/catalogo") navigate("/catalogo");
-    },
-    onInput: (event) => {
-      clearTimeout(headerSearchTimer);
-      const value = event.target.value;
-      headerSearchTimer = setTimeout(() => {
-        const params = new URLSearchParams(window.location.hash.split("?")[1] || "");
-        if (value) params.set("q", value);
-        else params.delete("q");
-        const query = params.toString();
-        navigate(`/catalogo${query ? `?${query}` : ""}`, { replace: true });
-      }, 280);
-    },
-  });
-
-  clear(headerSearchSlot);
-  headerSearchSlot.appendChild(h("div", { class: "header-search-wrap" }, icon("search", 15), headerSearchInput));
+  headerSearch = createHeaderSearch(headerSearchSlot);
+  headerSearchInput = headerSearch.input;
 }
 
 /** Mantiene el input sincronizado si se llega a /catalogo por otra vía (un
@@ -272,19 +258,18 @@ function accountMenu() {
 function renderActions() {
   clear(actionsSlot);
 
-  const quizButton = h(
-    "button",
-    {
-      class: "btn btn-sm btn-primary quiz-launch",
-      // Entrar por el encabezado es pedir una recomendación nueva, así que
-      // descarta la tirada anterior en vez de volver a mostrarla.
-      onClick: startNewQuiz,
-      title: "Asistente de decisión",
-      "aria-label": "¿Qué jugamos hoy? Empezar una recomendación",
+  const motionButton = h("button", {
+    class: "btn btn-icon btn-ghost motion-toggle",
+    "aria-label": motionPaused ? "Activar animaciones" : "Pausar animaciones",
+    title: motionPaused ? "Activar animaciones" : "Pausar animaciones",
+    "aria-pressed": String(!motionPaused),
+    onClick: () => {
+      motionPaused = !motionPaused;
+      localStorage.setItem(MOTION_KEY, motionPaused ? "paused" : "on");
+      document.body.classList.toggle("motion-paused", motionPaused);
+      renderActions();
     },
-    icon("dice", 15),
-    h("span", { class: "quiz-label" }, "¿Qué jugamos hoy?"),
-  );
+  }, icon("sparkles", 16));
 
   const themeButton = h(
     "button",
@@ -333,7 +318,7 @@ function renderActions() {
   );
   accountWrap.appendChild(accountButton);
 
-  actionsSlot.append(quizButton, themeButton, accountWrap);
+  actionsSlot.append(motionButton, themeButton, accountWrap);
 }
 
 /* ------------------------------------------------------------------ *
@@ -412,6 +397,7 @@ setNavigateHook((path) => {
   navigationRevision += 1;
   document.body.classList.toggle("auth-active", path === "/cuentas");
   renderNav(path);
+  headerSearch?.close();
   syncHeaderSearch();
   closeMenu();
 });
@@ -421,6 +407,7 @@ setNavigateHook((path) => {
  * ------------------------------------------------------------------ */
 
 subscribe(() => {
+  headerSearch?.close();
   renderNav();
   renderActions();
 });
@@ -430,6 +417,7 @@ async function boot() {
   renderActions();
   renderNav();
   renderHeaderSearch();
+  initMotion(main);
   main.replaceChildren(magicLoader("Iniciando GameTrack…"));
 
   await restore();

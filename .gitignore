@@ -26,6 +26,9 @@ venv/
 backend/data/generated/
 deploy/backups/
 
+# Logs locales
+*.log
+
 # Node / frontend
 node_modules/
 dist/

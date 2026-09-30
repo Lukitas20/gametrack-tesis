@@ -12,7 +12,31 @@ from app.models import Game, Rating, User
 from app.schemas.game import GameSummary
 from app.schemas.recommendation import RecommendationOut, RecommendationResponse
 
+from app.schemas.gametrack_score import DiscoveryResponse, GameTrackScore
+
 router = APIRouter(prefix="/recommendations", tags=["recomendaciones"])
+
+
+@router.get("/discovery", response_model=DiscoveryResponse)
+def discover_games(
+    mode: str = Query(default="affinity", pattern="^(affinity|critics|friends)$"),
+    limit: int = Query(default=8, ge=1, le=24),
+    friend_id: int | None = Query(default=None, gt=0),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    from app.services.gametrack_score_service import discovery
+    return discovery(db, user, mode, limit, friend_id)
+
+
+@router.get("/game/{game_id}/score", response_model=GameTrackScore)
+def personal_game_score(
+    game_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    from app.services.gametrack_score_service import game_score
+    return game_score(db, user, game_id)
 
 
 @router.get("", response_model=RecommendationResponse)

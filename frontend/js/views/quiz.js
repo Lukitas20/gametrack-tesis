@@ -189,9 +189,7 @@ export async function quizView() {
 
   function planSummary() {
     return h("aside", { class: "play-plan", "aria-label": "Resumen de tu plan" },
-      h("div", { class: "play-plan-mark", "aria-hidden": "true" }, icon("dice", 28)),
-      h("p", { class: "eyebrow" }, "HECHO A TU MEDIDA"), h("h2", null, "Tu plan de hoy"),
-      h("p", { class: "play-plan-note" }, "Cada elección nos acerca a tu próxima partida."),
+      h("h2", null, "Tu selección"),
       h("ul", null, QUESTIONS.map(question => h("li", { class: answers[question.key] ? "chosen" : "" },
         icon(question.symbol, 17), h("div", null, h("small", null, question.label), h("strong", null, answers[question.key]?.title || "Todavía por elegir")),
         answers[question.key] && icon("check", 14)))),
@@ -236,9 +234,7 @@ export async function quizView() {
 
   function head(eyebrow, title, note) {
     return h("header", { class: "play-banner" },
-      h("div", null, h("p", { class: "play-eyebrow" }, icon("sparkles", 14), eyebrow),
-        h("h1", null, title), note && h("p", { class: "play-banner-note" }, note)),
-      h("div", { class: "play-banner-art", "aria-hidden": "true" }, h("img", { src: "/assets/brand/mascota.png", alt: "", width: "140", height: "140" })));
+      h("div", null, h("h1", null, title), note && h("p", { class: "play-banner-note" }, note)));
   }
 
   function renderQuestion() {
@@ -268,7 +264,7 @@ export async function quizView() {
         h("span", { class: "play-option-check", "aria-hidden": "true" }, icon("check", 12)));
       options.append(button);
     });
-    mount(container, head("DESCUBRÍ TU PRÓXIMA PARTIDA", "¿Qué jugamos hoy?", "Cuatro elecciones. Una selección para vos."), progress(step),
+    mount(container, head("DESCUBRÍ TU PRÓXIMA PARTIDA", "¿Qué jugamos hoy?", "Elegí tu momento. Nosotros buscamos el juego."), progress(step),
       h("div", { class: "play-workspace" }, h("section", { class: "play-question-panel" },
         h("p", { class: "eyebrow" }, `PASO ${String(step + 1).padStart(2, "0")} / ${question.label.toLocaleUpperCase()}`),
         h("h2", { class: "quiz-question-title", id: "play-question-title", tabindex: "-1" }, question.title),

@@ -6,7 +6,7 @@
  */
 
 import { api } from "../api.js";
-import { gameGrid, gameCard, saveToListButton, starRating } from "../components.js";
+import { gameGrid, gameCard, cover, saveToListButton, starRating } from "../components.js";
 import { isDeveloper, isLoggedIn } from "../store.js";
 import {
   SOURCE_LABEL,
@@ -23,6 +23,7 @@ import {
 } from "../ui.js";
 import { coldStartNotice, openOnboarding } from "./onboarding.js";
 import { startNewQuiz } from "./quiz.js";
+import { discoverySection } from "./gametrack-score.js?v=score-1";
 
 const STRATEGIES = ["auto", "ia_local", "hibrido", "contenido", "colaborativo", "popularidad"];
 const COMPARABLE = ["ia_local", "hibrido", "contenido", "colaborativo", "popularidad"];
@@ -48,20 +49,24 @@ const DISCOVERY = [
 ];
 
 function discoveryHero(guest = false) {
-  return h("section", { class: "discovery-hero play-hero" },
+  return h("section", { class: "discovery-hero play-hero console-hero" },
     h("div", { class: "discovery-hero-copy" },
-      h("p", { class: "eyebrow" }, "Tu próxima partida empieza acá"),
-      h("h1", null, "¿Qué jugamos", h("br"), h("span", null, "hoy?")),
-      h("p", { class: "discovery-lead" }, "Tu tiempo, tus ganas y tu compañía. Encontrá el juego para este momento."),
+      h("p", { class: "eyebrow" }, "TU PRÓXIMA PARTIDA"),
+      h("h1", null, "¿Qué jugamos ", h("br"), h("span", null, "hoy?")),
+      h("p", { class: "discovery-lead" }, "Algo para vos. O para todo el grupo."),
       h("div", { class: "discovery-actions" },
-        h("button", { class: "btn btn-primary", onClick: startNewQuiz }, icon("sparkles", 17), "Encontrar mi próximo juego", icon("chevron", 17)),
-        guest
-          ? h("a", { class: "btn", href: "#/cuentas" }, "Personalizar mi perfil")
-          : h("button", { class: "btn", onClick: () => openOnboarding() }, icon("heart", 15), "Ajustar mis gustos")),
-      h("p", { class: "discovery-caption" }, "4 preguntas · Tu ánimo, tu tiempo y con quién jugás")),
-    h("div", { class: "discovery-hero-art", "aria-hidden": "true" },
-      h("img", { src: "/assets/brand/mascota.png", alt: "", width: "220", height: "220" }),
-      h("span", { class: "discovery-art-note" }, "Tu plan. Tu próxima aventura.")));
+        h("button", { class: "btn btn-primary", onClick: startNewQuiz }, "Encontrar un juego", icon("chevron", 17)),
+        h("a", { class: "hero-catalog-link", href: "#/catalogo" }, "Explorar catálogo")),
+      h("p", { class: "discovery-caption" }, "4 elecciones · A tu manera")),
+    h("div", { class: "console-hero-art", "aria-label": "Juegos del catálogo" }));
+}
+
+function fillHero(hero, games) {
+  const tiles = games.filter(game => game.background_image).slice(0, 3);
+  const art = hero.querySelector(".console-hero-art");
+  art.replaceChildren(...tiles.map(game => h("a", { class: "hero-game-tile", href: `#/juego/${game.id}`, "aria-label": `Ver ${game.name}`, title: game.name },
+    cover(game), h("span", { class: "hero-game-name" }, game.name))));
+  hero.classList.toggle("has-art", Boolean(tiles.length));
 }
 
 function personalCard(item, index, onRated) {
@@ -79,13 +84,10 @@ function personalCard(item, index, onRated) {
 
 export async function recommendationsView({ query } = { query: new URLSearchParams() }) {
   if (!isLoggedIn()) {
-    return h("div", null, discoveryHero(true),
-      h("div", { class: "discovery-steps" },
-        [["01", "Elegí tu momento", "Usá el asistente sin iniciar sesión."],
-         ["02", "Entendé la sugerencia", "Conocé los motivos y qué dicen las reseñas."],
-         ["03", "Hacelo tuyo", "Guardá favoritos y valorá juegos para afinar tu perfil."]].map(([n, title, copy]) =>
-          h("section", null, h("span", { class: "eyebrow" }, n), h("h2", null, title), h("p", null, copy)))),
-      h("a", { class: "btn", href: "#/catalogo" }, icon("search", 15), "Explorar el catálogo"));
+    const hero = discoveryHero(true);
+    const sections = h("div", { class: "console-home-rows" });
+    loadHomeSections(sections, hero);
+    return h("div", { class: "console-home" }, hero, sections);
   }
 
   if (isDeveloper()) {
@@ -109,6 +111,7 @@ export async function recommendationsView({ query } = { query: new URLSearchPara
   let discovery = DISCOVERY.some(([key]) => key === query.get("variedad")) ? query.get("variedad") : "balanced";
   let requestVersion = 0;
 
+  const hero = discoveryHero();
   const body = h("div");
   const meta = h("div", { class: "row", style: { gap: "var(--s-2)" } });
   const note = h("p", { class: "muted", style: { fontSize: "var(--fs-sm)", marginTop: "var(--s-3)" } });
@@ -373,36 +376,34 @@ export async function recommendationsView({ query } = { query: new URLSearchPara
   if (comparing) loadComparison();
   else load();
 
-  const sections = h("div");
-  loadHomeSections(sections);
+  const sections = h("div", { class: "console-home-rows" });
+  loadHomeSections(sections, hero);
 
   return h(
     "div",
-    null,
-    discoveryHero(),
-    modelNote,
+    { class: "console-home" },
+    hero,
+    discoverySection(),
+    h("details", { class: "gts-advanced" }, h("summary", null, "Más formas de recomendar"),
     h(
       "div",
       { class: "view-head" },
       h(
         "div",
         null,
-        h("p", { class: "eyebrow" }, "Tu selección personal"),
         h("h2", null, "Para vos"),
-        profileHint,
       ),
-      meta,
     ),
     h(
       "div",
       { class: "discovery-controls" },
-      h("div", null, h("p", { class: "discovery-control-label" }, "¿Cuánta variedad buscás?"), variety, varietyNote),
+      h("div", null, variety),
       h("a", { class: "btn btn-ghost", href: "#/catalogo" }, icon("star", 14), "Valorar más juegos"),
     ),
     h("details", { class: "recommendation-lab", open: comparing || strategy !== "auto" },
-      h("summary", null, icon("chart", 15), "Cómo recomienda GameTrack · comparar estrategias"),
-      h("div", { class: "filter-bar" }, segmented, compareButton), note),
-    body,
+      h("summary", null, icon("chart", 15), "Ajustes de recomendaciones"),
+      meta, profileHint, modelNote, varietyNote, h("div", { class: "filter-bar" }, segmented, compareButton), note),
+    body),
     sections,
   );
 }
@@ -415,7 +416,7 @@ const HOME_ROWS = [
   ["destacados", "Destacados"],
 ];
 
-async function loadHomeSections(container) {
+async function loadHomeSections(container, hero) {
   let home;
   try {
     home = await api.home(8);
@@ -423,6 +424,7 @@ async function loadHomeSections(container) {
     return; // La portada es un plus; si falla, el feed personalizado ya se ve.
   }
 
+  if (hero) fillHero(hero, [...(home.destacados || []), ...(home.populares || [])].filter((game, index, all) => all.findIndex(item => item.id === game.id) === index));
   const rows = HOME_ROWS.filter(([key]) => home[key]?.length).map(([key, title]) =>
     h(
       "section",
