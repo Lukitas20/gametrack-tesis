@@ -2,7 +2,7 @@
 
 import { api } from "./api.js";
 import { navigate } from "./router.js";
-import { isDeveloper, isLoggedIn, ratingFor, setRating } from "./store.js";
+import { ratingFor, setRating } from "./store.js";
 import {
   ASPECT_LABEL,
   SENTIMENT_LABEL,

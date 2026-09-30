@@ -1,14 +1,9 @@
 #!/usr/bin/env python
-"""Diagnóstico: ¿alcanza `hours_at_review` como fuente de duración?
+"""Mide cobertura y acuerdo de las fuentes de horas acumuladas de juego.
 
-Contexto: SteamSpy dejó de publicar `median_forever`/`average_forever`
-(vienen en 0 para todo), así que la pregunta "¿cuánto tiempo tenés?" del
-asistente se quedó sin fuente de datos. La propuesta en evaluación es usar
-la mediana de las horas jugadas por los reseñadores (`Review.
-hours_at_review`, que ya se importa de Steam) como señal primaria, con el
-`playtime_hours` de RAWG como respaldo de cobertura.
-
-Este script mide, sobre la base local, si esa propuesta se sostiene:
+Compara la mediana de ``Review.hours_at_review`` con ``Game.playtime_hours``
+de RAWG sobre la base configurada. Ambas son referencias de tiempo acumulado,
+no duraciones de campaña ni de una sesión. Este diagnóstico permite revisar:
 
 1. Cobertura: cuántos juegos con reseñas importadas tienen suficientes
    muestras de horas (>= --min-samples) como para que la mediana signifique
@@ -19,7 +14,7 @@ Este script mide, sobre la base local, si esa propuesta se sostiene:
    se reporta el acuerdo. Si el acuerdo por franja es alto, el sesgo en
    horas absolutas no importa: el filtro trabaja por franja, no por hora.
 
-No toca la red: lee la base local tal como está.
+No consulta Steam ni RAWG: sólo lee la base configurada.
 
 Uso:
     python scripts/diagnostico_playtime.py

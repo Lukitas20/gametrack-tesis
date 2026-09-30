@@ -1,15 +1,9 @@
 #!/usr/bin/env python
 """Rellena ``Game.released`` en los juegos ya enriquecidos desde Steam.
 
-Existe por un bug de parseo: las fichas se piden con ``l=spanish``, así que
-Steam contesta la fecha en español ("21 AGO 2012"), y ``_parse_release_date``
-sólo probaba patrones en inglés con coma. Resultado: los 6.430 juegos del
-catálogo quedaron sin año, y la falta se ve en cada tarjeta.
-
-Arreglado el parser, las fichas que ya están en la base siguen sin fecha
-hasta que les toque el TTL de refresco (6 h). Esto las completa de una,
-empezando por las más populares: si se corta a la mitad, lo que quedó hecho
-es justamente lo que la gente ve primero.
+Repara fichas importadas antes de que el parser reconociera fechas en
+español (por ejemplo, "21 AGO 2012"), sin esperar al refresco periódico.
+Procesa primero las fichas más populares.
 
 Es reanudable y puramente aditivo: sólo toca ``released``, y sólo donde
 está vacío.

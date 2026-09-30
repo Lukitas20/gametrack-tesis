@@ -1,6 +1,6 @@
 """Schemas del catálogo: juegos, géneros y etiquetas."""
 
-from datetime import date, datetime
+from datetime import date
 
 from pydantic import BaseModel, ConfigDict
 

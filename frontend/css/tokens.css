@@ -5,7 +5,7 @@
  *
  * 1. **Marca** (`--brand-*`, `--accent*`): violeta, verde agua y oro. Salen
  *    del logo del caldero y de la mascota, y son una decisión estética.
- * 2. **Datos** (`--positivo`, `--negativo`, `--neutro`, `--series-*`): NO se
+ * 2. **Datos** (`--positivo`, `--negativo`, `--neutro`): NO se
  *    eligieron a ojo. Están validados por backend/scripts/validate_palette.py,
  *    que mide contraste WCAG contra cada superficie y separación perceptual en
  *    OKLab simulando las tres dicromacias. Si se cambia alguno, hay que volver
@@ -89,24 +89,11 @@
   --negativo-wash: rgba(227, 73, 72, 0.12);
 
   /* --- Estado (fijo, nunca tematizado; siempre con ícono + etiqueta) --- */
-  --good: #0ca30c;
   --warning: #fab219;
   --serious: #ec835a;
-  --critical: #d03b3b;
-  --success-text: #006300;
-
-  /* --- Slots categóricos, en orden fijo (nunca ciclar) --- *
-   * Mismo criterio que la escala de sentimiento: son datos, no marca. El
-   * slot 1 comparte hex con el acento VIEJO por historia, no por acople —
-   * ahora que el acento es violeta, queda claro que son cosas distintas. */
-  --series-1: #2a78d6;
-  --series-2: #eb6834;
-  --series-3: #1baf7a;
-  --series-4: #eda100;
 
   /* --- Sombras --- */
   --shadow-sm: 0 1px 2px rgba(11, 11, 11, 0.04), 0 1px 1px rgba(11, 11, 11, 0.03);
-  --shadow-md: 0 2px 8px rgba(11, 11, 11, 0.06), 0 1px 2px rgba(11, 11, 11, 0.04);
   --shadow-lg: 0 12px 32px rgba(11, 11, 11, 0.12), 0 2px 8px rgba(11, 11, 11, 0.06);
 
   /* --- Tipografía: una sola familia sans, sin display ni serif --- */
@@ -184,15 +171,7 @@
     --neutro-wash: rgba(137, 135, 129, 0.18);
     --negativo-wash: rgba(230, 103, 103, 0.16);
 
-    --success-text: #0ca30c;
-
-    --series-1: #3987e5;
-    --series-2: #d95926;
-    --series-3: #199e70;
-    --series-4: #c98500;
-
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
-    --shadow-md: 0 2px 10px rgba(0, 0, 0, 0.45);
     --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.4);
   }
 }
@@ -234,14 +213,6 @@
   --neutro-wash: rgba(137, 135, 129, 0.18);
   --negativo-wash: rgba(230, 103, 103, 0.16);
 
-  --success-text: #0ca30c;
-
-  --series-1: #3987e5;
-  --series-2: #d95926;
-  --series-3: #199e70;
-  --series-4: #c98500;
-
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow-md: 0 2px 10px rgba(0, 0, 0, 0.45);
   --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.4);
 }

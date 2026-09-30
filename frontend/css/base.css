@@ -128,11 +128,7 @@ h4 {
   text-decoration: none;
 }
 
-/* Antes era un cuadradito con las letras "GT" y un degradado de
- * `--accent` a `--series-3`. Ese `--series-3` es el tercer slot categórico
- * de los gráficos: un color de DATOS haciendo de color de marca. Ahora el
- * caldero usa sólo tokens `--brand-*`, así que cambiar la paleta de los
- * gráficos ya no puede repintar el logo. */
+/* El logo usa su propia imagen, independiente de la paleta de los gráficos. */
 .brand-mark {
   width: 36px;
   height: 36px;
@@ -306,17 +302,6 @@ h4 {
 .spacer {
   flex: 1;
 }
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

@@ -2,11 +2,10 @@
 
 import { api } from "../api.js";
 import { openOnboarding } from "./onboarding.js";
-import { refreshUser, state } from "../store.js";
+import { isLoggedIn, refreshUser, state } from "../store.js";
 import { steamDashboard } from "./steam-profile.js";
 import { h, icon, initials, mount, toast } from "../ui.js";
 import { requiresLogin } from "../components.js";
-import { isLoggedIn } from "../store.js";
 
 function field(label, input) {
   return h(

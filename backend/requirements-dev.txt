@@ -1,0 +1,3 @@
+# Desarrollo y pruebas; el despliegue usa requirements(-postgres).txt.
+-r requirements.txt
+pytest==9.1.1

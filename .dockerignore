@@ -6,6 +6,7 @@
 **/venv
 **/__pycache__
 **/.pytest_cache
+**/.ruff_cache
 **/node_modules
 **/.env
 **/*.env.local
@@ -15,5 +16,7 @@
 **/*.sqlite3-*
 **/*.log
 backend/data/generated
+backend/tests
+backend/pytest.ini
 deploy/.env
 deploy/backups

@@ -67,12 +67,6 @@
   font-size: var(--fs-xs);
 }
 
-.btn-lg {
-  min-height: 44px;
-  padding: var(--s-3) var(--s-6);
-  font-size: var(--fs-base);
-}
-
 .btn-icon {
   padding: var(--s-2);
   min-width: 36px;
@@ -121,9 +115,6 @@
 }
 .grid-2 {
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-}
-.grid-3 {
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
 }
 .grid-4 {
   grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
@@ -264,23 +255,6 @@ button.chip[aria-pressed="true"] {
   background-size: 5px 5px, 5px 5px;
   background-repeat: no-repeat;
   padding-right: var(--s-8);
-}
-
-.search-wrap {
-  position: relative;
-  flex: 1;
-  min-width: 200px;
-}
-.search-wrap .input {
-  padding-left: 34px;
-}
-.search-wrap svg {
-  position: absolute;
-  left: 10px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--ink-muted);
-  pointer-events: none;
 }
 
 /* Una sola fila de filtros por encima de todo lo que condiciona. */
@@ -690,44 +664,9 @@ tbody tr:last-child td {
   overflow-x: auto;
 }
 
-tr.clickable {
-  cursor: pointer;
-}
-tr.clickable:hover td {
-  background: var(--surface-hover);
-}
-
 /* ------------------------------------------------------------------ *
- * Panel de aspectos (ABSA)
+ * Evidencia textual del panel de aspectos (ABSA)
  * ------------------------------------------------------------------ */
-
-.aspect-row {
-  padding: var(--s-4) 0;
-  border-bottom: 1px solid var(--border);
-}
-.aspect-row:last-child {
-  border-bottom: none;
-}
-
-.aspect-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--s-3);
-  margin-bottom: var(--s-3);
-}
-
-.aspect-name {
-  font-size: var(--fs-sm);
-  font-weight: 650;
-  text-transform: capitalize;
-}
-
-.aspect-net {
-  font-size: var(--fs-sm);
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
 
 .quote {
   margin-top: var(--s-3);
@@ -739,10 +678,6 @@ tr.clickable:hover td {
   color: var(--ink-secondary);
   font-style: italic;
   line-height: 1.55;
-}
-
-.quote-positive {
-  border-left-color: var(--positivo);
 }
 
 /* ------------------------------------------------------------------ *
@@ -1114,24 +1049,6 @@ tr.clickable:hover td {
   }
 }
 
-.skeleton {
-  background: linear-gradient(
-    90deg,
-    var(--surface-sunken) 25%,
-    var(--surface-hover) 50%,
-    var(--surface-sunken) 75%
-  );
-  background-size: 200% 100%;
-  animation: shimmer 1.4s infinite;
-  border-radius: var(--r-sm);
-}
-
-@keyframes shimmer {
-  to {
-    background-position: -200% 0;
-  }
-}
-
 /* ------------------------------------------------------------------ *
  * Toast
  * ------------------------------------------------------------------ */
@@ -1407,21 +1324,6 @@ tr.clickable:hover td {
 
 .quiz-progress span[data-on="true"] {
   background: var(--accent);
-}
-
-/* Barra de progreso simple con la pista en un paso más claro del mismo tono. */
-.meter {
-  height: 6px;
-  border-radius: var(--r-full);
-  background: var(--accent-wash);
-  overflow: hidden;
-}
-
-.meter-fill {
-  height: 100%;
-  border-radius: var(--r-full);
-  background: var(--accent);
-  transition: width 0.3s ease-out;
 }
 
 /* Descubrimiento: las recomendaciones y el asistente son la portada. */

@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 """Worker de ingesta de SteamSpy: índice masivo (nivel 0) y rasgos (nivel 1).
 
-Nivel 0 (``--index``): baja el índice completo de SteamSpy (``request=all``,
-1000 juegos por pedido, ~85-90 mil en total), crea las fichas pendientes que
-falten, actualiza positivos/negativos/dueños de TODO el catálogo y encola
-cada AppID para enriquecer, priorizado por dueños. Con esto, todo juego de
-Steam ya participa por señal de calidad; el nivel 1 le agrega lo que lo hace
-recomendable.
+Nivel 0 (``--index``): consulta el índice de SteamSpy (``request=all``), crea
+las fichas pendientes que falten, actualiza positivos/negativos/dueños de
+las entradas recibidas y encola cada AppID para enriquecer, priorizado por
+dueños. SteamSpy es una fuente complementaria: no garantiza la cobertura
+del índice oficial de Steam. Los juegos sin rasgos todavía no participan
+del recomendador.
 
 Nivel 1 (``--enrich N``): consume la cola de a lotes contra el endpoint por
 juego (~1 pedido/segundo): etiquetas comunitarias con votos, género y señal
@@ -21,7 +21,7 @@ SteamSpy sin datos marca ``skipped``, y ni siquiera eso borra la ficha del
 catálogo.
 
 Uso:
-    python scripts/steamspy_sync.py --index                  # nivel 0 completo (~1.5 h)
+    python scripts/steamspy_sync.py --index                  # nivel 0 completo
     python scripts/steamspy_sync.py --index --max-pages 2    # prueba rápida
     python scripts/steamspy_sync.py --enrich 500             # top 500 pendientes
     python scripts/steamspy_sync.py --enrich 20000 --sleep 1 # una noche de worker

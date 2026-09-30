@@ -22,11 +22,6 @@ const TWO_PI = Math.PI * 2;
 const STAGE = 1080; // lado del espacio de coordenadas original
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-const easeOutBack = (t) => {
-  const c1 = 1.70158;
-  const c3 = c1 + 1;
-  return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
-};
 const easeInQuad = (t) => t * t;
 
 /** Tween de un tramo: devuelve `from` antes de `start` y `to` después de `end`. */

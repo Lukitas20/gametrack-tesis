@@ -44,7 +44,7 @@ cd backend
 | Backend | Python 3.13 + FastAPI |
 | ORM | SQLAlchemy 2.0 (estilo tipado) |
 | Base de datos | SQLite (por defecto) · PostgreSQL opcional |
-| IA | scikit-learn · NumPy · pandas |
+| IA | scikit-learn · NumPy · SciPy |
 | Frontend | HTML5 + CSS propio + JavaScript ES modules |
 | Gráficos | SVG generado a mano (sin librería) |
 
@@ -68,10 +68,10 @@ cd backend
 
 # 1. Entorno virtual e instalación
 py -3 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
 
-# 2. Poblar la base con el dataset de demostración
-.\.venv\Scripts\python.exe scripts\seed_data.py --reset
+# 2. Poblar una base nueva con el dataset de demostración
+.\.venv\Scripts\python.exe scripts\seed_data.py
 
 # 3. Analizar las reseñas con el módulo NLP
 .\.venv\Scripts\python.exe scripts\analyze_reviews.py
@@ -85,6 +85,10 @@ En Linux/macOS es el mismo flujo con `python3 -m venv .venv` y
 
 Abrir **`http://localhost:8000`** — la interfaz y la API salen del mismo
 proceso. Documentación interactiva en `/docs`.
+
+El seed se ejecuta una sola vez al preparar la demo. `--reset` borra la base
+existente: usarlo sólo si se quiere regenerar sus datos. Para actualizar una
+instalación existente, aplicar las [migraciones](#migraciones).
 
 ### Cuentas de demostración
 
@@ -110,7 +114,7 @@ gametrack/
 │   │   │   └── v1/endpoints/    # Endpoints REST por recurso
 │   │   ├── core/
 │   │   │   ├── config.py        # Configuración (pydantic-settings)
-│   │   │   └── security.py      # bcrypt + JWT
+│   │   │   └── security.py      # Hash de contraseñas + JWT
 │   │   ├── db/
 │   │   │   ├── database.py      # Engine, sesión, Base declarativa
 │   │   │   ├── base.py          # Metadata completo + init_db / drop_db
@@ -120,6 +124,8 @@ gametrack/
 │   │   ├── services/            # Lógica de negocio
 │   │   └── ml/
 │   │       ├── recommender.py   # Motor híbrido de recomendación
+│   │       ├── local_model.py   # Factores latentes entrenados en CPU
+│   │       ├── group_recommender.py # Afinidad compartida entre amigos
 │   │       ├── analytics.py     # NLP: sentimiento + ABSA + agregación
 │   │       └── lexicon.py       # Recursos lingüísticos en español
 │   ├── data/
@@ -270,11 +276,9 @@ no para evaluar el ABSA.
 
 ---
 
----
-
 ## Motor de recomendación
 
-`app/ml/recommender.py` combina tres estrategias, elegidas según cuánto se
+`app/ml/recommender.py` combina estrategias, elegidas según cuánto se
 sepa del usuario, de modo que el arranque en frío degrada de forma gradual en
 lugar de fallar:
 
@@ -283,6 +287,7 @@ lugar de fallar:
 | **Contenido** | TF-IDF sobre géneros y etiquetas comunitarias ponderadas por votos; perfil firmado: notas >3 atraen, <3 alejan | Con preferencias o valoraciones que aporten una señal |
 | **Colaborativo** | Filtrado ítem-ítem centrado por usuario, hasta 20 vecinos; mínimo de coevaluadores y atenuación por evidencia | Con variación en las notas y relaciones respaldadas por otros usuarios |
 | **Híbrido** | Mezcla en escala [0,1]; el peso colaborativo configurado se reduce según la evidencia de cada candidato | En automático, desde 3 valoraciones y con evidencia colaborativa disponible |
+| **IA local** | Factores latentes aprendidos de las valoraciones, con respaldo de contenido | Disponible para comparar; en automático sólo si el modelo supera la referencia de validación |
 | **Popularidad** | Valoración agregada menos penalización por escasez de reseñas | Respaldo cuando faltan señales personales |
 
 Decisiones que vale la pena justificar:
@@ -449,8 +454,8 @@ un jugador.
 
 Importar la ficha de un juego **no requiere clave**: sale de la API pública de
 la tienda. Consultar la biblioteca de un usuario o su perfil sí necesita
-`STEAM_API_KEY` en `backend/.env`; sin ella esos endpoints devuelven vacío en
-lugar de fallar, para que la falta de configuración no rompa la interfaz.
+`STEAM_API_KEY` en `backend/.env`. Sin ella la consulta de biblioteca devuelve
+una lista vacía y el perfil informa que falta configurar la integración.
 
 ```powershell
 # Half-Life 2 (AppID 220) al catálogo
@@ -464,14 +469,15 @@ categorías de Steam ("Un jugador", "Cooperativo") se mapean a etiquetas. Al
 importar se invalida el modelo del recomendador, así que el juego nuevo entra
 en las recomendaciones sin reiniciar nada.
 
-### Catálogo local y sincronización de Steam
+### Sincronización de Steam
 
 El índice usa la API oficial paginada `IStoreService/GetAppList`, con una clave
 en `backend/.env`. La aplicación conserva cada página y su cursor para retomar
-después de un corte; los recorridos siguientes consultan novedades. Un proceso
-en segundo plano completa fichas y reintenta errores mientras la app está abierta.
+después de un corte; los recorridos siguientes consultan novedades. Las fichas
+se completan mediante un worker integrado, un proceso independiente o tandas
+programadas, según el despliegue elegido.
 
-La interfaz sirve los datos locales y muestra el estado de la sincronización.
+La interfaz sirve los datos de la base configurada y muestra la sincronización.
 Abrir una ficha la prioriza sin esperar llamadas a Steam. Los fallos no borran
 juegos ni interacciones; los productos confirmados de otro tipo se ocultan.
 Las reseñas de Steam tienen un cupo persistente por juego.
@@ -481,7 +487,7 @@ público y las fichas completas tienen coberturas distintas: los juegos sin rasg
 todavía no participan del recomendador. No se garantiza disponibilidad instantánea
 de todo lo que existe o existió en Steam.
 
-### Catálogo compartido por el equipo
+### Snapshot de Steam para demos sin conexión
 
 El listado de "más vendidos" de Steam depende de cuándo se lo pida, y la base
 de datos (`*.db`) está en `.gitignore` — cada instalación local es su propia
@@ -517,9 +523,10 @@ de que alguien los abra primero uno por uno.
 
 ## Migraciones
 
-El prototipo crea el esquema con `create_all` al arrancar, que alcanza para la
-demo. Alembic está configurado para cuando haga falta versionar cambios de
-esquema o desplegar sobre PostgreSQL, donde `create_all` no alcanza.
+En modo local, `DB_AUTO_CREATE=true` permite crear tablas al arrancar una base
+nueva. No actualiza las columnas de tablas existentes: para eso se deben
+aplicar las migraciones de Alembic. En despliegues compartidos se usa
+`DB_AUTO_CREATE=false` y se migra antes de iniciar la aplicación.
 
 ```powershell
 cd backend
@@ -527,15 +534,8 @@ cd backend
 .\.venv\Scripts\alembic.exe revision --autogenerate -m "descripción"
 ```
 
-La revisión `002fdea0cfa6` es una **línea base limpia**: reemplaza a las dos
-migraciones anteriores del repositorio, que describían un esquema previo a la
-reestructuración y habrían dejado una base incompatible con el ORM. Siguen
-disponibles en el historial (`git show 4ec4e80:backend/alembic/versions/`).
-
-Tres pruebas comparan el esquema que producen las migraciones contra el que
+Las pruebas comparan el esquema que producen las migraciones contra el que
 produce `create_all`, tabla por tabla, columna por columna e índice por índice.
-Una migración desincronizada del ORM es peor que no tener migraciones: da una
-falsa sensación de control y falla recién en el despliegue.
 
 ---
 
@@ -549,29 +549,24 @@ completa.
 
 | Pantalla | Qué muestra |
 |----------|-------------|
-| **Para vos** | Recomendaciones con la justificación en lenguaje natural en cada tarjeta, selector de estrategia y comparador de las cuatro lado a lado |
+| **Para vos** | Recomendaciones con justificación, selector de estrategia y comparador de contenido, colaborativo, híbrido, popularidad e IA local |
 | **Catálogo** | Búsqueda por nombre o desarrollador, filtros por género y etiqueta, cinco criterios de orden y paginación |
 | **Detalle de juego** | Ficha, valoración con estrellas, guardar en lista, publicar reseña y juegos parecidos |
 | **Mis listas** | Favoritos, Jugando y Pendientes más las listas propias |
+| **Amigos** | Solicitudes y amistades aceptadas para usar recomendaciones en grupo |
 
 Dos piezas hechas para la defensa:
 
 - **Comparador de estrategias.** El mismo usuario, en el mismo momento, con las
-  cuatro estrategias en columnas, más una tabla de solape que cuenta cuántos
+  estrategias en columnas, más una tabla de solape que cuenta cuántos
   títulos comparte cada par. Es la forma directa de mostrar que cada señal
   aporta algo distinto y que el híbrido no es una caja negra. Una tabla
   desplegable expone además el aporte numérico de cada estrategia por juego.
   Enlazable: `#/recomendaciones?comparar=1`, o
   `?estrategia=colaborativo` para entrar con una estrategia forzada.
 
-  > **Un hallazgo del propio comparador.** Con `jugador.demo`, el top 6 del
-  > híbrido coincide en **6 de 6** con el del colaborativo, mientras que con el
-  > de contenido comparte sólo 3. Con los pesos actuales (40 % contenido / 60 %
-  > colaborativo) y una matriz tan densa como la del seed, la señal colaborativa
-  > domina el orden final. Es un resultado defendible, pero conviene decirlo en
-  > la tesis en lugar de presentar el híbrido como un balance parejo. Los pesos
-  > se ajustan sin tocar código, con `REC_CONTENT_WEIGHT` y `REC_COLLAB_WEIGHT`
-  > en `backend/.env`.
+  Los pesos base se configuran con `REC_CONTENT_WEIGHT` y `REC_COLLAB_WEIGHT`
+  en `backend/.env`; el motor ajusta el aporte según la evidencia disponible.
 - **Análisis en vivo al escribir la reseña.** El textarea consulta
   `/reviews/analyze` mientras se tipea — ese endpoint no persiste nada — así que
   el ABSA se ve funcionando sobre texto escrito a mano en el momento, con la
@@ -634,23 +629,19 @@ si cualquier vista contiene un error que impediría arrancar la aplicación.
 
 ```powershell
 cd backend
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
 .\.venv\Scripts\python.exe -m pytest
 ```
 
-75 pruebas sobre el modelo de datos, el módulo NLP (negación, desambiguación de
+La suite cubre el modelo de datos, el módulo NLP (negación, desambiguación de
 aspectos, herencia de cláusulas), el recomendador (cada estrategia, el arranque
 en frío y la degradación entre ellas), la API (listas, filtros, permisos por rol
 y coherencia de los datos que consume el panel), la integración con Steam (sin
-tocar la red) y la correspondencia entre las migraciones y el ORM.
+tocar la red), las amistades, el asistente grupal, la IA local, los workers de
+catálogo y la correspondencia entre las migraciones y el ORM. Las pruebas que
+requieren Steam en vivo o PostgreSQL se habilitan por separado; no forman parte
+de la ejecución local predeterminada.
 
 Además, `scripts/validate_palette.py` valida la paleta de los gráficos y
 `scripts/analyze_reviews.py --evaluate` mide el módulo NLP contra el ground
 truth.
-
----
-
-## Estado
-
-- [x] **Paso 1** — Estructura, modelo de datos y seed
-- [x] **Paso 2** — Motor de recomendación híbrido y módulo NLP/ABSA
-- [x] **Paso 3** — Frontend con las vistas de jugador y desarrollador

@@ -6,7 +6,7 @@ gusto diferenciados, y las interacciones (ratings, listas y reseñas en
 español) que necesitan el motor de recomendación y el módulo NLP.
 
 Uso:
-    python scripts/seed_data.py                      # dataset local, 60 jugadores
+    python scripts/seed_data.py                      # dataset local, 80 jugadores
     python scripts/seed_data.py --reset              # borra todo y vuelve a crear
     python scripts/seed_data.py --players 120        # más usuarios
     python scripts/seed_data.py --source rawg        # importa juegos desde RAWG
@@ -56,7 +56,6 @@ from app.models import (  # noqa: E402
     ListType,
     Rating,
     Review,
-    ReviewAspect,
     Sentiment,
     Tag,
     User,

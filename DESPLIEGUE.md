@@ -148,7 +148,8 @@ una tanda; considerar ese uso al configurar el límite de conexiones.
 Para seguir usando la demo local, no hace falta cambiar `.env`: los valores
 predeterminados siguen siendo SQLite, `embedded` y creación automática de
 tablas. Dos PCs con SQLite separados siguen teniendo catálogos separados.
-Si una API local apunta a PostgreSQL compartido, debe usar `external`.
+Si una API local apunta a PostgreSQL compartido, debe usar `external` con un
+worker continuo, o `scheduled` con las tandas de [Neon](NEON_GRATIS.md).
 
 ## Estado y mantenimiento
 
@@ -195,6 +196,7 @@ temporal para cada caso. No apuntarlas a la base del proyecto. Ejemplo desde
 de base que empiece por `gametrack_test`:
 
 ```bash
+python -m pip install -r requirements-dev.txt -r requirements-postgres.txt
 python -m pytest tests/test_postgres_integration.py -q
 ```
 

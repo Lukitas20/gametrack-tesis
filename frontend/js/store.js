@@ -36,7 +36,6 @@ export const state = {
   genres: [],
   tags: [],
   ratings: new Map(), // game_id -> score
-  ready: false,
 };
 
 export function subscribe(listener) {
@@ -143,7 +142,6 @@ export async function restore() {
       logout();
     }
   }
-  state.ready = true;
   emit();
 }
 

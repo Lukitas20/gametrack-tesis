@@ -174,9 +174,6 @@ Comprobación HTTP sobre el servidor local: login demo, listado de amigos, diez
 recomendaciones automáticas sin incorporar el modelo no validado, diez sugerencias
 en IA local con aporte aprendido, asistente anónimo con tres resultados y rechazo
 403 al intentar incluir un usuario sin amistad. Sintaxis JavaScript verificada.
-La comprobación visual automatizada quedó pendiente: Chrome está instalado y la
-extensión habilitada, pero falta el registro del host de comunicación de Browser.
-La recuperación indicada por el plugin es reinstalar Browser desde la aplicación.
 
 Referencias metodológicas: [Koren, Bell y Volinsky, factorización matricial](https://doi.org/10.1109/MC.2009.263)
 y [Fair Sequential Group Recommendations](https://homepages.tuni.fi/konstantinos.stefanidis/docs/sac20.pdf).

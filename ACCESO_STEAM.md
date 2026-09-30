@@ -10,10 +10,13 @@ En esta instalación, desde la terminal de Visual Studio Code en la raíz:
 .\INICIAR_GAMETRACK.ps1
 ```
 
-El lanzador usa `backend/gametrack.runtime.db` si existe: es la base local cuyo
-esquema coincide con el catálogo actual. `gametrack.db` conserva un esquema
-anterior. No se borra, copia ni reinicia ninguna de las dos. Si el servidor ya
-está abierto en el puerto 8000, basta con abrir el enlace del login.
+El lanzador respeta `DATABASE_URL` y `PUBLIC_BASE_URL` del entorno o de
+`backend/.env`. Sin configuración usa `backend/gametrack.db`. Si una instalación
+conserva sus datos en `gametrack.runtime.db`, debe indicar esa ruta explícitamente
+en `DATABASE_URL`; no se elige una base sólo porque exista otro archivo.
+Antes de actualizar una base existente, aplicar las migraciones según
+[DESPLIEGUE.md](DESPLIEGUE.md). Si el servidor ya está abierto en el puerto 8000,
+basta con abrir el enlace del login.
 
 ## Steam
 

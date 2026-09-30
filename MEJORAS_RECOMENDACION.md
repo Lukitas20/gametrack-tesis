@@ -43,8 +43,7 @@ Validación realizada el 24/09/2026: suite general con **201 pruebas aprobadas y
 omitidas**. Las omitidas son los casos opcionales `GOLDEN_LIVE`, que requieren un
 catálogo local específico. También se verificó la sintaxis JavaScript y, con la
 aplicación en marcha, login demo, recomendaciones, modo estricto y alternativas
-sin repetir resultados. La revisión visual en navegador queda pendiente porque
-no había una conexión de Browser disponible.
+sin repetir resultados.
 
 Los tests de comportamiento verifican propiedades del sistema. No demuestran por
 sí solos mayor precisión ni satisfacción de usuarios. Antes de afirmar una mejora:

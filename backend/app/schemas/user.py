@@ -71,13 +71,6 @@ class Token(BaseModel):
     user: UserResponse
 
 
-class GenrePreference(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    genre_id: int
-    weight: float
-
-
 class PreferencesUpdate(BaseModel):
     """Géneros elegidos en el onboarding, usados para el arranque en frío."""
 

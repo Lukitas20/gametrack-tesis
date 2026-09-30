@@ -14,7 +14,7 @@ from app.models.enums import UserRole
 
 if TYPE_CHECKING:
     from app.models.steam_auth import SteamIdentity
-    from app.models.game import Game, Genre
+    from app.models.game import Genre
     from app.models.game_list import GameList
     from app.models.interaction import Rating, Review
 

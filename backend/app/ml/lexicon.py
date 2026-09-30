@@ -399,17 +399,3 @@ ASPECT_TERMS: dict[Aspect, dict[str, float]] = {
 }
 
 STRONG_TERM_THRESHOLD = 0.5
-
-# Palabras vacías del español, para el vectorizador TF-IDF del recomendador.
-SPANISH_STOPWORDS: list[str] = [
-    "a", "al", "algo", "algunas", "algunos", "ante", "antes", "aqui", "asi", "aun",
-    "cada", "como", "con", "contra", "cual", "cuando", "de", "del", "desde", "donde",
-    "dos", "e", "el", "ella", "ellos", "en", "entre", "es", "esa", "ese", "eso",
-    "esta", "estas", "este", "esto", "estos", "fue", "hace", "hacia", "hasta", "hay",
-    "la", "las", "le", "les", "lo", "los", "mas", "me", "mi", "mientras", "mismo",
-    "mucho", "muchos", "muy", "nada", "ni", "no", "nos", "o", "otra", "otras", "otro",
-    "otros", "para", "pero", "poco", "por", "porque", "puede", "pueden", "que",
-    "quien", "quienes", "se", "sea", "segun", "ser", "si", "sin", "sobre", "solo",
-    "son", "su", "sus", "tambien", "tanto", "tiene", "tienen", "todo", "todos",
-    "tras", "tres", "un", "una", "uno", "unos", "y", "ya",
-]

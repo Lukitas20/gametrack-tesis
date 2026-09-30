@@ -37,11 +37,10 @@ live`` se corta a mitad de camino, subí ``--delay`` y volvé a correrlo — tan
 la corrida de Steam como la siembra en la base son incrementales, no
 duplican lo que ya está.
 
-Literalmente "todos" los juegos de Steam (cientos de miles, la mayoría sin
-relevancia) no es un objetivo realista ni deseable: Steam ni siquiera expone
-un endpoint así (ver ``steam_service.get_top_seller_appids``). El criterio es
-"todos los que importan": los más vendidos y más reseñados, con ``--count``
-para ajustar cuántos.
+Este snapshot contiene una selección de juegos populares, ajustable con
+``--count``. Para sincronizar el índice público completo con checkpoint y
+enriquecimiento progresivo, usar ``scripts/import_steam_appindex.py`` o los
+workers de ``app.workers`` (ver ``CATALOGO_STEAM.md`` en la raíz).
 """
 
 from __future__ import annotations

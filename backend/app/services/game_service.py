@@ -40,10 +40,6 @@ def get_game(db: Session, game_id: int) -> Game | None:
     return db.get(Game, game_id)
 
 
-def get_game_by_slug(db: Session, slug: str) -> Game | None:
-    return db.scalar(select(Game).where(Game.slug == slug))
-
-
 def _apply_filters(
     statement: Select,
     search: str | None,

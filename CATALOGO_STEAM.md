@@ -2,6 +2,8 @@
 
 También puede funcionar como **catálogo compartido**, con PostgreSQL y un worker
 independiente de la API. Ver [despliegue y migración al servidor](DESPLIEGUE.md).
+Para actualizar sin esta PC ni un servidor permanente, ver las
+[tandas programadas con Neon y GitHub Actions](NEON_GRATIS.md).
 Las secciones siguientes describen el modo local `embedded`; en modo `external`
 las actualizaciones continúan mientras el servicio del servidor esté encendido,
 aunque se cierre la app o se apague esta PC.
@@ -173,8 +175,6 @@ y 215 preferencias existentes. El buscador y el estado del catálogo respondiero
 en menos de un segundo en esta PC durante la comprobación HTTP.
 La clave se configuró exclusivamente en el `.env` local, fuera de Git.
 Se guardó una copia local en `backend/data/generated/` antes de iniciar el worker.
-La revisión visual automatizada no pudo realizarse por la conexión de Browser
-pendiente de reparación.
 
 Referencias: [índice oficial y sincronización incremental](https://partner.steamgames.com/doc/webapi/IStoreService#GetAppList),
 [reemplazo de la API antigua](https://partner.steamgames.com/doc/webapi/ISteamApps#GetAppList)

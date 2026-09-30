@@ -20,7 +20,7 @@ Metodología (pooling estilo TREC):
    ya cargados se conservan por (consulta, juego) y sólo quedan pendientes
    los juegos nuevos que hayan entrado al pool.
 2. Cada integrante llena su CSV por separado (columna ``relevante``: 1/0).
-   Criterio impreso en las instrucciones que genera ``--pool``.
+   Criterio disponible en ``eval/INSTRUCCIONES.md``.
 3. ``--metrics A.csv B.csv``: computa el kappa de Cohen entre los dos,
    exporta los desacuerdos para adjudicar hablando, y (con
    ``--adjudicadas R.csv`` o si no hay desacuerdos) imprime la tabla
@@ -294,30 +294,6 @@ def _game_context(db) -> dict[str, tuple[str, str, str]]:
 # --pool
 # ---------------------------------------------------------------------------
 
-INSTRUCCIONES = """\
-# Instrucciones de anotación
-
-Para cada fila: ¿le sugerirías ESTE juego a alguien que respondió ESO en el
-asistente? Poné 1 (sí) o 0 (no) en la columna `relevante`. Nada más.
-
-Criterio:
-- Juzgá la consulta COMPLETA (ánimo + compañía + tiempo), no sólo el ánimo.
-  "Relajarme, con amigos" y el juego no tiene cooperativo => 0.
-- "Una tarde" pregunta por la sesión: un juego-servicio de partidas cortas
-  es un 1 aunque la gente le meta cientos de horas.
-- Si no conocés el juego, mirá su ficha en Steam antes de juzgar (las
-  columnas de géneros y etiquetas son un resumen para acelerar, no
-  reemplazan conocer el juego).
-- No hay "0.5": si dudás en serio, 0 (la sugerencia tibia no le sirve a
-  nadie). Anotá el caso en `notas` para discutirlo en la adjudicación.
-- Cada uno llena SU archivo sin mirar el del otro. Los desacuerdos se
-  adjudican hablando, después de medir el kappa — no antes.
-
-El orden de los juegos es aleatorio y ninguna fila dice qué variante lo
-propuso: no se puede (ni se debe poder) anotar a favor de una variante.
-"""
-
-
 ANNOTATION_HEADER = [
     "consulta_id", "consulta", "juego_slug", "juego",
     "generos", "etiquetas_top", "relevante", "notas",
@@ -396,8 +372,6 @@ def cmd_pool(db, args) -> int:
         for slug in slugs:
             name, genres, tags = context.get(slug, (slug, "", ""))
             rows.append([consulta_id, descripcion[consulta_id], slug, name, genres, tags])
-
-    (EVAL_DIR / "INSTRUCCIONES.md").write_text(INSTRUCCIONES, encoding="utf-8")
 
     total = len(rows)
     print()

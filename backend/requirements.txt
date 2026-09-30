@@ -20,11 +20,9 @@ bcrypt==5.0.0
 scikit-learn==1.9.0
 numpy==2.5.1
 scipy==1.18.0
-pandas==3.0.5
 
-# --- Integraciones y tests ---
+# --- Integraciones ---
 httpx==0.28.1
-pytest==9.1.1
 
 # --- TLS ---
 # Usa el almacén de certificados del sistema operativo en vez del bundle de

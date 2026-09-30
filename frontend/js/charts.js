@@ -20,7 +20,6 @@ const BAR = 18;
 const GAP = 2; // hueco de superficie entre rellenos contiguos
 const ROUND = 4; // radio del extremo de dato
 const ROW = 34;
-const FONT = 11.5;
 const CHAR = 6.15; // ancho aproximado por carácter, para medir antes de etiquetar
 
 export const SENTIMENTS = ["positivo", "neutro", "negativo"];
