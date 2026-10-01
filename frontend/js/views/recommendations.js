@@ -6,7 +6,7 @@
  */
 
 import { api } from "../api.js";
-import { gameGrid, gameCard, cover, saveToListButton, starRating } from "../components.js";
+import { gameCard, cover, saveToListButton, starRating } from "../components.js";
 import { isDeveloper, isLoggedIn } from "../store.js";
 import {
   SOURCE_LABEL,
@@ -23,7 +23,9 @@ import {
 } from "../ui.js";
 import { coldStartNotice, openOnboarding } from "./onboarding.js";
 import { startNewQuiz } from "./quiz.js";
-import { discoverySection } from "./gametrack-score.js?v=score-2";
+import { discoverySection } from "./gametrack-score.js?v=score-explainer-1";
+
+import { loadHomeCollections } from "./home-sections.js";
 
 const STRATEGIES = ["auto", "ia_local", "hibrido", "contenido", "colaborativo", "popularidad"];
 const COMPARABLE = ["ia_local", "hibrido", "contenido", "colaborativo", "popularidad"];
@@ -86,8 +88,9 @@ export async function recommendationsView({ query } = { query: new URLSearchPara
   if (!isLoggedIn()) {
     const hero = discoveryHero(true);
     const sections = h("div", { class: "console-home-rows" });
-    loadHomeSections(sections, hero);
-    return h("div", { class: "console-home" }, hero, sections);
+    const intro = h("div", {class:"home-intro"});
+    loadHomeSections(sections, hero, intro);
+    return h("div", { class: "console-home" }, hero, intro, sections);
   }
 
   if (isDeveloper()) {
@@ -377,12 +380,14 @@ export async function recommendationsView({ query } = { query: new URLSearchPara
   else load();
 
   const sections = h("div", { class: "console-home-rows" });
-  loadHomeSections(sections, hero);
+  const intro = h("div", {class:"home-intro"});
+  loadHomeSections(sections, hero, intro);
 
   return h(
     "div",
     { class: "console-home" },
     hero,
+    intro,
     discoverySection(),
     h("details", { class: "gts-advanced" }, h("summary", null, "Más formas de recomendar"),
     h(
@@ -408,32 +413,12 @@ export async function recommendationsView({ query } = { query: new URLSearchPara
   );
 }
 
-/** Filas curadas de la portada: sólo juegos con ficha completa. */
-const HOME_ROWS = [
-  ["populares", "Populares"],
-  ["mejor_valorados", "Mejor valorados"],
-  ["recientes", "Lanzamientos recientes"],
-  ["destacados", "Destacados"],
-];
-
-async function loadHomeSections(container, hero) {
-  let home;
-  try {
-    home = await api.home(8);
-  } catch {
-    return; // La portada es un plus; si falla, el feed personalizado ya se ve.
-  }
-
-  if (hero) fillHero(hero, [...(home.destacados || []), ...(home.populares || [])].filter((game, index, all) => all.findIndex(item => item.id === game.id) === index));
-  const rows = HOME_ROWS.filter(([key]) => home[key]?.length).map(([key, title]) =>
-    h(
-      "section",
-      { class: "section", style: { marginTop: "var(--s-8)" } },
-      h("div", { class: "section-head" }, h("h2", null, title)),
-      gameGrid(home[key]),
-    ),
-  );
-  container.replaceChildren(...rows);
+/** Colecciones públicas y agenda; GameTrackScore conserva su feed propio. */
+function loadHomeSections(container, hero, intro) {
+  loadHomeCollections(container, intro, home => {
+    fillHero(hero, [...(home.destacados || []), ...(home.populares || [])]
+      .filter((game, index, all) => all.findIndex(item => item.id === game.id) === index));
+  });
 }
 
 /** Aporte numérico de cada estrategia por juego: hace auditable la mezcla. */

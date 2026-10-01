@@ -216,3 +216,48 @@ def test_ficha_incompleta_no_aparece_aunque_sea_popular(sample):
     db, user, _, _, games, *_ = sample
     games[0].background_image = None; db.commit()
     assert games[0].id not in {i.game.id for i in service.discovery(db, user).items}
+
+
+def test_mas_gustos_no_diluyen_la_afinidad_sin_historial(sample):
+    db, user, _, _, games, a, b = sample
+    prefs(db, user, a)
+    before = service.game_score(db, user, games[0].id).affinity
+    prefs(db, user, b)
+    assert service.game_score(db, user, games[0].id).affinity >= before
+    result = service.discovery(db, user)
+    assert {item.game.id for item in result.items} == {game.id for game in games}
+    assert all(item.gametrack_score.evidence == "inicial" for item in result.items)
+
+
+def test_perfil_inicial_con_varios_gustos_completa_ocho_sin_rellenar(sample):
+    db, user, _, _, games, a, b = sample
+    other = [Genre(slug=f"otro-{i}", name=f"Otro {i}") for i in range(20)]
+    rare = Genre(slug="violencia", name="Violencia")
+    db.add_all([*other, rare]); db.flush()
+    games[3].genres.append(rare)
+    candidates = [Game(slug=f"popular-{i}", name=f"Popular {i}", description="Prueba",
+        genres=[a, *other], steam_app_id=200+i, metacritic=85,
+        steam_synced_at=datetime.now(timezone.utc), background_image="https://example.test/cover.jpg",
+        steam_total_reviews=10000, steam_positive_reviews=9500, steamspy_owners=100000)
+        for i in range(8)]
+    unknown = Game(slug="sin-respaldo", name="Sin respaldo", description="Prueba", genres=[a],
+        background_image="https://example.test/cover.jpg", metacritic=99,
+        steam_total_reviews=2, steam_positive_reviews=2)
+    db.add_all([*candidates, unknown]); db.commit()
+    for genre in (a, b, rare):
+        prefs(db, user, genre)
+    result = service.discovery(db, user, limit=8)
+    assert len(result.items) == 8
+    assert len({item.game.id for item in result.items}) == 8
+    assert unknown.id not in {item.game.id for item in result.items}
+    assert all(item.gametrack_score.affinity >= 45 for item in result.items)
+    assert all(service.reputable(db.get(Game, item.game.id), service.public_evidence(db.get(Game, item.game.id)))
+               for item in result.items)
+
+
+def test_terminos_desconocidos_no_inventan_preferencias(sample):
+    db, user, _, _, _, *_ = sample
+    genre = Genre(slug="sin-juegos", name="Sin juegos")
+    db.add(genre); db.commit(); prefs(db, user, genre)
+    assert not service.score_context(db, user)["personal"]
+    assert not service.discovery(db, user).items

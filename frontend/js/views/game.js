@@ -1,7 +1,7 @@
 /* Detalle de juego: valorar, guardar en lista y publicar reseña. */
 
 import { api } from "../api.js";
-import { personalScorePanel } from "./gametrack-score.js?v=score-2";
+import { personalScorePanel } from "./gametrack-score.js?v=score-explainer-1";
 import { steamAchievementPanel } from "./steam-achievements.js";
 import {
   aspectChip,

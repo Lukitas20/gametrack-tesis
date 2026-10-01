@@ -83,6 +83,7 @@ export const api = {
   tags: (minGames = 3) => request("/tags", { auth: false, params: { min_games: minGames } }),
   games: (params) => request("/games", { auth: false, params }),
   steamCatalogStatus: () => request("/steam/catalog/status", { auth: false }),
+  upcoming: () => request("/home/upcoming", { auth: false }),
   home: (limit = 8) => request("/home", { auth: false, params: { limit } }),
   game: (id) => request(`/games/${id}`, { auth: false }),
   similar: (id, limit = 6) => request(`/games/${id}/similar`, { auth: false, params: { limit } }),
@@ -93,6 +94,8 @@ export const api = {
     request("/recommendations", { params: { strategy, limit, discovery } }),
   discovery: (mode = "affinity", friendId = null) => request("/recommendations/discovery", { params: { mode, friend_id: friendId, limit: 8 } }),
   gameTrackScore: (id) => request(`/recommendations/game/${id}/score`),
+  gameExplanation: (id, question) => request(`/recommendations/game/${id}/explanation`,
+    question === undefined ? {} : { method: "POST", body: { question } }),
   quizSuggest: (payload) =>
     request("/quiz/suggest", { method: "POST", body: payload }),
 

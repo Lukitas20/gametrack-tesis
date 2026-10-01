@@ -1,6 +1,6 @@
 """Afinidad y respaldo público: componentes auditables de GameTrackScore."""
 from typing import Literal
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from app.schemas.game import GameSummary
 
 
@@ -35,3 +35,34 @@ class DiscoveryResponse(BaseModel):
     library_status: str | None = None
     history_size: int
     personal_data: bool
+
+
+class ExplanationQuestion(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    question: str = Field(min_length=1, max_length=500)
+
+
+class ExplanationPoint(BaseModel):
+    text: str
+    reference_ids: list[str] = Field(default_factory=list)
+
+
+class ExplanationReference(BaseModel):
+    id: str
+    title: str
+    url: str
+    detail: str
+
+
+class GameExplanation(BaseModel):
+    game_id: int
+    game_name: str
+    score: GameTrackScore
+    summary: str
+    positives: list[ExplanationPoint]
+    cautions: list[ExplanationPoint]
+    answer: list[ExplanationPoint]
+    references: list[ExplanationReference]
+    suggested_questions: list[str]
+    engine: Literal["local"] = "local"
+    method: str

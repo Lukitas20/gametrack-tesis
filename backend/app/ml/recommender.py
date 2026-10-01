@@ -586,7 +586,18 @@ class RecommenderEngine:
         0.5 neutral, no una supuesta opinión personal derivada de popularidad.
         """
         history = self._content_scores_from_history(user_id)
-        preference = self._content_scores_from_preferences(preferred_genres)
+        # Cada género elegido es una alternativa válida. Una única consulta
+        # con todos exige coincidencias simultáneas y un término raro puede
+        # diluir los demás hasta hacer desaparecer las recomendaciones.
+        genre_scores = [self.score_terms({slug: 1.0}) for slug in sorted(set(preferred_genres))]
+        genre_scores = [scores for scores in genre_scores if scores is not None]
+        preference = None
+        if genre_scores:
+            similarity = np.maximum.reduce(genre_scores)
+            # Misma escala que el historial firmado: una coincidencia positiva
+            # queda sobre el punto neutral. Cero sigue siendo falta de afinidad;
+            # no se inventa un gusto por términos ausentes del catálogo.
+            preference = np.where(similarity > 0, (similarity + 1.0) / 2.0, 0.0)
         values = (history + 1.0) / 2.0 if history is not None else preference
         if values is None:
             values, basis = np.full(len(self.game_ids), 0.5), "popularidad"

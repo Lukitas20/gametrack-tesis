@@ -1,7 +1,8 @@
 """Consultas sobre el catálogo de juegos."""
 
+from datetime import date
 from sqlalchemy import Select, func, or_, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.models import Game, Genre, Review, ReviewAspect, Tag, game_genres, game_tags
 
@@ -33,6 +34,12 @@ def _enriched_only(statement: Select) -> Select:
     return statement.where(
         visible_catalog_clause(),
         or_(Game.steam_app_id.is_(None), Game.steam_synced_at.is_not(None)),
+        # Importaciones antiguas pueden conservar software como ficha completa.
+        Game.id.notin_(select(game_genres.c.game_id).join(Genre).where(Genre.slug.in_(
+            ["utilities", "utilidades", "animation-modeling", "animacion-y-modelado",
+             "design-illustration", "diseno-e-ilustracion", "photo-editing", "edicion-fotografica",
+             "video-production", "produccion-de-video", "software-training", "web-publishing"]
+        ))),
     )
 
 
@@ -111,8 +118,39 @@ def list_games(
 def list_home_section(db: Session, sort: str, limit: int = 8) -> list[Game]:
     """Una fila curada de la portada (populares, mejor valorados, recientes)."""
     ordering = SORT_FIELDS.get(sort, SORT_FIELDS["popularidad"])
-    statement = _enriched_only(select(Game)).order_by(ordering).limit(limit)
+    statement = _enriched_only(select(Game)).where(
+        or_(Game.released.is_(None), Game.released <= date.today())
+    )
+    if sort == "metacritic":
+        statement = statement.where(Game.metacritic >= 70)
+    statement = statement.options(selectinload(Game.genres)).order_by(ordering, Game.id).limit(limit)
     return list(db.scalars(statement))
+
+
+def list_home_collections(db: Session):
+    """Categorías navegables: mismo slug que el filtro de catálogo y cantidades reales."""
+    definitions = [
+        ("accion", "Acción", "Subí el ritmo", ["accion"]),
+        ("aventura", "Aventura", "Un mundo por explorar", ["aventura"]),
+        ("rol", "Rol", "Construí tu propia historia", ["rol", "rpg"]),
+        ("indie", "Indie", "Ideas con personalidad", ["indie"]),
+        ("estrategia", "Estrategia", "Tu siguiente movimiento", ["estrategia"]),
+        ("carreras", "Carreras", "En la línea de salida", ["carreras"]),
+    ]
+    collections = []
+    for key, title, caption, slugs in definitions:
+        for slug in slugs:
+            genre_ids = select(game_genres.c.game_id).join(Genre).where(Genre.slug == slug)
+            conditions = [Game.id.in_(genre_ids), or_(Game.released.is_(None), Game.released <= date.today())]
+            count = db.scalar(_enriched_only(select(func.count(Game.id))).where(*conditions)) or 0
+            if not count:
+                continue
+            games = list(db.scalars(_enriched_only(select(Game)).where(*conditions)
+                .options(selectinload(Game.genres)).order_by(Game.ratings_count.desc(), Game.id).limit(6)))
+            collections.append({"key": key, "title": title, "caption": caption, "slug": slug,
+                "count": count, "games": games})
+            break
+    return collections
 
 
 def list_featured(db: Session, limit: int = 8) -> list[Game]:
@@ -124,6 +162,7 @@ def list_featured(db: Session, limit: int = 8) -> list[Game]:
     with_metacritic = list(
         db.scalars(
             _enriched_only(select(Game))
+            .where(or_(Game.released.is_(None), Game.released <= date.today()))
             .where(Game.metacritic.is_not(None))
             .order_by(Game.popularity_score.desc())
             .limit(limit)
@@ -133,7 +172,9 @@ def list_featured(db: Session, limit: int = 8) -> list[Game]:
         return with_metacritic
 
     exclude = [g.id for g in with_metacritic]
-    statement = _enriched_only(select(Game)).order_by(Game.popularity_score.desc())
+    statement = _enriched_only(select(Game)).where(
+        or_(Game.released.is_(None), Game.released <= date.today())
+    ).order_by(Game.popularity_score.desc())
     if exclude:
         statement = statement.where(Game.id.notin_(exclude))
     fallback = list(db.scalars(statement.limit(limit - len(with_metacritic))))

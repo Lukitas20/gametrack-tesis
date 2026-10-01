@@ -2,6 +2,7 @@ import { api } from "../api.js";
 import { gameCard, saveToListButton } from "../components.js";
 import { isLoggedIn, isDeveloper, state } from "../store.js";
 import { h, icon } from "../ui.js";
+import { gameAnalysisButton } from "./game-insights.js";
 
 const EVIDENCE = { sin_datos: "Faltan tus gustos", inicial: "Perfil inicial", en_desarrollo: "Perfil en desarrollo", amplia: "Más historial disponible", valoracion_propia: "Según tu valoración" };
 
@@ -39,7 +40,7 @@ export function personalScorePanel(gameId) {
     try {
       const score = await api.gameTrackScore(gameId);
       if (request !== revision || owner !== state.user?.id) return;
-      panel.replaceChildren(scoreBadge(score), scoreExplanation(score));
+      panel.replaceChildren(scoreBadge(score), scoreExplanation(score), gameAnalysisButton(gameId));
       if (score.value == null) panel.append(h("a", { href: "#/perfil" }, "Completar mis gustos"));
     } catch {
       if (request !== revision || owner !== state.user?.id) return;
@@ -105,7 +106,7 @@ export function discoverySection() {
             h("p", { class: "gts-meta" }, "Metascore ", h("strong", null, item.gametrack_score.metascore != null ? `${item.gametrack_score.metascore}/100` : "Sin dato")),
             h("p", { class: "gts-public" }, `${new Intl.NumberFormat("es-AR").format(item.gametrack_score.review_count)} reseñas públicas`),
             item.reasons.length ? h("ul", { class: "gts-reasons" }, item.reasons.map(reason => h("li", null, reason))) : null,
-            scoreExplanation(item.gametrack_score), saveToListButton(item.game)))))
+            scoreExplanation(item.gametrack_score), gameAnalysisButton(item.game.id), saveToListButton(item.game)))))
         : h("div", { class: "gts-empty" }, icon("search", 26), h("h3", null, "Todavía no hay coincidencias"),
           h("p", null, currentMode === "friends" ? "No encontramos juegos multijugador compartibles con los datos disponibles. Probá otro amigo o el asistente de partidas." : currentMode === "critics" ? "No hay juegos nuevos con Metascore disponible para esta selección." : "Probá otra forma de descubrir juegos.")));
     } catch (error) {

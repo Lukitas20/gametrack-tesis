@@ -4,8 +4,9 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
-from app.schemas.game import GameSummary, HomeSections
-from app.services.game_service import list_featured, list_home_section
+from app.schemas.game import GameSummary, HomeSections, HomeCollection, UpcomingReleases
+from app.services.game_service import list_featured, list_home_section, list_home_collections
+from app.services.home_release_service import upcoming_releases
 
 router = APIRouter(prefix="/home", tags=["portada"])
 
@@ -33,4 +34,12 @@ def get_home(
             for game in list_home_section(db, "lanzamiento", limit)
         ],
         destacados=[GameSummary.model_validate(game) for game in list_featured(db, limit)],
+        critica=[GameSummary.model_validate(game) for game in list_home_section(db, "metacritic", limit)],
+        colecciones=[HomeCollection(**{**collection, "games": [GameSummary.model_validate(game) for game in collection["games"]]})
+            for collection in list_home_collections(db)],
     )
+
+
+@router.get("/upcoming", response_model=UpcomingReleases)
+def get_upcoming():
+    return upcoming_releases()

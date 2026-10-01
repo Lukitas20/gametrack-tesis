@@ -2,7 +2,7 @@
 
 from datetime import date
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class GenreOut(BaseModel):
@@ -59,6 +59,15 @@ class GamePage(BaseModel):
     items: list[GameSummary]
 
 
+class HomeCollection(BaseModel):
+    key: str
+    title: str
+    caption: str
+    slug: str
+    count: int
+    games: list[GameSummary]
+
+
 class HomeSections(BaseModel):
     """Filas curadas de la portada. Sólo juegos con ficha completa."""
 
@@ -66,3 +75,20 @@ class HomeSections(BaseModel):
     mejor_valorados: list[GameSummary]
     recientes: list[GameSummary]
     destacados: list[GameSummary]
+    critica: list[GameSummary] = Field(default_factory=list)
+    colecciones: list[HomeCollection] = Field(default_factory=list)
+
+
+class UpcomingGame(BaseModel):
+    steam_app_id: int
+    name: str
+    background_image: str
+    release_label: str
+    store_url: str
+
+
+class UpcomingReleases(BaseModel):
+    status: str
+    source: str
+    updated_at: int | None
+    items: list[UpcomingGame]

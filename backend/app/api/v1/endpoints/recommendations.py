@@ -1,6 +1,6 @@
 """Recomendaciones personalizadas para el rol jugador."""
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -12,9 +12,29 @@ from app.models import Game, Rating, User
 from app.schemas.game import GameSummary
 from app.schemas.recommendation import RecommendationOut, RecommendationResponse
 
-from app.schemas.gametrack_score import DiscoveryResponse, GameTrackScore
+from app.schemas.gametrack_score import DiscoveryResponse, GameTrackScore, ExplanationQuestion, GameExplanation
 
 router = APIRouter(prefix="/recommendations", tags=["recomendaciones"])
+
+
+@router.get("/game/{game_id}/explanation", response_model=GameExplanation)
+def explain_personal_game(
+    game_id: int, response: Response,
+    user: User = Depends(get_current_user), db: Session = Depends(get_db),
+):
+    from app.services.game_explanation_service import explain_game
+    response.headers["Cache-Control"] = "no-store"
+    return explain_game(db, user, game_id)
+
+
+@router.post("/game/{game_id}/explanation", response_model=GameExplanation)
+def ask_about_personal_game(
+    game_id: int, payload: ExplanationQuestion, response: Response,
+    user: User = Depends(get_current_user), db: Session = Depends(get_db),
+):
+    from app.services.game_explanation_service import explain_game
+    response.headers["Cache-Control"] = "no-store"
+    return explain_game(db, user, game_id, payload.question)
 
 
 @router.get("/discovery", response_model=DiscoveryResponse)
