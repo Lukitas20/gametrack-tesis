@@ -13,8 +13,16 @@ function scoreBadge(score) {
 }
 
 function scoreExplanation(score) {
+  const labels = { affinity: "Tus gustos", metacritic: "Metacritic", community: "Reseñas de Steam", reach: "Respaldo público", own_rating: "Tu valoración" };
+  const breakdown = Object.entries(score.weights || {}).map(([key, weight]) => {
+    const value = Math.round((score.components?.[key] ?? 0) * 100);
+    return h("div", { class: "gts-component" },
+      h("div", null, h("span", null, labels[key] || key), h("span", null, `${value}/100 · peso ${Math.round(weight * 100)}%`)),
+      h("div", { class: "gts-component-track", "aria-hidden": "true" }, h("span", { style: { width: `${value}%` } })));
+  });
   return h("details", { class: "gts-explanation" }, h("summary", null, "¿Por qué este puntaje?"),
-    h("p", null, score.explanation), h("ul", null, score.reasons.map(reason => h("li", null, reason))));
+    h("p", null, score.explanation), breakdown.length ? h("div", { class: "gts-breakdown" }, breakdown) : null,
+    h("ul", null, score.reasons.map(reason => h("li", null, reason))));
 }
 
 export function personalScorePanel(gameId) {
@@ -94,7 +102,8 @@ export function discoverySection() {
       body.replaceChildren(data.items.length ? h("div", { class: "gts-grid" }, data.items.map(item =>
         h("article", { class: "gts-card" }, gameCard(item.game),
           h("div", { class: "gts-card-info" }, scoreBadge(item.gametrack_score),
-            item.game.metacritic != null ? h("p", { class: "gts-meta" }, "Metascore ", h("strong", null, `${item.game.metacritic}/100`)) : null,
+            h("p", { class: "gts-meta" }, "Metascore ", h("strong", null, item.gametrack_score.metascore != null ? `${item.gametrack_score.metascore}/100` : "Sin dato")),
+            h("p", { class: "gts-public" }, `${new Intl.NumberFormat("es-AR").format(item.gametrack_score.review_count)} reseñas públicas`),
             item.reasons.length ? h("ul", { class: "gts-reasons" }, item.reasons.map(reason => h("li", null, reason))) : null,
             scoreExplanation(item.gametrack_score), saveToListButton(item.game)))))
         : h("div", { class: "gts-empty" }, icon("search", 26), h("h3", null, "Todavía no hay coincidencias"),

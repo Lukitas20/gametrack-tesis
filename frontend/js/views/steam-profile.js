@@ -3,6 +3,7 @@ import { api } from "../api.js";
 import { state } from "../store.js";
 import { h, icon, initials, spinnerBlock, emptyState, toast } from "../ui.js";
 import { steamFriendsList } from "./steam-friends.js";
+import { achievementProgress, steamAchievementPanel } from "./steam-achievements.js";
 
 const number = value => new Intl.NumberFormat("es-AR", { maximumFractionDigits: 1 }).format(value);
 const hours = minutes => minutes == null ? "Horas no disponibles" : minutes === 0 ? "Sin jugar" : minutes < 60 ? `${minutes} min` : `${number(minutes / 60)} h`;
@@ -34,16 +35,27 @@ export function steamDashboard(user) {
   const updateNote = h("p", { class: "steam-caption", "aria-live": "polite" });
   let data = null, ratings = null, ratingsError = null, steamError = null;
   let active = "library", search = "", filter = "all", order = "hours", shown = 12;
+  let selectedAchievement = null, achievementSearch = "";
   let loading = false, revision = 0;
   const owner = user.id;
   const refresh = h("button", { class: "btn btn-sm", onClick: () => load(true) }, icon("refresh", 14), "Sincronizar Steam");
   const tabButtons = [];
-  for (const [key, label, symbol] of [["library", "Biblioteca de Steam", "list"], ["ratings", "Mis valoraciones", "star"], ["friends", "Amigos de Steam", "user"]]) {
+  for (const [key, label, symbol] of [["library", "Biblioteca", "gamepad"], ["achievements", "Logros y progreso", "trophy"], ["ratings", "Valoraciones", "star"], ["friends", "Amigos", "user"]]) {
     const button = h("button", { type: "button", "aria-pressed": String(active === key), onClick: () => {
       active = key; shown = 12; renderBody();
       tabButtons.forEach(([id, element]) => element.setAttribute("aria-pressed", String(id === active)));
     } }, icon(symbol, 15), label);
     tabButtons.push([key, button]); tabs.append(button);
+  }
+  root.showSection = key => {
+    if (!tabButtons.some(([id]) => id === key)) return;
+    active=key;shown=12;renderBody();
+    tabButtons.forEach(([id,element]) => element.setAttribute("aria-pressed",String(id === active)));
+  };
+
+  function openAchievements(game) {
+    selectedAchievement=game.appid;root.showSection("achievements");
+    body.scrollIntoView({block:"start",behavior:document.body.classList.contains("motion-paused") || matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth"});
   }
 
   function metrics() {
@@ -67,9 +79,11 @@ export function steamDashboard(user) {
         h("p", { class: "steam-game-hours" }, icon("clock", 14), hours(game.minutes), h("span", null, "en Steam")),
         game.recent_minutes > 0 && h("p", { class: "steam-caption" }, `${hours(game.recent_minutes)} en las últimas 2 semanas`),
         game.last_played > 0 && h("p", { class: "steam-caption" }, `Última partida · ${date(game.last_played)}`),
+        game.achievements?.percentage != null && achievementProgress(game.achievements,true),
         h("div", { class: "steam-game-rating" },
           h("span", { class: game.rating == null ? "muted" : "steam-own-score" }, game.rating == null ? "Sin valorar" : [icon("star", 13), `${number(game.rating)} / 5`]),
-          game.game_id ? h("a", { href: `#/juego/${game.game_id}` }, game.rating == null ? "Valorar →" : "Ver tu nota →") : h("span", { class: "steam-caption" }, "Fuera del catálogo GameTrack"))));
+          game.game_id ? h("a", { href: `#/juego/${game.game_id}` }, game.rating == null ? "Valorar →" : "Ver tu nota →") : h("span", { class: "steam-caption" }, "Fuera del catálogo GameTrack")),
+        h("button",{class:"steam-achievement-link",onClick:() => openAchievements(game)},icon("trophy",14),"Ver logros",icon("chevron",12))));
   }
 
   function libraryTab() {
@@ -96,9 +110,37 @@ export function steamDashboard(user) {
     }
     rows();
     return h("div", null, sectionNotice(library, "tu biblioteca"),
-      h("div", { class: "steam-section-head" }, h("div", null, h("h2", null, "Todos tus mundos, en un lugar"), h("p", { class: "muted" }, "Tus juegos y horas de Steam, junto a la nota que les diste en GameTrack.")),
+      h("div", { class: "steam-section-head" }, h("div", null, h("h2", null, "Tu biblioteca"), h("p", { class: "muted" }, "Juegos, tiempo de juego y progreso.")),
         h("a", { class: "btn btn-sm", href: data.profile_url + "games/?tab=all", target: "_blank", rel: "noopener noreferrer" }, "Ver en Steam ↗")),
       h("div", { class: "steam-library-tools" }, query, sort), filters, results);
+  }
+
+  function achievementsTab() {
+    if (!data) return loading ? spinnerBlock("Cargando tu biblioteca…") : emptyState("Steam no está disponible",steamError || "Volvé a sincronizar.");
+    const games = [...data.library.items].sort((a,b) => (b.last_played || 0)-(a.last_played || 0) || (b.minutes || 0)-(a.minutes || 0));
+    if (!games.length) return h("div",null,sectionNotice(data.library,"tu biblioteca"),emptyState("Tu progreso empieza acá","Cuando Steam comparta tu biblioteca, vas a poder consultar los logros de cada juego."));
+    if (!games.some(game => game.appid === selectedAchievement)) selectedAchievement=games[0].appid;
+    const selected=games.find(game => game.appid === selectedAchievement);
+    const rows=h("div",{class:"achievement-game-list"});
+    const details=h("div",{class:"achievement-game-detail"});
+    const query=h("input",{class:"input",type:"search",placeholder:"Buscar un juego…","aria-label":"Buscar juego para consultar logros",value:achievementSearch,onInput:event => {achievementSearch=event.target.value;renderRows();}});
+    function renderRows() {
+      const found=games.filter(game => game.name.toLocaleLowerCase().includes(achievementSearch.toLocaleLowerCase().trim()));
+      rows.replaceChildren(...found.slice(0,40).map(game => h("button",{class:"achievement-game-option","aria-pressed":String(game.appid === selectedAchievement),onClick:() => {
+        selectedAchievement=game.appid;renderRows();renderDetail(game);
+      }},cover(game.cover,game.name),h("span",null,h("strong",null,game.name),h("small",null,game.achievements?.percentage != null ? `${number(game.achievements.percentage)}% · ${game.achievements.unlocked}/${game.achievements.total} logros` : hours(game.minutes))),icon("chevron",12))));
+      if (!found.length) rows.append(h("p",{class:"steam-caption"},"No hay juegos con ese nombre."));
+      if (found.length > 40) rows.append(h("p",{class:"steam-caption"},"Usá el buscador para encontrar otros juegos de tu biblioteca."));
+    }
+    function renderDetail(game) {
+      details.replaceChildren(steamAchievementPanel(game.appid,game.name,{onUpdate:progress => {
+        if (state.user?.id !== owner) return;
+        game.achievements=progress;renderRows();
+      }}));
+    }
+    renderRows();renderDetail(selected);
+    return h("div",null,h("div",{class:"steam-section-head"},h("div",null,h("h2",null,"Cada logro cuenta"),h("p",{class:"muted"},"Elegí un juego para ver lo que desbloqueaste y lo que te falta."))),
+      h("div",{class:"achievement-workspace"},h("aside",{class:"achievement-game-picker","aria-label":"Elegir juego"},query,rows),details));
   }
 
   function ratingsTab() {
@@ -124,7 +166,7 @@ export function steamDashboard(user) {
     } });
   }
 
-  function renderBody() { body.replaceChildren(active === "library" ? libraryTab() : active === "ratings" ? ratingsTab() : friendsTab()); }
+  function renderBody() { body.replaceChildren(active === "library" ? libraryTab() : active === "achievements" ? achievementsTab() : active === "ratings" ? ratingsTab() : friendsTab()); }
   async function load(force = false) {
     if (loading) return;
     if (force && data?.next_refresh_at > Date.now() / 1000) { toast(`Podés volver a sincronizar en ${Math.ceil(data.next_refresh_at - Date.now() / 1000)} segundos.`); return; }
@@ -139,9 +181,9 @@ export function steamDashboard(user) {
     else ratingsError = results[1].reason.message;
     loading = false; refresh.disabled = false; refresh.replaceChildren(icon("refresh", 14), "Sincronizar Steam");
     updateNote.textContent = steamError || (data ? `Última consulta · ${new Date(data.checked_at * 1000).toLocaleString("es-AR")} · Datos privados de tu perfil` : "");
-    metrics(); renderBody();
+    metrics(); renderBody();if (data) root.onData?.(data);
   }
-  root.append(h("div", { class: "steam-sync-bar" }, h("div", null, h("p", { class: "eyebrow" }, "TU UNIVERSO GAMER"), h("h2", null, "Una cuenta. Toda tu historia.")), refresh), updateNote, summary, tabs, body);
+  root.append(h("div", { class: "steam-sync-bar" }, h("div", null, h("p", { class: "eyebrow" }, "TU ACTIVIDAD"), h("h2", null, "Mi espacio de juego")), refresh), updateNote, summary, tabs, body);
   metrics(); load();
   return root;
 }

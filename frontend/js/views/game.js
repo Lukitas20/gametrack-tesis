@@ -1,7 +1,8 @@
 /* Detalle de juego: valorar, guardar en lista y publicar reseña. */
 
 import { api } from "../api.js";
-import { personalScorePanel } from "./gametrack-score.js?v=score-1";
+import { personalScorePanel } from "./gametrack-score.js?v=score-2";
+import { steamAchievementPanel } from "./steam-achievements.js";
 import {
   aspectChip,
   cover,
@@ -12,7 +13,7 @@ import {
   starRating,
 } from "../components.js";
 import { resolve } from "../router.js";
-import { isDeveloper, isLoggedIn, refreshRatings } from "../store.js";
+import { isDeveloper, isLoggedIn, refreshRatings, state } from "../store.js";
 import { emptyState, formatYear, h, icon, mount, signed, spinnerBlock, toast } from "../ui.js";
 
 /** De dónde vino el usuario, para ofrecerle el camino de vuelta. Sólo se
@@ -150,6 +151,8 @@ export async function gameView({ params, query }) {
         "aside",
         { class: "sticky-side" },
         scorePanel,
+        state.user?.steam_verified && !isDeveloper() && game.steam_app_id
+          ? steamAchievementPanel(game.steam_app_id, "Mis logros de Steam", {autoLoad:false}) : null,
         h(
           "section",
           { class: "card" },

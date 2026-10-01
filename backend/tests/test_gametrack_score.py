@@ -1,4 +1,5 @@
 import pytest
+from datetime import datetime, timezone
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -23,6 +24,8 @@ def sample(monkeypatch):
         db.add_all([a, b, coop, host, friend, outsider]); db.flush()
         games = [Game(slug=f"game-{i}", name=f"Juego {i}", description="Prueba", genres=[a if i < 3 else b],
             tags=[coop] if i in (0, 1, 3) else [], steam_app_id=100+i, metacritic=[90, 75, None, 99][i],
+            steam_synced_at=datetime.now(timezone.utc), background_image="https://example.test/cover.jpg",
+            steam_total_reviews=10000, steam_positive_reviews=9500, steamspy_owners=100000,
             avg_rating=4, ratings_count=50, popularity_score=3.8) for i in range(4)]
         db.add_all(games); db.flush()
         db.add(Friendship(user_low_id=host.id, user_high_id=friend.id, requester_id=host.id, status="accepted"))
@@ -49,15 +52,18 @@ def test_no_historial_no_inventa_score(sample):
     assert service.game_score(db, user, games[0].id).evidence == "sin_datos"
 
 
-def test_preferencias_cambian_afinidad_sin_confundirla_con_metacritic(sample):
+def test_gustos_y_metacritic_influyen_sin_alterar_afinidad(sample):
     db, user, friend, _, games, a, b = sample
     prefs(db, user, a); prefs(db, friend, b)
     assert service.game_score(db, user, games[0].id).value > service.game_score(db, user, games[3].id).value
     assert service.game_score(db, friend, games[3].id).value > service.game_score(db, friend, games[0].id).value
     assert service.game_score(db, user, games[0].id).evidence == "inicial"
     before = service.game_score(db, user, games[0].id).value
+    affinity = service.game_score(db, user, games[0].id).affinity
     games[0].metacritic = 10; db.commit()
-    assert service.game_score(db, user, games[0].id).value == before
+    after = service.game_score(db, user, games[0].id)
+    assert after.value < before and after.affinity == affinity
+    assert after.metascore == 10
 
 
 def test_critica_no_inventa_notas_y_score_consistente(sample):
@@ -134,3 +140,79 @@ def test_api_autenticacion_parametros_y_score(sample):
         response = client.get(f"/recommendations/game/{games[0].id}/score")
         assert response.status_code == 200 and response.json()["value"] is None
         assert client.get("/recommendations/game/999999/score").status_code == 404
+
+
+def test_no_rellena_con_desconocidos_o_datos_internos(sample):
+    db, user, _, _, games, genre, _ = sample
+    prefs(db, user, genre)
+    # Dos reseñas perfectas y una nota crítica alta no prueban alcance.
+    games[0].steam_total_reviews = games[0].steam_positive_reviews = 2
+    games[0].steamspy_owners = 0
+    games[0].ratings_count = 9999999
+    games[1].steam_synced_at = None
+    games[2].steam_total_reviews = games[2].steam_positive_reviews = 800
+    games[2].steamspy_owners = 0
+    db.commit(); invalidate_engine()
+    assert service.discovery(db, user).items == []
+
+
+def test_critica_mala_excluida_y_sin_meta_exige_mas_respaldo(sample):
+    db, user, _, _, games, genre, _ = sample
+    prefs(db, user, genre)
+    games[0].metacritic = 40
+    games[2].steam_total_reviews = 1500
+    games[2].steam_positive_reviews = 1400
+    games[2].steamspy_owners = 0
+    db.commit(); invalidate_engine()
+    assert {i.game.id for i in service.discovery(db, user).items} == {games[1].id}
+    games[2].steam_total_reviews = 6000
+    games[2].steam_positive_reviews = 5700
+    db.commit()
+    assert games[2].id in {i.game.id for i in service.discovery(db, user).items}
+    score = service.game_score(db, user, games[2].id)
+    assert score.metascore is None and "metacritic" not in score.components
+    assert any("Sin Metascore" in reason for reason in score.reasons)
+
+
+def test_preferencias_descartan_generos_ajenos_aunque_meta_sea_alto(sample):
+    db, user, _, _, games, genre, _ = sample
+    prefs(db, user, genre)
+    assert games[3].id not in {i.game.id for i in service.discovery(db, user).items}
+    assert games[3].id not in {i.game.id for i in service.discovery(db, user, "critics").items}
+
+
+def test_historial_positivo_define_generos_sin_preferencias(sample):
+    db, user, _, _, games, *_ = sample
+    db.add(Rating(user_id=user.id, game_id=games[0].id, score=5)); db.commit(); invalidate_engine()
+    ids = {i.game.id for i in service.discovery(db, user).items}
+    assert games[0].id not in ids and games[3].id not in ids
+    assert games[1].id in ids
+
+
+def test_componentes_explican_mismo_score_en_ficha_y_seleccion(sample):
+    db, user, _, _, games, genre, _ = sample
+    prefs(db, user, genre)
+    for item in service.discovery(db, user).items:
+        score = item.gametrack_score
+        assert sum(score.weights.values()) == pytest.approx(1)
+        assert score.value == round(sum(score.weights[k]*score.components[k] for k in score.weights)*100)
+        assert service.game_score(db, user, item.game.id) == score
+
+
+def test_wilson_y_fuentes_invalidas_no_inflan_reputacion(sample):
+    _, _, _, _, games, *_ = sample
+    game = games[0]
+    game.steam_total_reviews = game.steam_positive_reviews = 2
+    small = service.public_evidence(game)
+    game.steam_total_reviews = game.steam_positive_reviews = 10000
+    assert service.public_evidence(game)["community"] > small["community"]
+    game.steam_positive_reviews = 20000  # fuente inconsistente
+    game.steamspy_positive, game.steamspy_negative = 2000, 100
+    public = service.public_evidence(game)
+    assert public["total"] == 2100 and public["source"] == "Steam vía SteamSpy"
+
+
+def test_ficha_incompleta_no_aparece_aunque_sea_popular(sample):
+    db, user, _, _, games, *_ = sample
+    games[0].background_image = None; db.commit()
+    assert games[0].id not in {i.game.id for i in service.discovery(db, user).items}

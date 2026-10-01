@@ -114,7 +114,7 @@
 .gts-note { font-size:11px; line-height:1.7; color:var(--ink-secondary); max-width:95ch; margin-bottom:18px; }
 .gts-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:18px; align-items:start; }
 .gts-card { min-width:0; background:var(--surface); border:1px solid var(--border); border-radius:13px; overflow:hidden; }
-.gts-card .game-card { border:0; border-radius:0; margin:0; }
+.gts-card .game-card { width:100%; border:0; border-radius:0; margin:0; }
 .gts-card .game-card:hover { transform:none; box-shadow:none; }
 .gts-card-info { padding:15px; display:grid; gap:14px; }
 .gts-badge { display:flex; align-items:center; gap:10px; }
@@ -130,6 +130,11 @@
 .gts-explanation summary { cursor:pointer; color:var(--accent); }
 .gts-explanation ul { padding-left:16px; margin-bottom:0; }
 .gts-explanation p { margin-top:12px; }
+.gts-public { margin:0; font-size:10px; color:var(--ink-secondary); }
+.gts-breakdown { display:grid; gap:12px; margin:16px 0; }
+.gts-component > div:first-child { display:flex; justify-content:space-between; gap:8px; font-size:10px; margin-bottom:5px; }
+.gts-component-track { height:4px; background:var(--border); border-radius:8px; overflow:hidden; }
+.gts-component-track span { display:block; height:100%; background:var(--accent); border-radius:8px; }
 .gts-friend-row { display:flex; align-items:center; flex-wrap:wrap; gap:12px; padding:16px; border-radius:10px; border:1px solid var(--border); margin:0 0 16px; background:var(--surface); }
 .gts-friend-row[hidden] { display:none; }
 .gts-friend-row label { font-size:12px; font-weight:600; }

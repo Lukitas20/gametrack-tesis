@@ -36,7 +36,7 @@ import { inviteView } from "./views/invite.js";
 import { ratingsView } from "./views/ratings.js";
 import { recommendationsView } from "./views/recommendations.js";
 import { createHeaderSearch } from "./header-search.js?v=search-1";
-import { initMotion } from "./motion.js?v=score-1";
+import { initMotion } from "./motion.js";
 
 const THEME_KEY = "gametrack.theme";
 const MOTION_KEY = "gametrack.motion";
@@ -97,7 +97,7 @@ function homePath() {
 // Accesos persistentes a las secciones del jugador.
 const PLAYER_NAV = [
   ["/recomendaciones", "Inicio", "sparkles"],
-  ["/que-jugamos", "¿Qué jugamos?", "dice"],
+  ["/que-jugamos", "¿Qué jugamos?", "gamepad"],
   ["/catalogo", "Catálogo", "search"],
   ["/listas", "Mis listas", "list"],
   ["/amigos", "Amigos", "user"],

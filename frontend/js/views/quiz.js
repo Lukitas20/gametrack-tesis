@@ -24,6 +24,14 @@ import { cauldronLoader, h, icon, mount, toast } from "../ui.js";
  */
 let lastRun = null;
 let quizGeneration = 0;
+let artworkPromise = null;
+
+function catalogArtwork() {
+  const art=h("div",{class:"play-catalog-art","aria-hidden":"true"});
+  artworkPromise ||= api.home(4).then(data => data.destacados.filter(game => game.background_image).slice(0,3)).catch(() => []);
+  artworkPromise.then(games => art.replaceChildren(...games.map(game => h("img",{src:game.background_image,alt:"",loading:"lazy",onError:event => event.target.remove()}))));
+  return art;
+}
 
 /** Arranca el asistente de cero, descartando la tirada anterior. Es lo que
  * hace el botón del encabezado: entrar ahí es pedir una recomendación nueva,
@@ -130,14 +138,10 @@ function resultCard(pick, index, memberName) {
         { class: "account-note", style: { display: "block" } },
         game.genres.map((genre) => genre.name).join(" · "),
       ),
-      h(
-        "p",
-        { class: "row", style: { gap: "var(--s-2)", marginTop: "4px" } },
-        icon("sparkles", 11),
-        h("span", { class: "muted", style: { fontSize: "var(--fs-sm)" } }, pick.reason),
-      ),
-      pick.matched_criteria?.length ? h("div", { class: "row quiz-match-chips" },
-        pick.matched_criteria.map(criterion => h("span", { class: "chip" }, icon("check", 11), criterion))) : null,
+      h("details",{class:"quiz-fit-details"},h("summary",null,icon("sparkles",13),"Por qué encaja con tu plan"),
+        h("p",{class:"muted"},pick.reason),
+        pick.matched_criteria?.length ? h("div", { class: "row quiz-match-chips" },
+          pick.matched_criteria.map(criterion => h("span", { class: "chip" }, icon("check", 11), criterion))) : null),
       relaxed.length ? h("p", { class: "quiz-exception" }, icon("info", 13), `Se amplió: ${relaxed.join(", ")}.`) : null,
       pick.time_note ? h("p", { class: "quiz-time-note" }, icon("clock", 13), pick.time_note) : null,
       pick.group_fit ? h("section", { class: "group-fit", "aria-label": "Afinidad de los participantes" },
@@ -149,12 +153,12 @@ function resultCard(pick, index, memberName) {
             : member.score >= 0.7 ? "Alta" : member.score >= 0.4 ? "Media" : "Baja"))),
         h("p", { class: "discovery-control-note" }, "Afinidad estimada según los perfiles disponibles; no garantiza que les guste.")) : null,
       pick.aspect_evidence
-        ? h(
+        ? h("details",{class:"quiz-fit-details"},h("summary",null,icon("quote",13),"Lo que dicen las reseñas"),h(
             "blockquote",
             { class: "quote", style: { marginLeft: "0", marginRight: "0" } },
             h("p", null, `“${pick.aspect_evidence}”`),
             h("cite", null, `Fragmento de una reseña del catálogo${pick.aspect_mentions ? ` · Balance sobre ${pick.aspect_mentions} menciones del aspecto` : ""}`),
-          )
+          ))
         : null,
       h("div", { class: "discovery-actions" },
         h("a", { class: "btn btn-primary btn-sm", href: `#/juego/${game.id}?volver=que-jugamos` }, "Ver juego", icon("chevron", 13)),
@@ -189,7 +193,8 @@ export async function quizView() {
 
   function planSummary() {
     return h("aside", { class: "play-plan", "aria-label": "Resumen de tu plan" },
-      h("h2", null, "Tu selección"),
+      catalogArtwork(),
+      h("div",{class:"play-plan-heading"},h("span",{class:"play-plan-symbol"},icon("gamepad",21)),h("div",null,h("p",{class:"eyebrow"},"A TU MANERA"),h("h2", null, "Tu plan de juego"))),
       h("ul", null, QUESTIONS.map(question => h("li", { class: answers[question.key] ? "chosen" : "" },
         icon(question.symbol, 17), h("div", null, h("small", null, question.label), h("strong", null, answers[question.key]?.title || "Todavía por elegir")),
         answers[question.key] && icon("check", 14)))),
@@ -234,7 +239,8 @@ export async function quizView() {
 
   function head(eyebrow, title, note) {
     return h("header", { class: "play-banner" },
-      h("div", null, h("h1", null, title), note && h("p", { class: "play-banner-note" }, note)));
+      h("div",{class:"play-banner-copy"},h("p",{class:"play-eyebrow"},icon("gamepad",16),eyebrow),h("h1", null, title), note && h("p", { class: "play-banner-note" }, note)),
+      h("div",{class:"play-banner-emblem","aria-hidden":"true"},icon("gamepad",44)));
   }
 
   function renderQuestion() {
@@ -269,7 +275,7 @@ export async function quizView() {
         h("p", { class: "eyebrow" }, `PASO ${String(step + 1).padStart(2, "0")} / ${question.label.toLocaleUpperCase()}`),
         h("h2", { class: "quiz-question-title", id: "play-question-title", tabindex: "-1" }, question.title),
         h("p", { class: "play-question-note" }, question.note), options,
-        question.help && h("p", { class: "play-method-note" }, icon("info", 14), question.help),
+        question.help && h("details",{class:"play-method-details"},h("summary",null,icon("info",13),"Cómo usamos el tiempo"),h("p", { class: "play-method-note" }, question.help)),
         h("div", { class: "play-question-actions" },
           h("button", { class: "btn btn-ghost", onClick: () => {
             if (editing && lastRun) { editing = false; friendIds = [...lastRun.friendIds]; groupStrategy = lastRun.groupStrategy; Object.assign(answers, lastRun.answers); showResults(lastRun); }

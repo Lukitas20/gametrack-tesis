@@ -53,6 +53,9 @@ def _request(path, params):
             return "private", None
         if response.status_code in {401, 403}:
             return "not_configured", None
+        if response.status_code == 400 and "GetPlayerAchievements" in path:
+            body = response.json()
+            return ("ok", body) if isinstance(body, dict) else ("unavailable", None)
         response.raise_for_status()
         data = response.json()
         if not isinstance(data, dict):
@@ -165,6 +168,10 @@ def sync_profile(db, user, force=False):
             library_future = pool.submit(fetch_library, identity.steam_id)
             friends_future = pool.submit(fetch_friends, identity.steam_id)
             library, friends = library_future.result(), friends_future.result()
+        if library["status"] == "ok":
+            owned = {str(game["appid"]) for game in library.get("items", [])}
+            progress = (cache.library or {}).get("achievement_progress", {})
+            library["achievement_progress"] = {key: value for key, value in progress.items() if key in owned}
         cache.library = _merge(cache.library, library)
         cache.friends = _merge(cache.friends, friends)
         cache.checked_at = now
@@ -174,6 +181,7 @@ def sync_profile(db, user, force=False):
 
 def profile_payload(db, user, cache):
     library = deepcopy(cache.library)
+    progress = library.pop("achievement_progress", {})
     friends = deepcopy(cache.friends)
     games = library.get("items", [])
     appids = [game["appid"] for game in games]
@@ -188,6 +196,9 @@ def profile_payload(db, user, cache):
         row = local.get(game["appid"])
         game["game_id"] = row.id if row else None
         game["rating"] = row.score if row else None
+        achievement = progress.get(str(game["appid"]))
+        game["achievements"] = {key: achievement.get(key) for key in (
+            "status", "unlocked", "total", "percentage", "checked_at", "updated_at")} if achievement else None
     games.sort(key=lambda game: (-(game["minutes"] or 0), game["name"].casefold()))
     library["items"] = games
     library["total_hours"] = round(sum(game["minutes"] or 0 for game in games) / 60, 1)

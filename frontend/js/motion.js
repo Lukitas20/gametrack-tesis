@@ -3,7 +3,7 @@ export function initMotion(root) {
   if (!("IntersectionObserver" in window)) return;
   const reduced = matchMedia("(prefers-reduced-motion: reduce)");
   const seen = new WeakSet();
-  const targets = ".gts-card,.gts-heading,.section-head,.game-card,.recommendation-card,.quiz-result-card,.friend-row,.steam-friend,.play-question-panel,.play-plan";
+  const targets = ".gts-card,.gts-heading,.section-head,.game-card,.recommendation-card,.quiz-result-card,.friend-row,.steam-friend,.play-question-panel,.play-plan,.profile-activity-game,.profile-steam-connect,.steam-game,.achievement-row";
   const disabled = () => reduced.matches || document.body.classList.contains("motion-paused");
   const show = node => { node.classList.add("is-revealed"); observer.unobserve(node); };
   const observer = new IntersectionObserver(entries => {

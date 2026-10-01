@@ -23,7 +23,7 @@ import {
 } from "../ui.js";
 import { coldStartNotice, openOnboarding } from "./onboarding.js";
 import { startNewQuiz } from "./quiz.js";
-import { discoverySection } from "./gametrack-score.js?v=score-1";
+import { discoverySection } from "./gametrack-score.js?v=score-2";
 
 const STRATEGIES = ["auto", "ia_local", "hibrido", "contenido", "colaborativo", "popularidad"];
 const COMPARABLE = ["ia_local", "hibrido", "contenido", "colaborativo", "popularidad"];
