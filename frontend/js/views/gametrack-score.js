@@ -4,7 +4,7 @@ import { isLoggedIn, isDeveloper, state } from "../store.js";
 import { h, icon } from "../ui.js";
 import { gameAnalysisButton } from "./game-insights.js";
 
-const EVIDENCE = { sin_datos: "Faltan tus gustos", inicial: "Perfil inicial", en_desarrollo: "Perfil en desarrollo", amplia: "Más historial disponible", valoracion_propia: "Según tu valoración" };
+const EVIDENCE = { sin_datos: "Falta evidencia personal", inicial: "Afinidad provisional", en_desarrollo: "Perfil en desarrollo", amplia: "Más historial disponible", valoracion_propia: "Según tu valoración", steam: "Usa tu historial de Steam" };
 
 function scoreBadge(score) {
   const value = score?.value;
@@ -14,7 +14,7 @@ function scoreBadge(score) {
 }
 
 function scoreExplanation(score) {
-  const labels = { affinity: "Tus gustos", metacritic: "Metacritic", community: "Reseñas de Steam", reach: "Respaldo público", own_rating: "Tu valoración" };
+  const labels = { affinity: "Afinidad con tu historial y gustos", metacritic: "Metacritic", community: "Reseñas públicas de Steam", reach: "Respaldo público", own_rating: "Tu valoración" };
   const breakdown = Object.entries(score.weights || {}).map(([key, weight]) => {
     const value = Math.round((score.components?.[key] ?? 0) * 100);
     return h("div", { class: "gts-component" },

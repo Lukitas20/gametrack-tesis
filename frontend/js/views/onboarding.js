@@ -37,7 +37,9 @@ export function openOnboarding({ onDone = null } = {}) {
       container.replaceChildren(
         modalHead(
           "¿Qué géneros te gustan?",
-          "Elegí al menos uno. Con esto ya podemos recomendarte por contenido, sin necesidad de que hayas valorado nada.",
+          state.user?.preferences_source === "steam"
+            ? "Partimos de tus juegos más jugados en Steam. Ajustá la selección a tu gusto; después respetaremos tus cambios."
+            : "Elegí al menos uno para personalizar tus recomendaciones. Si conectaste Steam, también podés usar tus juegos más jugados desde el perfil.",
           close,
         ),
         h("div", { class: "row", style: { gap: "var(--s-2)" } }, chips),

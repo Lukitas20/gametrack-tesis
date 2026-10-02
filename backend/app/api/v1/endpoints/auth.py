@@ -22,6 +22,7 @@ from app.services.user_service import (
     get_user_by_username,
     set_preferences,
     update_profile,
+    ensure_steam_preferences,
 )
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -46,11 +47,13 @@ def login(data: LoginRequest, db: Session = Depends(get_db)) -> Token:
     user = authenticate_user(db, data.username, data.password)
     if not user:
         raise HTTPException(status_code=401, detail="Credenciales incorrectas")
+    ensure_steam_preferences(db, user)
     return _token_for(user)
 
 
 @router.get("/me", response_model=UserResponse)
-def me(user: User = Depends(get_current_user)) -> User:
+def me(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> User:
+    ensure_steam_preferences(db, user)
     return user
 
 
@@ -73,3 +76,21 @@ def update_preferences(
     db: Session = Depends(get_db),
 ) -> User:
     return set_preferences(db, user, data.genre_ids)
+
+
+@router.post("/me/preferences/steam", response_model=UserResponse)
+def suggest_steam_preferences(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> User:
+    from copy import deepcopy
+    from app.services import steam_profile_service as profiles, steam_preferences_service as tastes
+    cache = profiles.sync_profile(db, user)
+    with profiles._user_lock(user.id):
+        db.refresh(cache)
+        library = deepcopy(cache.library)
+        if not tastes.assign_preferences(db, user, library, force=True):
+            cache.library = library
+            db.commit()
+            raise HTTPException(409, "Todavía no tenemos géneros de tus juegos jugados. Revisá que tu biblioteca sea pública y volvé a sincronizar Steam.")
+        cache.library = library
+        db.commit()
+        db.refresh(user)
+    return user

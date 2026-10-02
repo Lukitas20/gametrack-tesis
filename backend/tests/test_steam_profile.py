@@ -28,6 +28,7 @@ def player(client, db):
 
 @pytest.fixture
 def source(monkeypatch):
+    monkeypatch.setattr(service.steam_preferences_service, "fetch_game_genres", lambda _: {})
     result = {
         "library": {"status": "ok", "updated_at": int(time.time()), "items": [
             {"appid": 220, "name": "Half-Life 2", "minutes": 125, "recent_minutes": 10, "last_played": 1, "cover": ""},

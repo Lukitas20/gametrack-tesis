@@ -1,4 +1,4 @@
-"""GameTrackScore 1.1: gustos, crítica y evidencia pública en una escala fija.
+"""GameTrackScore 2.0: historial propio primero, respaldo público secundario.
 
 Las reseñas públicas acreditan alcance, no jugadores únicos ni sesiones juntos.
 Los umbrales no se relajan para rellenar una lista sin candidatos adecuados.
@@ -13,6 +13,7 @@ from app.schemas.game import GameSummary
 from app.schemas.gametrack_score import DiscoveryItem, DiscoveryResponse, GameTrackScore
 from app.services.friendship_service import require_player, resolve_group_members
 from app.services import steam_profile_service
+from app.services.personal_history_service import personal_history, history_affinities, history_reasons
 
 
 def _count(value):
@@ -54,10 +55,30 @@ def score_context(db, user):
     liked = db.scalars(select(Game).join(Rating).where(Rating.user_id == user.id, Rating.score >= 4)).all()
     target_genres = genres or {genre.slug for game in liked for genre in game.genres}
     values, basis = engine.personal_scores(user.id, list(genres))
-    personal = bool(ratings or genres) and basis != "popularidad"
+    signals, owned, imported_reviews = personal_history(db, user, ratings)
+    history_values, used, similarities = history_affinities(engine, signals)
+    has_history = history_values is not None
+    if has_history:
+        # Los gustos manuales acompañan; los inferidos del mismo historial no
+        # se cuentan dos veces. No restringen la exploración a un género amplio.
+        if user.preferences_source == "manual" and genres and basis != "popularidad":
+            genre_values, _ = engine.personal_scores(None, list(genres))
+            history_values = .95 * history_values + .05 * genre_values
+        values, basis = history_values, "historial_personal"
+    personal = has_history or (bool(ratings or genres) and basis != "popularidad")
+    steam_used = {gid: signal for gid, signal in used.items() if signal["source"].startswith("steam_")}
+    history_games = {game.id: game for game in db.scalars(select(Game).where(Game.id.in_(used))).all()}
+    specific_count = sum(bool(engine._community_terms_by_game.get(gid, set()) & engine.personal_specific_terms)
+                         for gid in history_games) if used else 0
     return {"ratings": ratings, "genres": genres, "target_genres": target_genres,
             "scores": dict(zip(engine.game_ids, values)) if personal else {}, "basis": basis,
-            "history_size": len(ratings), "personal": personal}
+            "history_size": len(set(ratings) | set(used)), "rating_count": len(ratings), "personal": personal,
+            "has_positive_history": any(signal["weight"] > 0 for signal in used.values()), "specific_count": specific_count,
+            "has_history": has_history, "signals": used, "similarities": similarities, "engine": engine,
+            "history_games": history_games,
+            "steam_count": len(steam_used), "steam_review_count": sum(s["source"] == "steam_review" for s in steam_used.values()),
+            "steam_played_count": sum(s["source"] == "steam_playtime" for s in steam_used.values()),
+            "imported_review_count": imported_reviews, "owned": owned}
 
 
 def score_game(game, context):
@@ -78,31 +99,47 @@ def score_game(game, context):
     reasons = []
     matches = [genre.name for genre in game.genres if genre.slug in context["genres"]]
     value = max(0., min(1., float(value)))
-    if context["genres"]:
+    if context["genres"] and not context["has_history"]:
         value = .85*value + .15 if matches else .65*value
-    if matches:
-        reasons.append("Coincide con tus géneros: " + ", ".join(matches[:3]) + ".")
+    if not context["has_history"]:
+        value = min(.55, value)  # Géneros solos no acreditan afinidad fuerte.
+    reasons.extend(item[3] for item in history_reasons(game, context))
+    if matches and not context["has_history"]:
+        reasons.append("Coincidencia amplia de géneros: " + ", ".join(matches[:3]) + ". Es una señal provisional, no demuestra tu gusto por este juego.")
     count = context["history_size"]
-    if count:
-        reasons.append(f"Tiene en cuenta tus {count} valoraciones, incluidas las negativas.")
+    if context["steam_count"]:
+        reasons.append(f"Usa {context['steam_review_count']} reseñas tuyas de Steam y {context['steam_played_count']} juegos con horas comparables en el catálogo. Las horas indican interés; tus reseñas expresan tu opinión.")
+        if context["imported_review_count"] > context["steam_review_count"]:
+            reasons.append("Algunas reseñas importadas aún no tienen una ficha comparable, o ya cuentan con tu nota de GameTrack; no duplicamos esas opiniones.")
+    if context["rating_count"]:
+        reasons.append(f"Tiene en cuenta tus {context['rating_count']} valoraciones de GameTrack, incluidas las negativas.")
+    if context["has_history"] and not context["specific_count"]:
+        reasons.append("A los juegos comparados les faltan etiquetas específicas: la estimación sigue siendo limitada aunque tu historial esté cargado.")
+    elif context["has_history"] and not (context["engine"]._community_terms_by_game.get(game.id, set()) & context["engine"].personal_specific_terms):
+        reasons.append("A esta ficha le faltan etiquetas específicas; el historial está cargado, pero la comparación con este juego es limitada.")
     components = {"affinity": value}
     if public["meta"] is not None:
         components["metacritic"] = public["meta"]/100
     if public["community"] is not None:
-        components.update(community=public["community"], reach=public["reach"])
-        weights = {"affinity": .60, "metacritic": .25, "community": .10, "reach": .05} if public["meta"] is not None else {"affinity": .70, "community": .25, "reach": .05}
+        components.update(community=public["community"])
+        weights = {"affinity": .85, "metacritic": .10, "community": .05} if public["meta"] is not None else {"affinity": .95, "community": .05}
     else:
-        weights = {"affinity": .75, "metacritic": .25} if public["meta"] is not None else {"affinity": 1.}
+        weights = {"affinity": .90, "metacritic": .10} if public["meta"] is not None else {"affinity": 1.}
         reasons.append("Faltan reseñas públicas verificables; no se recomienda en Descubrí.")
     if public["meta"] is not None:
         reasons.append(f"Metascore {public['meta']}/100: aporta {round(weights['metacritic']*100)}% del índice.")
     else:
         reasons.append("Sin Metascore disponible: usamos tus gustos y las reseñas públicas, sin inventar una nota crítica.")
     if public["total"]:
-        reasons.append(f"Respaldado por {public['total']:,} reseñas de {public['source']}.")
-    evidence = "amplia" if count >= 10 else "en_desarrollo" if count >= 3 else "inicial"
+        reasons.append(f"Recepción pública: {public['total']:,} reseñas de {public['source']}; su cantidad no aumenta tu afinidad.")
+    own_signal = context["signals"].get(game.id)
+    if own_signal and own_signal["source"] == "steam_review":
+        reasons.insert(0, "Ya lo recomendaste en Steam; esa opinión forma parte del perfil." if own_signal["recommended"] else "Ya lo marcaste como no recomendado en Steam; esa opinión reduce la afinidad.")
+    evidence = "steam" if context["steam_count"] else "amplia" if count >= 10 else "en_desarrollo" if count >= 3 else "inicial"
     if evidence == "inicial":
-        reasons.append("Perfil inicial: se ajustará cuando valores más juegos.")
+        reasons.append("Todavía hay poca evidencia personal comparable; los géneros solos dan una estimación provisional.")
+    elif context["steam_count"] and not context["steam_review_count"]:
+        reasons.append("El historial aporta señales de interés, pero aún no tenemos reseñas tuyas comparables para distinguir qué te gustó y qué no.")
     return GameTrackScore(value=round(sum(components[key]*weight for key, weight in weights.items())*100),
         affinity=round(value*100), evidence=evidence, reasons=reasons, components=components, weights=weights, **metadata)
 
@@ -143,20 +180,22 @@ def discovery(db, user, mode="affinity", limit=8, friend_id=None):
         public = public_evidence(game)
         if not reputable(game, public):
             continue
-        if context["target_genres"] and not ({g.slug for g in game.genres} & context["target_genres"]):
+        if not context["has_history"] and context["target_genres"] and not ({g.slug for g in game.genres} & context["target_genres"]):
             continue
         multiplayer = bool({tag.slug for tag in game.tags} & multiplayer_tags)
         friend_rating, friend_owns = friend_ratings.get(game.id), game.steam_app_id in owned
         if mode == "friends":
             if not multiplayer or not (friend_owns or (friend_rating is not None and friend_rating >= 4)):
                 continue
-            if context["ratings"].get(game.id, 5) <= 2 or (friend_rating is not None and friend_rating <= 2):
+            if context["ratings"].get(game.id, 5) <= 2 or context["signals"].get(game.id, {}).get("weight", 0) < 0 or (friend_rating is not None and friend_rating <= 2):
                 continue
-        elif game.id in context["ratings"]:
+        elif game.id in context["ratings"] or game.id in context["signals"] or game.id in context["owned"]:
             continue
         if mode == "critics" and public["meta"] is None:
             continue
         score = score_game(game, context)
+        if context["has_history"] and not context["has_positive_history"] and not context["genres"]:
+            continue  # Los rechazos solos no permiten afirmar afinidad positiva.
         if context["personal"] and (score.affinity is None or score.affinity < 45):
             continue
         quality = .7*public["meta"]/100 + .3*public["community"] if public["meta"] is not None else public["community"]

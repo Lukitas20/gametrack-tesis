@@ -17,10 +17,19 @@ from app.schemas.gametrack_score import DiscoveryResponse, GameTrackScore, Expla
 router = APIRouter(prefix="/recommendations", tags=["recomendaciones"])
 
 
+def personal_score_user(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    from app.services.friendship_service import require_player
+    from app.services.steam_review_service import prepare_personal_history
+    require_player(user)
+    if user.steam_verified:
+        prepare_personal_history(db, user)
+    return user
+
+
 @router.get("/game/{game_id}/explanation", response_model=GameExplanation)
 def explain_personal_game(
     game_id: int, response: Response,
-    user: User = Depends(get_current_user), db: Session = Depends(get_db),
+    user: User = Depends(personal_score_user), db: Session = Depends(get_db),
 ):
     from app.services.game_explanation_service import explain_game
     response.headers["Cache-Control"] = "no-store"
@@ -30,7 +39,7 @@ def explain_personal_game(
 @router.post("/game/{game_id}/explanation", response_model=GameExplanation)
 def ask_about_personal_game(
     game_id: int, payload: ExplanationQuestion, response: Response,
-    user: User = Depends(get_current_user), db: Session = Depends(get_db),
+    user: User = Depends(personal_score_user), db: Session = Depends(get_db),
 ):
     from app.services.game_explanation_service import explain_game
     response.headers["Cache-Control"] = "no-store"
@@ -39,23 +48,27 @@ def ask_about_personal_game(
 
 @router.get("/discovery", response_model=DiscoveryResponse)
 def discover_games(
+    response: Response,
     mode: str = Query(default="affinity", pattern="^(affinity|critics|friends)$"),
     limit: int = Query(default=8, ge=1, le=24),
     friend_id: int | None = Query(default=None, gt=0),
-    user: User = Depends(get_current_user),
+    user: User = Depends(personal_score_user),
     db: Session = Depends(get_db),
 ):
     from app.services.gametrack_score_service import discovery
+    response.headers["Cache-Control"] = "no-store"
     return discovery(db, user, mode, limit, friend_id)
 
 
 @router.get("/game/{game_id}/score", response_model=GameTrackScore)
 def personal_game_score(
     game_id: int,
-    user: User = Depends(get_current_user),
+    response: Response,
+    user: User = Depends(personal_score_user),
     db: Session = Depends(get_db),
 ):
     from app.services.gametrack_score_service import game_score
+    response.headers["Cache-Control"] = "no-store"
     return game_score(db, user, game_id)
 
 

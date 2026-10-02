@@ -8,13 +8,11 @@ import re
 import unicodedata
 
 from fastapi import HTTPException
-from sqlalchemy import select
-
-from app.ml.recommender import get_engine
 from app.models import Game
 from app.schemas.gametrack_score import GameExplanation, ExplanationPoint, ExplanationReference
 from app.services.friendship_service import require_player
 from app.services.gametrack_score_service import public_evidence, score_context, score_game
+from app.services.personal_history_service import history_reasons
 
 
 def _plain(text):
@@ -33,8 +31,8 @@ def explain_game(db, user, game_id, question=None):
     public = public_evidence(game)
     references = [ExplanationReference(id="game", title="Ficha de GameTrack", url=f"#/juego/{game.id}",
         detail="Géneros, etiquetas y datos importados del catálogo; no es una reseña crítica completa."),
-        ExplanationReference(id="profile", title="Tus gustos y valoraciones", url="#/perfil",
-        detail=f"Tu perfil actual: {context['history_size']} valoraciones. Sólo se consulta tu propia cuenta.")]
+        ExplanationReference(id="profile", title="Tu historial y gustos", url="#/perfil",
+        detail=f"Señales comparables: {context['rating_count']} notas de GameTrack, {context['steam_review_count']} reseñas propias de Steam y {context['steam_played_count']} juegos con horas. Sólo se consulta tu propia cuenta.")]
     review_ref = "game"
     if game.steam_app_id:
         references.append(ExplanationReference(id="steam", title="Ficha oficial en Steam",
@@ -53,46 +51,33 @@ def explain_game(db, user, game_id, question=None):
         return ExplanationPoint(text=text, reference_ids=list(ids))
 
     common = [g.name for g in game.genres if g.slug in context["genres"]]
-    if common:
-        positives.append(point("Encaja con géneros que elegiste: " + ", ".join(common) + ". Es una señal a favor, aunque dos juegos del mismo género pueden sentirse distintos.", "profile", "game"))
-    elif context["genres"]:
+    if common and not context["has_history"]:
+        positives.append(point("Coincidencia amplia con tus géneros: " + ", ".join(common) + ". Es una señal provisional; dos juegos del mismo género pueden sentirse distintos.", "profile", "game"))
+    elif context["genres"] and not context["has_history"]:
         cautions.append(point("No coincide directamente con los géneros que elegiste. Si hay afinidad, viene de otros rasgos y de tus valoraciones.", "profile", "game"))
 
-    # Referencias contrastables a juegos realmente valorados por ESTA persona.
-    history = db.scalars(select(Game).where(Game.id.in_(context["ratings"]))).all() if context["ratings"] else []
-    engine = get_engine(db)
-    index = engine._game_index.get(game.id)
-    similarities = engine._similarity_row(index) if index is not None else None
-    compared = []
-    if similarities is not None:
-        for previous in history:
-            position = engine._game_index.get(previous.id)
-            if position is None or previous.id == game.id:
-                continue
-            similarity = float(similarities[position])
-            rating = context["ratings"][previous.id]
-            if similarity < .12 or (2 < rating < 4):
-                continue
-            shared = [g.name for g in previous.genres if g.slug in {v.slug for v in game.genres}]
-            shared += [t.name for t in previous.tags if t.slug in {v.slug for v in game.tags} and t.kind == "community"]
-            if not shared:
-                continue
-            compared.append((similarity, previous, rating, shared[:3]))
-    compared.sort(key=lambda item: (-item[0], item[1].id))
-    used = {"positive": 0, "negative": 0}
-    for _, previous, rating, shared in compared:
-        direction = "positive" if rating >= 4 else "negative"
-        if used[direction] >= 2:
-            continue
-        used[direction] += 1
-        ref = f"history-{previous.id}"
-        references.append(ExplanationReference(id=ref, title=f"Tu valoración de {previous.name}",
-            url=f"#/juego/{previous.id}", detail=f"Lo valoraste con {rating:g}/5. La comparación es por rasgos de contenido, no por una experiencia idéntica."))
-        text = f"Comparte {', '.join(shared)} con {previous.name}, que valoraste {rating:g}/5. "
-        text += "Esa similitud suma evidencia a favor." if rating >= 4 else "Puede ser una señal de desencaje; compartir rasgos no demuestra que vayas a rechazarlo."
-        (positives if rating >= 4 else cautions).append(point(text, ref, "game"))
+    # Usa exactamente las comparaciones y fuentes que alimentan el puntaje.
+    for _, gid, negative, text in history_reasons(game, context):
+        previous, signal = context["history_games"][gid], context["signals"][gid]
+        ref = f"history-{gid}"
+        url = f"#/juego/{gid}"
+        if signal["source"] == "steam_review":
+            url = f"https://steamcommunity.com/profiles/{user.steam_id}/recommended/{signal['appid']}/"
+        references.append(ExplanationReference(id=ref, title=f"Tu historial de {previous.name}", url=url,
+            detail=text + " La similitud de contenido no garantiza la misma experiencia."))
+        (cautions if negative else positives).append(point(text, ref, "game"))
+    if context["steam_count"]:
+        positives.append(point(f"Usamos {context['steam_review_count']} reseñas tuyas de Steam y {context['steam_played_count']} juegos con horas comparables. Las opiniones negativas también reducen la afinidad.", "profile"))
+        if context["steam_played_count"]:
+            cautions.append(point("Las horas muestran interés, pero no prueban que un juego te haya gustado. Las reseñas propias tienen más peso; comprar o poseer un juego no cuenta como una opinión positiva.", "profile"))
 
     own_rating = context["ratings"].get(game.id)
+    own_signal = context["signals"].get(game.id)
+    if own_rating is None and own_signal and own_signal["source"] == "steam_review":
+        recommended = own_signal["recommended"]
+        (positives if recommended else cautions).insert(0, point(
+            ("Ya lo recomendaste en Steam." if recommended else "Ya lo marcaste como no recomendado en Steam.")
+            + " Usamos esa opinión como señal explícita; no la convertimos en estrellas de GameTrack.", "profile"))
     if own_rating is not None:
         (positives if own_rating >= 4 else cautions).insert(0, point(
             f"Ya lo valoraste {own_rating:g}/5. Tu GameTrackScore de {score.value}/100 refleja esa opinión; no es una nueva predicción.", "profile"))
@@ -112,7 +97,7 @@ def explain_game(db, user, game_id, question=None):
     else:
         cautions.append(point("Faltan reseñas públicas verificables para contrastar la recepción del juego.", "game"))
     if score.evidence in {"sin_datos", "inicial", "en_desarrollo"}:
-        cautions.append(point("La explicación es provisional: con pocas valoraciones sabemos menos sobre tus gustos. Valorar juegos que te gustaron y que no te gustaron mejora el perfil.", "profile"))
+        cautions.append(point("La explicación es provisional: hay pocas opiniones o juegos con rasgos comparables. Los géneros amplios solos no describen con precisión tus gustos.", "profile"))
     if not game.is_enriched:
         cautions.append(point("La ficha todavía está incompleta. No alcanza para describir con confianza su experiencia de juego.", "game"))
     if not cautions:
@@ -146,7 +131,7 @@ def explain_game(db, user, game_id, question=None):
                 selected.append(point("Sin gustos reconocibles o valoraciones no calculamos un puntaje personal.", "profile"))
         if re.search(r"compara|parecid|similar|historial|jugue|valore", q):
             comparisons = [p for p in positives + cautions if any(ref.startswith("history-") for ref in p.reference_ids)]
-            selected.extend(comparisons or [point("No hay juegos valorados con suficientes rasgos compartidos para una comparación fiable. No tomo las valoraciones de otras cuentas como si fueran tuyas.", "profile", "game")])
+            selected.extend(comparisons or [point("No hay juegos de tu historial con suficientes rasgos específicos compartidos para una comparación fiable. No tomo las valoraciones de otras cuentas como si fueran tuyas.", "profile", "game")])
         if re.search(r"genero|modalidad|multijugador|cooperativ|amigo|solo|mecanica|juega", q):
             features = [g.name for g in game.genres] + [t.name for t in game.tags[:12]]
             selected.append(point("La ficha registra: " + (", ".join(features) if features else "todavía no hay géneros o modalidades suficientes") + ". Las etiquetas describen rasgos; no garantizan que puedas compartir partida con cualquier plataforma o amigo.", "game", *(["steam"] if game.steam_app_id else [])))

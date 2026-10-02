@@ -1,6 +1,7 @@
 """Schemas Pydantic de usuarios y autenticación."""
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
@@ -52,6 +53,7 @@ class UserResponse(BaseModel):
 
     # Géneros elegidos en el onboarding (ver User.genres).
     genres: list[GenreOut] = []
+    preferences_source: Literal["steam", "manual"] | None = None
 
 
 class LoginRequest(BaseModel):

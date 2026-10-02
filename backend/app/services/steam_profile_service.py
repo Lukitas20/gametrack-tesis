@@ -15,6 +15,7 @@ from sqlalchemy.exc import IntegrityError
 from app.core.config import settings
 from app.models import Game, Rating, SteamIdentity, SteamProfileCache, User, UserRole
 from app.services import friendship_service, steam_service
+from app.services import steam_preferences_service
 
 TTL = 300
 RETRY_DELAY = 30
@@ -152,6 +153,10 @@ def sync_profile(db, user, force=False):
         now = int(time.time())
         interval = RETRY_DELAY if force else TTL
         if cache and cache.steam_id == identity.steam_id and now - cache.checked_at < interval:
+            library = deepcopy(cache.library)
+            steam_preferences_service.assign_preferences(db, user, library)
+            cache.library = library
+            db.commit()
             return cache
         if not cache:
             cache = SteamProfileCache(user_id=user.id, steam_id=identity.steam_id, checked_at=0, library={}, friends={})
@@ -172,6 +177,12 @@ def sync_profile(db, user, force=False):
             owned = {str(game["appid"]) for game in library.get("items", [])}
             progress = (cache.library or {}).get("achievement_progress", {})
             library["achievement_progress"] = {key: value for key, value in progress.items() if key in owned}
+        # Las reseñas públicas son independientes de la privacidad de la biblioteca.
+        if "user_reviews" in (cache.library or {}):
+            library["user_reviews"] = deepcopy(cache.library["user_reviews"])
+        if library["status"] != "private" and "genre_hints" in (cache.library or {}):
+            library["genre_hints"] = deepcopy(cache.library["genre_hints"])
+        steam_preferences_service.assign_preferences(db, user, library, refresh=True)
         cache.library = _merge(cache.library, library)
         cache.friends = _merge(cache.friends, friends)
         cache.checked_at = now
@@ -182,6 +193,8 @@ def sync_profile(db, user, force=False):
 def profile_payload(db, user, cache):
     library = deepcopy(cache.library)
     progress = library.pop("achievement_progress", {})
+    library.pop("user_reviews", None)
+    library.pop("genre_hints", None)
     friends = deepcopy(cache.friends)
     games = library.get("items", [])
     appids = [game["appid"] for game in games]
@@ -225,6 +238,8 @@ def profile_payload(db, user, cache):
         friend["profile_url"] = f"https://steamcommunity.com/profiles/{friend['steam_id']}/"
     friends["items"] = sorted(friends.get("items", []), key=lambda friend: (not bool(friend["account"]), friend["name"].casefold(), friend["steam_id"]))
     return {"steam_id": cache.steam_id, "checked_at": cache.checked_at,
+            "preferences": {"source": user.preferences_source,
+                            "genres": [{"id": genre.id, "slug": genre.slug, "name": genre.name} for genre in user.genres]},
             "next_refresh_at": cache.checked_at + RETRY_DELAY,
             "profile_url": f"https://steamcommunity.com/profiles/{cache.steam_id}/",
             "reviews_url": f"https://steamcommunity.com/profiles/{cache.steam_id}/recommended/",

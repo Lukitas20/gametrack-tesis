@@ -23,6 +23,7 @@ from app.core.config import settings
 from app.db.database import get_db
 from app.models import SteamAuthFlow, SteamIdentity, User, UserRole
 from app.services.steam_service import get_player_summary
+from app.services.user_service import ensure_steam_preferences
 
 router = APIRouter(prefix="/auth/steam", tags=["auth"])
 ENDPOINT = "https://steamcommunity.com/openid/login"
@@ -240,6 +241,7 @@ def session(request: Request, response: Response, db: Session = Depends(get_db))
     user = db.get(User, flow.user_id)
     if not user or not user.is_active:
         raise HTTPException(401, "Cuenta no disponible")
+    ensure_steam_preferences(db, user)
     response.delete_cookie(SESSION_COOKIE, path=cookie_path())
     response.headers["Cache-Control"] = "no-store"
     return _token_for(user)

@@ -47,6 +47,17 @@
 .steam-own-score { display:inline-flex; align-items:center; gap:5px; color:var(--brand-gold-ui); font-weight:650; white-space:nowrap; }
 .steam-more { display:flex; margin:24px auto; }
 .steam-ratings-list { display:grid; gap:10px; }
+.steam-review-card { padding:18px; border:1px solid var(--border); border-radius:12px; background:var(--surface); }
+.steam-review-heading { display:flex; align-items:center; gap:15px; flex-wrap:wrap; }
+.steam-review-cover { width:100px; height:50px; overflow:hidden; border-radius:6px; flex-shrink:0; }
+.steam-review-cover img { width:100%; height:100%; object-fit:cover; }
+.steam-review-heading > div { flex:1; min-width:120px; }
+.steam-review-heading h3 { font-size:15px; overflow-wrap:anywhere; }
+.steam-review-verdict { display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:650; }
+.steam-review-verdict.is-recommended { color:var(--brand-teal-ui); }
+.steam-review-content { margin:18px 0; font-size:14px; line-height:1.7; white-space:pre-wrap; overflow-wrap:anywhere; }
+.steam-review-footer { display:flex; justify-content:space-between; flex-wrap:wrap; gap:10px; font-size:12px; }
+.steam-gametrack-ratings-head { margin-top:34px; }
 .steam-rating-row { display:flex; align-items:center; gap:16px; padding:12px; border:1px solid var(--border); border-radius:10px; color:var(--ink); background:var(--surface); }
 .steam-rating-row:hover { text-decoration:none; background:var(--surface-hover); }
 .steam-rating-row > img,.steam-rating-row > .steam-game-fallback { width:100px; height:50px; border-radius:6px; object-fit:cover; }

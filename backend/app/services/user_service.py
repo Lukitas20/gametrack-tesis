@@ -46,11 +46,32 @@ def authenticate_user(db: Session, username: str, password: str) -> User | None:
 
 def set_preferences(db: Session, user: User, genre_ids: list[int]) -> User:
     """Reemplaza las preferencias de género del usuario por las indicadas."""
-    genres = db.scalars(select(Genre).where(Genre.id.in_(genre_ids))).all()
-    user.preferences = [UserPreference(genre=genre, weight=1.0) for genre in genres]
-    db.commit()
-    db.refresh(user)
+    from app.services.steam_profile_service import _user_lock
+    with _user_lock(user.id):
+        db.refresh(user, attribute_names=["preferences", "preferences_source"])
+        genres = db.scalars(select(Genre).where(Genre.id.in_(genre_ids))).all()
+        replace_preferences(user, [(genre, 1.0) for genre in genres])
+        user.preferences_source = "manual"
+        db.commit()
+        db.refresh(user)
     return user
+
+
+def replace_preferences(user: User, weighted_genres: list[tuple[Genre, float]]) -> None:
+    """Conserva las filas comunes para no insertar duplicados al modificar gustos."""
+    previous = {preference.genre_id: preference for preference in user.preferences}
+    preferences = []
+    for genre, weight in weighted_genres:
+        preference = previous.get(genre.id) or UserPreference(genre=genre)
+        preference.weight = weight
+        preferences.append(preference)
+    user.preferences = preferences
+
+
+def ensure_steam_preferences(db: Session, user: User) -> None:
+    if user.steam_verified and user.preferences_source != "manual":
+        from app.services.steam_profile_service import sync_profile
+        sync_profile(db, user)
 
 
 def update_profile(

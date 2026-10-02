@@ -163,3 +163,9 @@ export async function refreshUser() {
   state.user = await api.me();
   emit();
 }
+
+export function updateSteamPreferences(preferences) {
+  if (!state.user) return;
+  state.user = { ...state.user, genres: preferences.genres, preferences_source: preferences.source };
+  emit();
+}

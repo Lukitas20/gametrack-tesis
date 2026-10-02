@@ -31,6 +31,7 @@ import numpy as np
 from scipy.sparse import csr_matrix, lil_matrix
 from sklearn.feature_extraction.text import TfidfTransformer
 from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.preprocessing import normalize
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
@@ -194,12 +195,18 @@ class RecommenderEngine:
                 select(game_tags.c.game_id, Tag.slug, game_tags.c.votes)
                 .join(Tag, Tag.id == game_tags.c.tag_id)
                 .join(Game, Game.id == game_tags.c.game_id)
-                .where(Tag.kind == "community", _recommendable_game_filter())
+                # Algunas etiquetas antiguas del seed quedaron como platform.
+                # Votos > 1 son evidencia por asociación de la ingesta SteamSpy;
+                # las categorías oficiales conservan su default de 1.
+                .where(or_(Tag.kind == "community", game_tags.c.votes > 1), _recommendable_game_filter())
             ).all()
             if self.config.use_community_tags
             else []
         )
         community_terms = {slug for _, slug, _ in vote_rows}
+        self._community_terms_by_game: dict[int, set[str]] = {}
+        for game_id, slug, _ in vote_rows:
+            self._community_terms_by_game.setdefault(game_id, set()).add(slug)
         self._term_index: dict[str, int] = {
             term: column
             for column, term in enumerate(sorted(genre_terms | community_terms))
@@ -248,6 +255,38 @@ class RecommenderEngine:
         row = np.asarray((self._tfidf @ self._tfidf[index].T).todense()).ravel()
         row[index] = 0.0
         return row
+
+    def personal_history_similarities(self, game_ids: list[int]) -> dict[int, np.ndarray]:
+        """Comparaciones para GTS: rasgos específicos antes que géneros amplios.
+
+        No construye una matriz catálogo x catálogo. Sólo compara los juegos
+        de esta persona; una coincidencia exclusivamente de género se limita
+        a .45 y no puede aparentar una coincidencia fuerte de experiencia.
+        """
+        if not self._term_index:
+            return {}
+        broad = set(self._genre_names) | {
+            "action", "adventure", "rpg", "indie", "casual", "simulation",
+            "strategy", "sports", "racing", "massively-multiplayer", "free-to-play",
+            "singleplayer", "multiplayer", "co-op", "online-co-op", "pvp",
+        }
+        weights = np.ones(len(self._term_index))
+        self.personal_specific_terms = set(self._term_index) - broad
+        for term, column in self._term_index.items():
+            if term in broad:
+                weights[column] = .15
+        matrix = normalize(self._tfidf.multiply(weights).tocsr())
+        specific = matrix.multiply(weights == 1).tocsr()
+        result = {}
+        for gid in game_ids:
+            index = self._game_index.get(gid)
+            if index is None or matrix[index].nnz == 0:
+                continue
+            similarity = np.asarray((matrix @ matrix[index].T).todense()).ravel()
+            shared_specific = np.asarray((specific @ specific[index].T).todense()).ravel() > 0
+            similarity[~shared_specific] = np.minimum(similarity[~shared_specific], .45)
+            result[gid] = np.clip(similarity, 0., 1.)
+        return result
 
     def score_terms(self, term_weights: dict[str, float]) -> np.ndarray | None:
         """Afinidad de cada juego con una consulta ponderada término->peso.

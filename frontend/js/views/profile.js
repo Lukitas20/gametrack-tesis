@@ -2,7 +2,7 @@
 
 import { api } from "../api.js";
 import { openOnboarding } from "./onboarding.js";
-import { isLoggedIn, refreshUser, state, displayName } from "../store.js";
+import { isLoggedIn, refreshUser, state, displayName, updateSteamPreferences } from "../store.js";
 import { steamDashboard } from "./steam-profile.js";
 import { h, icon, initials, mount, toast } from "../ui.js";
 import { requiresLogin } from "../components.js";
@@ -50,6 +50,23 @@ function dataSection(user) {
 }
 
 function genresSection(user) {
+  const fromSteam = user.preferences_source === "steam";
+  const useSteam = user.steam_verified && h("button", {
+    class: "btn btn-sm btn-ghost",
+    onClick: async event => {
+      const button = event.currentTarget;
+      button.disabled = true;
+      try {
+        await api.suggestSteamPreferences();
+        await refreshUser();
+        await renderAgain();
+        toast("Gustos actualizados según tus juegos más jugados en Steam");
+      } catch (error) {
+        toast(error.message, "error");
+        button.disabled = false;
+      }
+    },
+  }, icon("refresh", 13), fromSteam ? "Actualizar desde Steam" : "Usar mis juegos de Steam");
   return h(
     "section",
     { class: "profile-genres" },
@@ -57,20 +74,21 @@ function genresSection(user) {
       "div",
       { class: "row", style: { justifyContent: "space-between", alignItems: "center", marginBottom: "var(--s-3)" } },
       h("h2", null, "Mis gustos"),
-      h(
+      h("div", { class: "row", style: { gap: "var(--s-2)", flexWrap: "wrap" } }, useSteam, h(
         "button",
         { class: "btn btn-sm", onClick: () => openOnboarding({ onDone: renderAgain }) },
         icon("sparkles", 13),
-        "Cambiar",
-      ),
+        "Modificar",
+      )),
     ),
+    fromSteam && h("p", { class: "steam-caption", style: { marginBottom: "var(--s-3)" } }, "Asignados según tus juegos más jugados en Steam. Podés modificarlos cuando quieras."),
     user.genres.length
       ? h(
           "div",
           { class: "row", style: { gap: "var(--s-2)" } },
           user.genres.map((genre) => h("span", { class: "chip" }, genre.name)),
         )
-      : h("p", { class: "muted" }, "Elegí tus géneros para encontrar juegos más afines a vos."),
+      : h("p", { class: "muted" }, user.steam_verified ? "Tus juegos con tiempo registrado nos ayudan a identificar tus gustos. Si Steam no comparte tu biblioteca, también podés elegirlos." : "Elegí tus géneros para encontrar juegos más afines a vos."),
   );
 }
 
@@ -122,13 +140,19 @@ async function renderAgain() {
 }
 
 async function buildBody() {
+  if (state.user.steam_verified) await refreshUser();
   const user = state.user;
   const wrap = h("div",{class:"player-profile"});
   const heroMedia=h("div",{class:"profile-hero-media","aria-hidden":"true"});
   const dashboard=user.steam_verified && user.role === "jugador" ? steamDashboard(user) : null;
+  const tastes = genresSection(user);
   if (dashboard) dashboard.onData = data => {
     const recent=[...data.library.items].sort((a,b) => (b.last_played || 0)-(a.last_played || 0) || (b.minutes || 0)-(a.minutes || 0))[0];
     if (recent?.cover) mount(heroMedia,h("img",{src:recent.cover,alt:"",onError:() => heroMedia.replaceChildren()}));
+    if (data.preferences && state.user?.id === user.id) {
+      updateSteamPreferences(data.preferences);
+      tastes.replaceChildren(...genresSection(state.user).childNodes);
+    }
   };
   mount(wrap,
     h(
@@ -155,7 +179,7 @@ async function buildBody() {
         dashboard ? h("button",{class:"btn profile-secondary-action",onClick:() => {dashboard.showSection("achievements");dashboard.scrollIntoView({block:"start",behavior:"instant"});}},icon("trophy",16),"Mis logros")
           : h("a",{href:"#/listas",class:"btn profile-secondary-action"},icon("list",16),"Mis listas")),
     ),
-    genresSection(user),
+    tastes,
     dashboard || (user.role === "jugador" ? profileActivity(user,heroMedia) : null),
     user.role === "jugador" && !user.steam_verified ? steamSection(user) : null,
     h("details",{class:"profile-settings-fold"},h("summary",null,icon("user",16),"Ajustes del perfil",icon("chevronDown",14)),h("div",{class:"profile-settings"},dataSection(user))),

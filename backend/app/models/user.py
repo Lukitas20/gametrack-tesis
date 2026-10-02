@@ -54,6 +54,8 @@ class User(Base):
     # Solo para el rol desarrollador: estudio al que pertenece. Permite filtrar
     # el dashboard de analítica a los juegos de ese estudio.
     studio: Mapped[str | None] = mapped_column(String(120), index=True)
+    # Las elecciones manuales tienen prioridad sobre los gustos inferidos.
+    preferences_source: Mapped[str | None] = mapped_column(String(20))
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 

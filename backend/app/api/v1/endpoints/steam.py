@@ -1,6 +1,6 @@
 """Integración con Steam: importar juegos y vincular la cuenta."""
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
@@ -12,8 +12,22 @@ from app.schemas.user import SteamLinkRequest, UserResponse
 from app.services import steam_service
 from app.services import steam_profile_service
 from app.services import steam_achievement_service
+from app.services import steam_review_service
 
 router = APIRouter(prefix="/steam", tags=["steam"])
+
+
+@router.get("/me/reviews")
+def my_steam_reviews(response: Response, page: int = Query(default=1, ge=1, le=1000),
+                     user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    response.headers["Cache-Control"] = "no-store"
+    return steam_review_service.reviews(db, user, page)
+
+
+@router.post("/me/reviews/sync")
+def sync_my_steam_reviews(response: Response, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    response.headers["Cache-Control"] = "no-store"
+    return steam_review_service.reviews(db, user, force=True)
 
 
 @router.get("/me/achievements/{appid}")

@@ -29,6 +29,18 @@ No se necesita una Steam Web API key para iniciar sesión. `STEAM_API_KEY`
 permite obtener nombre/avatar, biblioteca y amigos. Al entrar con Steam se abre
 el perfil, que consulta automáticamente estos datos y muestra los disponibles.
 
+Al iniciar sesión con una cuenta Steam verificada y una biblioteca accesible,
+GameTrack asigna hasta cuatro gustos de género a partir de los veinte juegos
+con más tiempo registrado. Usa los géneros del catálogo y completa unas pocas
+fichas faltantes desde Steam; no considera juegos sin tiempo jugado, software
+ni categorías comerciales como «Free to play». Si la biblioteca es privada o
+Steam no responde, permite elegir los gustos desde el perfil sin impedir el login.
+
+En **Mi perfil → Mis gustos**, **Modificar** guarda una selección personal que
+las sincronizaciones futuras respetan. **Usar mis juegos de Steam** vuelve a la
+asignación automática; los gustos automáticos se actualizan al sincronizar la
+biblioteca. Las selecciones que ya existían se conservan como manuales.
+
 Configuración por defecto para desarrollo:
 
 ```dotenv
@@ -83,8 +95,43 @@ valorados. Las horas ocultas o desconocidas no se presentan como cero.
 
 Las notas de 1 a 5 provienen de GameTrack. La sincronización no crea ratings,
 no sobreescribe las horas ingresadas manualmente y no convierte tiempo en
-puntuaciones. Las reseñas escritas en Steam se consultan mediante el enlace al
-perfil de reseñas de Steam; no se importan como notas de GameTrack.
+puntuaciones. Las reseñas públicas escritas en Steam se muestran en Valoraciones
+con su veredicto original «Recomendado / No recomendado»; no se importan como
+notas de GameTrack.
+
+## GameTrackScore 2.0
+
+El índice usa el historial de la propia identidad verificada: reseñas de Steam,
+notas de GameTrack y hasta 40 juegos con al menos dos horas registradas. Las
+horas tienen menor peso y sólo indican interés; poseer un juego o tener cero
+horas no se interpreta como una opinión. Una nota de GameTrack prevalece sobre
+la reseña del mismo juego y evita duplicar esa evidencia.
+
+Las comparaciones usan etiquetas comunitarias con sus votos e IDF. Los géneros
+y modalidades amplias se atenúan; compartir sólo «Acción» no establece una
+coincidencia fuerte. Sin historial comparable, la afinidad por géneros se limita
+a 55/100 y se identifica como provisional. Los gustos manuales acompañan al historial con un 5%; los
+inferidos de Steam no se cuentan dos veces. La afinidad aporta 85%, Metacritic
+10% y recepción comunitaria 5%; si falta una fuente pública, su peso pasa a
+afinidad. El volumen de reseñas aporta confianza al indicador comunitario,
+pero no suma afinidad ni tiene un componente de popularidad independiente.
+Son pesos iniciales de diseño, pendientes de evaluación con preferencias
+reales; el número no es una probabilidad de satisfacción.
+
+Los endpoints privados del puntaje preparan hasta tres páginas de reseñas
+personales con la misma caché que el perfil, sin exigir abrir Valoraciones.
+Sólo se usan juegos con rasgos disponibles en el catálogo y páginas públicas
+importadas; las explicaciones indican cantidades y fuentes efectivamente
+usadas. La biblioteca privada se excluye, pero las reseñas pueden ser públicas
+independientemente. No se usan datos de otra cuenta ni se crean estrellas.
+
+El catálogo necesita la ingesta de rasgos de SteamSpy (`scripts/steamspy_sync.py
+--index` y `--enrich N`) además de las fichas oficiales de Steam: las categorías
+de la tienda por sí solas no describen mecánicas o experiencia. Si faltan esas
+etiquetas, se informa la limitación y no se inventan comparaciones. La evidencia
+del perfil identifica Steam cuando se usa su historial, aunque no haya notas
+de GameTrack. Descubrí excluye juegos ya poseídos o valorados y admite otros
+géneros si sus rasgos encajan con el historial.
 
 La biblioteca se consulta con
 [GetOwnedGames](https://partner.steamgames.com/doc/webapi/IPlayerService#GetOwnedGames)

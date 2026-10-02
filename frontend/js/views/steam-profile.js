@@ -34,6 +34,7 @@ export function steamDashboard(user) {
   const tabs = h("div", { class: "steam-tabs", role: "group", "aria-label": "Secciones del perfil" });
   const updateNote = h("p", { class: "steam-caption", "aria-live": "polite" });
   let data = null, ratings = null, ratingsError = null, steamError = null;
+  let reviews = null, reviewsError = null, reviewsLoading = false;
   let active = "library", search = "", filter = "all", order = "hours", shown = 12;
   let selectedAchievement = null, achievementSearch = "";
   let loading = false, revision = 0;
@@ -65,7 +66,7 @@ export function steamDashboard(user) {
     const entries = [
       ["list", available ? number(library.items.length) : "—", "Juegos en Steam", available ? `${library.played_count} con tiempo registrado` : "Biblioteca"],
       ["clock", available && (!library.items.length || library.items.some(game => game.minutes != null)) ? number(library.total_hours) + " h" : "—", "Tiempo en Steam", library?.hours_complete === false ? "Total parcial · hay horas privadas" : "Horas registradas por Steam"],
-      ["star", ratings ? number(ratings.length) : "—", "Tus valoraciones", "Puntuaciones de GameTrack"],
+      ["star", reviews?.total != null ? number(reviews.total) : "—", "Reseñas en Steam", ratings ? `${number(ratings.length)} valoraciones en GameTrack` : "Tus recomendaciones publicadas"],
       ["user", friendsAvailable ? number(data.friends.items.length) : "—", "Amigos en Steam", friendsAvailable ? `${data.friends.items.filter(friend => friend.account).length} vinculados en GameTrack` : "Tu comunidad"],
     ];
     summary.replaceChildren(h("div", { class: "steam-metrics" }, entries.map(([symbol, value, label, note]) => h("article", { class: "steam-metric" },
@@ -144,17 +145,56 @@ export function steamDashboard(user) {
   }
 
   function ratingsTab() {
-    if (!ratings) return ratingsError ? emptyState("No pudimos cargar tus valoraciones", ratingsError) : spinnerBlock("Cargando tus valoraciones…");
     const gamesById = new Map((data?.library.items || []).map(game => [game.game_id, game]));
     return h("div", null,
-      h("div", { class: "steam-section-head" }, h("div", null, h("h2", null, "Tu criterio. Tus favoritos."), h("p", { class: "muted" }, "Tus puntuaciones guardadas en GameTrack. También podés consultar tus reseñas en Steam.")),
+      h("div", { class: "steam-section-head" }, h("div", null, h("h2", null, "Tus reseñas de Steam"), h("p", { class: "muted" }, "Lo que recomendaste y lo que no, con tus propias palabras.")),
         data && h("a", { class: "btn btn-sm", href: data.reviews_url, target: "_blank", rel: "noopener noreferrer" }, "Mis reseñas en Steam ↗")),
-      ratings.length ? h("div", { class: "steam-ratings-list" }, [...ratings].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).map(row => {
+      steamReviewsList(),
+      h("div", { class: "steam-section-head steam-gametrack-ratings-head" }, h("div", null, h("h2", null, "Tus notas en GameTrack"), h("p", { class: "muted" }, "Las puntuaciones de 1 a 5 que guardaste acá."))),
+      !ratings ? (ratingsError ? emptyState("No pudimos cargar tus notas", ratingsError) : spinnerBlock("Cargando tus notas…")) : ratings.length ? h("div", { class: "steam-ratings-list" }, [...ratings].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).map(row => {
         const steam = gamesById.get(row.game_id);
         return h("a", { class: "steam-rating-row", href: `#/juego/${row.game_id}` }, cover(row.game.background_image, row.game.name),
           h("div", null, h("strong", null, row.game.name), h("p", { class: "steam-caption" }, steam ? `${hours(steam.minutes)} en Steam` : `${number(row.hours_played)} h guardadas en GameTrack`)),
           h("span", { class: "steam-own-score" }, icon("star", 15), `${number(row.score)} / 5`), icon("chevron", 16));
       })) : emptyState("Tu primera valoración te espera", "Elegí un juego de tu biblioteca y contanos qué te pareció. Tus notas ayudan a recomendarte juegos según tus gustos.", h("a", { class: "btn", href: "#/catalogo" }, "Buscar un juego")));
+  }
+
+  function steamReviewsList() {
+    if (!reviews) return reviewsError ? emptyState("No pudimos cargar tus reseñas de Steam", reviewsError) : spinnerBlock("Trayendo tus reseñas de Steam…");
+    const entries = reviews.items || [];
+    return h("div", null,
+      reviewsError && h("p", { class: "steam-notice", role: "status" }, reviewsError),
+      sectionNotice(reviews, "tus reseñas"),
+      reviews.total != null && h("p", { class: "steam-result-count" }, `${entries.length} de ${number(reviews.total)} reseñas de Steam`),
+      entries.length ? h("div", { class: "steam-ratings-list" }, entries.map(review => h("article", { class: "steam-review-card" },
+        h("div", { class: "steam-review-heading" },
+          h("a", { class: "steam-review-cover", href: review.game_id ? `#/juego/${review.game_id}` : `https://store.steampowered.com/app/${review.appid}/`, target: review.game_id ? null : "_blank", rel: review.game_id ? null : "noopener noreferrer", "aria-label": `Ver ${review.name}` }, cover(review.cover, review.name)),
+          h("div", null, h("h3", null, review.name), review.minutes != null && h("p", { class: "steam-caption" }, `${hours(review.minutes)} en Steam`)),
+          h("span", { class: `steam-review-verdict ${review.is_recommended ? "is-recommended" : "is-not-recommended"}` }, icon(review.is_recommended ? "check" : "x", 14), review.is_recommended ? "Recomendado" : "No recomendado")),
+        h("p", { class: "steam-review-content" }, review.content),
+        h("div", { class: "steam-review-footer" }, h("span", { class: "steam-caption" }, review.posted.replace(/Posted /g, "Publicada ").replace(/Updated /g, "Actualizada ")),
+          h("a", { href: review.url, target: "_blank", rel: "noopener noreferrer" }, "Ver reseña en Steam ↗")))))
+        : reviews.status === "ok" ? emptyState("Todavía no publicaste reseñas en Steam", "Cuando recomiendes un juego en Steam, tu reseña aparecerá acá.") : null,
+      reviews.next_page && h("button", { class: "btn btn-sm steam-more", disabled: reviewsLoading, onClick: loadMoreReviews }, reviewsLoading ? "Cargando…" : "Ver más reseñas"));
+  }
+
+  async function loadMoreReviews() {
+    if (loading || reviewsLoading || !reviews?.next_page) return;
+    const current = revision, page = reviews.next_page;
+    reviewsLoading = true; renderBody();
+    try {
+      const next = await api.steamReviews(page);
+      if (current !== revision || state.user?.id !== owner) return;
+      if (next.status !== "ok") throw new Error("No pudimos cargar más reseñas. Probá nuevamente.");
+      const entries = new Map(reviews.items.map(review => [review.appid, review]));
+      next.items.forEach(review => entries.set(review.appid, review));
+      reviews = { ...next, items: [...entries.values()] }; reviewsError = null;
+      metrics();
+    } catch (error) {
+      if (current === revision && state.user?.id === owner) reviewsError = error.message;
+    } finally {
+      if (current === revision && state.user?.id === owner) { reviewsLoading = false; renderBody(); }
+    }
   }
 
   function friendsTab() {
@@ -170,15 +210,17 @@ export function steamDashboard(user) {
   async function load(force = false) {
     if (loading) return;
     if (force && data?.next_refresh_at > Date.now() / 1000) { toast(`Podés volver a sincronizar en ${Math.ceil(data.next_refresh_at - Date.now() / 1000)} segundos.`); return; }
-    const current = ++revision; loading = true; refresh.disabled = true; refresh.textContent = "Sincronizando…";
+    const current = ++revision; loading = true; reviewsLoading = false; refresh.disabled = true; refresh.textContent = "Sincronizando…";
     updateNote.textContent = "Consultando la información que Steam comparte…";
     renderBody();
-    const results = await Promise.allSettled([force ? api.syncSteamProfile() : api.steamProfile(), api.myRatings()]);
+    const results = await Promise.allSettled([force ? api.syncSteamProfile() : api.steamProfile(), api.myRatings(), force ? api.syncSteamReviews() : api.steamReviews()]);
     if (current !== revision || state.user?.id !== owner) return;
     if (results[0].status === "fulfilled") { data = results[0].value; steamError = null; }
     else steamError = results[0].reason.message;
     if (results[1].status === "fulfilled") { ratings = results[1].value; ratingsError = null; }
     else ratingsError = results[1].reason.message;
+    if (results[2].status === "fulfilled") { reviews = results[2].value; reviewsError = null; }
+    else reviewsError = results[2].reason.message;
     loading = false; refresh.disabled = false; refresh.replaceChildren(icon("refresh", 14), "Sincronizar Steam");
     updateNote.textContent = steamError || (data ? `Última consulta · ${new Date(data.checked_at * 1000).toLocaleString("es-AR")} · Datos privados de tu perfil` : "");
     metrics(); renderBody();if (data) root.onData?.(data);

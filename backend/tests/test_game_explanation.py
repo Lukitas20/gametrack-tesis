@@ -12,7 +12,7 @@ from app.api.deps import get_current_user
 from app.api.v1.endpoints.recommendations import router
 from app.db.database import Base, get_db
 from app.ml.recommender import invalidate_engine
-from app.models import Game, Genre, Rating, User, UserPreference
+from app.models import Game, Genre, Rating, Tag, User, UserPreference
 from app.models.enums import UserRole
 from app.services.game_explanation_service import explain_game
 from app.services.gametrack_score_service import game_score
@@ -25,10 +25,11 @@ def example(monkeypatch):
     Base.metadata.create_all(engine)
     with Session(engine) as db:
         genre = Genre(slug="accion", name="Acción")
+        tag = Tag(slug="souls-like", name="Souls-like", kind="community")
         user, other = User(username="propio"), User(username="ajeno")
         db.add_all([genre, user, other]); db.flush()
         games = [Game(slug=f"explain-{i}", name=f"Juego {i}", description="Descripción de prueba",
-            genres=[genre], steam_app_id=300+i, steam_synced_at=datetime.now(timezone.utc),
+            genres=[genre], tags=[tag], steam_app_id=300+i, steam_synced_at=datetime.now(timezone.utc),
             background_image="https://example.test/cover.jpg", metacritic=85,
             steam_total_reviews=10000, steam_positive_reviews=9500) for i in range(4)]
         db.add_all(games); db.flush()
