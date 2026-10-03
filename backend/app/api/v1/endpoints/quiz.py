@@ -318,7 +318,7 @@ class QuizOutcome:
 
 def run_quiz(
     db: Session, payload: QuizRequest, engine: RecommenderEngine | None = None,
-    *, members: list[User] | None = None,
+    *, members: list[User] | None = None, user: User | None = None,
 ) -> QuizOutcome:
     """Todo el asistente salvo el efecto de red y la serialización HTTP.
 
@@ -347,6 +347,11 @@ def run_quiz(
             .options(selectinload(Game.tags), selectinload(Game.genres))
         )})
     candidates = [c for c in candidates if c.game_id in games]
+    if user and not members:
+        from app.services.play_service import learning_context
+        context=learning_context(db,user,engine)
+        if context and context['personal']:
+            candidates=[replace(c,score=.75*c.score+.25*context['scores'].get(c.game_id,.5)) for c in candidates]
     fits = {}
     if members:
         # Esta restricción nunca participa de la relajación: ninguna afinidad
@@ -397,7 +402,7 @@ def suggest(
             raise HTTPException(status_code=401, detail="Iniciá sesión para recomendar con amigos",
                                 headers={"WWW-Authenticate": "Bearer"})
         members = resolve_group_members(db, user, payload.friend_ids)
-    outcome = run_quiz(db, payload, members=members)
+    outcome = run_quiz(db, payload, members=members, user=user)
     profile, _, company = _resolve_vocabulary(payload)
 
     # Prioriza las tres fichas elegidas para el worker, sirviendo los datos
@@ -424,7 +429,7 @@ def suggest(
         # revocado una amistad durante la consulta.
         members = resolve_group_members(db, user, payload.friend_ids)
     if changed:
-        outcome = run_quiz(db, payload, members=members)
+        outcome = run_quiz(db, payload, members=members, user=user)
     games, aspect_scores = outcome.games, outcome.aspect_scores
     top = outcome.ranked[:3]
 

@@ -3,6 +3,7 @@ import { gameCard, saveToListButton } from "../components.js";
 import { isLoggedIn, isDeveloper, state } from "../store.js";
 import { h, icon } from "../ui.js";
 import { gameAnalysisButton } from "./game-insights.js";
+import {playFeedbackButton} from "./play-feedback.js";
 
 const EVIDENCE = { sin_datos: "Falta evidencia personal", inicial: "Afinidad provisional", en_desarrollo: "Perfil en desarrollo", amplia: "Más historial disponible", valoracion_propia: "Según tu valoración", steam: "Usa tu historial de Steam" };
 
@@ -40,7 +41,7 @@ export function personalScorePanel(gameId) {
     try {
       const score = await api.gameTrackScore(gameId);
       if (request !== revision || owner !== state.user?.id) return;
-      panel.replaceChildren(scoreBadge(score), scoreExplanation(score), gameAnalysisButton(gameId));
+      panel.replaceChildren(scoreBadge(score), scoreExplanation(score), gameAnalysisButton(gameId),h("div",null,playFeedbackButton(gameId,"este juego",panel.refresh)));
       if (score.value == null) panel.append(h("a", { href: "#/perfil" }, "Completar mis gustos"));
     } catch {
       if (request !== revision || owner !== state.user?.id) return;
@@ -66,7 +67,7 @@ export function discoverySection() {
     h("label", { for: "gts-friend" }, "Tu compañero"), selector, friendHint);
   root.append(h("div", { class: "gts-heading" },
     h("div", null, h("p", { class: "eyebrow" }, "HECHO PARA VOS"), h("h2", null, "Tu próximo favorito")),
-    h("a", { class: "btn btn-ghost btn-sm", href: "#/que-jugamos" }, icon("dice", 16), "Armar una partida")),
+    h("a", { class: "btn btn-ghost btn-sm", href: "#/que-jugamos?modo=plan" }, icon("dice", 16), "Armar una partida")),
     h("p", { class: "gts-intro" }, "Tus gustos, la crítica y tus amigos. Tres formas de encontrar qué jugar."), tabs, friendRow, note, body);
   function renderTabs() {
     tabs.replaceChildren(...modes.map(([key, label, symbol]) => h("button", {

@@ -1,6 +1,7 @@
 """Alta y actualización de ratings y reseñas."""
 
 import math
+from datetime import datetime, timezone
 from statistics import median
 
 from sqlalchemy import case, func, select
@@ -135,6 +136,8 @@ def upsert_rating(db: Session, user: User, data: RatingCreate) -> Rating:
     rating.score = data.score
     rating.hours_played = data.hours_played
     rating.status = data.status
+    # Precisión consistente con las devoluciones: la opinión más reciente gana.
+    rating.updated_at = datetime.now(timezone.utc)
 
     db.flush()
     recompute_game_aggregates(db, data.game_id)

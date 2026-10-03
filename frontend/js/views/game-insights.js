@@ -1,6 +1,6 @@
 import { api } from "../api.js";
-import { state } from "../store.js";
-import { h, icon, openModal, modalHead } from "../ui.js";
+import { state, isLoggedIn, isDeveloper } from "../store.js";
+import { h, icon, mount, openModal, modalHead } from "../ui.js";
 
 function referenceLink(ref, compact = false) {
   const external = ref.url.startsWith("https://");
@@ -16,7 +16,8 @@ function evidencePoint(point, references) {
       .filter(Boolean).map(ref => referenceLink(ref, true))));
 }
 
-function analysisContent(gameId, close) {
+function analysisContent(gameId, close, upcoming = false) {
+  const explain = upcoming ? api.upcomingExplanation : api.gameExplanation;
   const owner = state.user?.id;
   const root = h("div", { class: "game-insights", onClick: event => {
     if (event.target.closest("a")?.getAttribute("href")?.startsWith("#/")) close();
@@ -27,7 +28,7 @@ function analysisContent(gameId, close) {
   async function load() {
     const version = ++revision;
     try {
-      const data = await api.gameExplanation(gameId);
+      const data = await explain(gameId);
       if (version !== revision || !current()) return;
       render(data);
     } catch (error) {
@@ -69,7 +70,7 @@ function analysisContent(gameId, close) {
       input.value = ""; setBusy(true);
       message.scrollIntoView({ block: "nearest" });
       try {
-        const response = await api.gameExplanation(gameId, question);
+        const response = await explain(gameId, question);
         if (version !== revision || !current()) return;
         message.lastElementChild.replaceChildren(h("span", { class: "insight-reply-label" }, icon("sparkles", 13), "IA local · evidencia"),
           h("ul", { class: "insight-points" }, response.answer.map(point => evidencePoint(point, response.references))));
@@ -90,7 +91,8 @@ function analysisContent(gameId, close) {
           h("ul", { class: "insight-points" }, points.slice(2).map(point => evidencePoint(point, data.references)))) : null);
     }
 
-    root.replaceChildren(
+    mount(root,
+      data.score.preliminary && h("p", { class: "prelaunch-notice" }, icon("clock",14), "PREVIO AL LANZAMIENTO · Estimación provisional"),
       h("div", { class: "insight-overview" }, h("div", { class: "insight-score", "aria-label": `GameTrackScore ${data.score.value ?? 'sin datos'}` },
         h("strong", null, data.score.value ?? "—"), h("span", null, "GameTrackScore")),
         h("div", null, h("p", { class: "insight-local" }, icon("sparkles", 13), "TU IA LOCAL"), h("h3", null, data.game_name), h("p", null, data.summary))),
@@ -103,6 +105,14 @@ function analysisContent(gameId, close) {
   }
   load();
   return root;
+}
+
+export function openUpcomingAnalysis(appid) {
+  openModal(close => h("div", null,
+    modalHead("¿Podría gustarte cuando salga?", "GameTrackScore previo al lanzamiento, con tus gustos y referencias.", close),
+    !isLoggedIn() || isDeveloper() ? h("div", {class:"game-insights"},
+      h("p",null,isDeveloper() ? "Esta estimación necesita una cuenta de jugador con gustos e historial personal." : "Iniciá sesión para comparar este anuncio con tus gustos e historial."),
+      h("a",{class:"btn btn-primary",href:"#/cuentas",onClick:close},"Ir a mi cuenta")) : analysisContent(appid, close, true)), {wide:true});
 }
 
 export function openGameAnalysis(gameId) {

@@ -16,6 +16,7 @@ from app.models.game import Game, Genre, Tag, game_genres, game_tags
 from app.models.friendship import Friendship
 from app.models.game_list import GameList, GameListItem
 from app.models.interaction import Rating, Review, ReviewAspect
+from app.models.play_feedback import PlayFeedback
 from app.models.steamspy import SteamSpySync
 from app.models.steam_catalog import SteamCatalogEntry, SteamCatalogSync
 from app.models.steam_catalog_worker import SteamCatalogWorker
@@ -37,6 +38,7 @@ __all__ = [
     "Genre",
     "ListType",
     "Rating",
+    "PlayFeedback",
     "RecommendationSource",
     "Review",
     "ReviewAspect",

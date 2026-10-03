@@ -147,6 +147,50 @@ def test_steam_failure_is_recoverable(client):
     assert "steam_error=unavailable" in result.headers["location"]
 
 
+def test_transient_connect_failure_retries_before_verification(client):
+    params = assertion(client)
+    response = httpx.Response(200, text=f"ns:{steam.NAMESPACE}\nis_valid:true\n",
+                              request=httpx.Request("POST", steam.ENDPOINT))
+    with patch.object(httpx.Client, "post", side_effect=[httpx.ConnectError("offline"), response]) as post:
+        result = client.get("/api/v1/auth/steam/callback", params=params)
+    assert result.headers["location"].endswith("/#/steam-complete")
+    assert post.call_count == 2
+    assert client.post("/api/v1/auth/steam/session").status_code == 200
+
+
+@pytest.mark.parametrize("error,attempts", [(httpx.ConnectTimeout, 2), (httpx.ReadTimeout, 1),
+                                          (httpx.WriteTimeout, 1)])
+def test_timeout_requires_fresh_login_without_replaying_assertion(client, error, attempts):
+    params = assertion(client)
+    state = client.cookies.get(steam.STATE_COOKIE)
+    with patch.object(httpx.Client, "post", side_effect=error("slow")) as post:
+        result = client.get("/api/v1/auth/steam/callback", params=params)
+    assert result.headers["location"].endswith("steam_error=timeout")
+    assert post.call_count == attempts
+    assert client.post("/api/v1/auth/steam/session").status_code == 401
+    client.cookies.set(steam.STATE_COOKIE, state, path=steam.cookie_path())
+    replay, post = callback(client, params)
+    assert replay.headers["location"].endswith("steam_error=expired")
+    post.assert_not_called()
+    # Un nuevo clic crea un estado distinto y permite ingresar normalmente.
+    client.cookies.clear()  # Retirar la cookie sin dominio inyectada para probar la repetición.
+    fresh = assertion(client)
+    assert fresh["state"] != params["state"]
+    success, post = callback(client, fresh)
+    assert success.headers["location"].endswith("/#/steam-complete")
+    post.assert_called_once()
+    assert client.post("/api/v1/auth/steam/session").status_code == 200
+
+
+def test_http_error_does_not_repeat_verification(client):
+    params = assertion(client)
+    response = httpx.Response(503, request=httpx.Request("POST", steam.ENDPOINT))
+    with patch.object(httpx.Client, "post", return_value=response) as post:
+        result = client.get("/api/v1/auth/steam/callback", params=params)
+    assert result.headers["location"].endswith("steam_error=unavailable")
+    post.assert_called_once()
+
+
 def test_legacy_id_cannot_take_over_account_and_can_be_verified(client, db):
     account = register(client)
     user = db.get(User, account["user"]["id"]); user.steam_id = SID; db.commit()

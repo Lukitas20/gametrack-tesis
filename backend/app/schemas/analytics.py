@@ -30,6 +30,11 @@ class GameHeader(BaseModel):
     nombre: str
     slug: str
     desarrollador: str | None
+    background_image: str | None = None
+    steam_app_id: int | None = None
+    rating_local_promedio: float | None = None
+    cantidad_ratings_local: int = 0
+    # Índice combinado del catálogo; no representa sólo votos de GameTrack.
     rating_promedio: float
     cantidad_ratings: int
 
@@ -47,7 +52,13 @@ class GameAnalyticsOut(BaseModel):
 class StudioGameRow(BaseModel):
     id: int
     nombre: str
+    background_image: str | None = None
+    steam_app_id: int | None = None
+    rating_local_promedio: float | None = None
+    cantidad_ratings_local: int = 0
+    # Índice combinado del catálogo; no representa sólo votos de GameTrack.
     rating_promedio: float
+    cantidad_ratings: int = 0
     cantidad_resenas: int
     resenas_analizadas: int
     distribucion: SentimentDistribution

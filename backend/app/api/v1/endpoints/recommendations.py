@@ -1,6 +1,6 @@
 """Recomendaciones personalizadas para el rol jugador."""
 
-from fastapi import APIRouter, Depends, Query, Response
+from fastapi import APIRouter, Depends, Path, Query, Response
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -24,6 +24,22 @@ def personal_score_user(user: User = Depends(get_current_user), db: Session = De
     if user.steam_verified:
         prepare_personal_history(db, user)
     return user
+
+
+@router.get('/upcoming/{appid}/explanation', response_model=GameExplanation)
+def upcoming_explanation(response: Response, appid: int = Path(gt=0, le=4294967295),
+                         user: User = Depends(personal_score_user), db: Session = Depends(get_db)):
+    from app.services.prelaunch_score_service import explain_upcoming
+    response.headers['Cache-Control'] = 'no-store'
+    return explain_upcoming(db,user,appid)
+
+
+@router.post('/upcoming/{appid}/explanation', response_model=GameExplanation)
+def ask_upcoming(payload: ExplanationQuestion, response: Response, appid: int = Path(gt=0, le=4294967295),
+                 user: User = Depends(personal_score_user), db: Session = Depends(get_db)):
+    from app.services.prelaunch_score_service import explain_upcoming
+    response.headers['Cache-Control'] = 'no-store'
+    return explain_upcoming(db,user,appid,payload.question)
 
 
 @router.get("/game/{game_id}/explanation", response_model=GameExplanation)

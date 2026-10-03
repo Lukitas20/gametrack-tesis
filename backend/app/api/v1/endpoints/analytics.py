@@ -1,6 +1,8 @@
 """Panel de analítica NLP/ABSA. Exclusivo del rol desarrollador."""
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_developer
@@ -19,8 +21,49 @@ from app.schemas.analytics import (
     StudioAnalyticsOut,
 )
 from app.services import steam_service
+from app.services.developer_assistant import explain_developer_report
 
 router = APIRouter(prefix="/analytics", tags=["analitica"])
+
+
+class AssistantQuestion(BaseModel):
+    question: str = Field(min_length=1, max_length=600)
+    studio: str | None = Field(default=None, max_length=120)
+    game_id: int | None = Field(default=None, gt=0)
+
+
+@router.get("/studios")
+def studios(search: str = Query(default="", max_length=120),
+            _: User = Depends(require_developer), db: Session = Depends(get_db)):
+    name = func.trim(Game.developer)
+    query = select(func.min(name).label('name'), func.count(Game.id).label('games')).where(
+        Game.developer.is_not(None), name != ""
+    )
+    if search.strip():
+        query = query.where(func.lower(name).contains(search.strip().lower(), autoescape=True))
+    rows = db.execute(query.group_by(func.lower(name)).order_by(func.count(Game.id).desc(), func.min(name)).limit(20))
+    return [dict(row._mapping) for row in rows]
+
+
+@router.post("/assistant")
+def assistant(payload: AssistantQuestion, user: User = Depends(require_developer),
+              db: Session = Depends(get_db)):
+    if payload.game_id is not None:
+        game = db.get(Game, payload.game_id)
+        if game is None:
+            raise HTTPException(404, 'El juego no existe')
+        report = game_analytics(db, game)
+    else:
+        target = (payload.studio or user.studio or '').strip()
+        if not target:
+            raise HTTPException(400, 'Elegí un estudio para consultar el informe')
+        report = studio_analytics(db, target)
+    # No actualizar desde Steam al preguntar: explicar la muestra ya guardada.
+    import unicodedata
+    question = ''.join(c for c in unicodedata.normalize('NFD', payload.question.lower())
+                       if unicodedata.category(c) != 'Mn')
+    overview = platform_overview(db) if any(word in question for word in ('compar', 'catalogo', 'promedio')) else None
+    return explain_developer_report(report, payload.question, overview)
 
 
 @router.get("/overview", response_model=PlatformOverviewOut)
@@ -72,11 +115,25 @@ def process_reviews(
         default=False, description="Reprocesa también las reseñas ya analizadas"
     ),
     limit: int | None = Query(default=None, ge=1),
+    studio: str | None = Query(default=None, max_length=120),
+    game_id: int | None = Query(default=None, gt=0),
     _: User = Depends(require_developer),
     db: Session = Depends(get_db),
 ) -> ProcessResult:
     """Ejecuta el módulo NLP sobre las reseñas pendientes."""
-    processed = analyze_pending_reviews(db, limit=limit, reanalyze=reanalyze)
+    game_ids = None
+    if game_id is not None:
+        game = db.get(Game, game_id)
+        if game is None:
+            raise HTTPException(404, 'El juego no existe')
+        if studio is not None and (game.developer or '').strip().lower() != studio.strip().lower():
+            raise HTTPException(400, 'El juego no pertenece al estudio seleccionado')
+        game_ids = [game_id]
+    elif studio is not None:
+        game_ids = list(db.scalars(select(Game.id).where(
+            func.lower(func.trim(Game.developer)) == studio.strip().lower()
+        )))
+    processed = analyze_pending_reviews(db, limit=limit, reanalyze=reanalyze, game_ids=game_ids)
     return ProcessResult(
         procesadas=processed,
         mensaje=f"Se analizaron {processed} reseñas.",

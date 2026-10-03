@@ -62,6 +62,11 @@ def group_scores(
             member.id, preferred_genres=[genre.slug for genre in member.genres],
         )
         scores = np.asarray(scores, dtype=float)
+        from app.services.play_service import learning_context
+        learned=learning_context(db,member,engine)
+        if learned and learned['personal']:
+            scores=np.asarray([learned['scores'].get(gid,.5) for gid in engine.game_ids],dtype=float)
+            method='experiencias_personales'
         if scores.shape != (len(engine.game_ids),):
             raise ValueError("Los puntajes personales no coinciden con el catálogo del motor")
         if method == "popularidad":

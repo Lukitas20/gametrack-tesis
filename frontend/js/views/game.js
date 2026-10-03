@@ -1,7 +1,7 @@
 /* Detalle de juego: valorar, guardar en lista y publicar reseña. */
 
 import { api } from "../api.js";
-import { personalScorePanel } from "./gametrack-score.js?v=score-explainer-1";
+import { personalScorePanel } from "./gametrack-score.js";
 import { steamAchievementPanel } from "./steam-achievements.js";
 import {
   aspectChip,
@@ -20,7 +20,7 @@ import { emptyState, formatYear, h, icon, mount, signed, spinnerBlock, toast } f
  * aceptan destinos conocidos: el valor llega por la URL y terminaría en un
  * `navigate`. */
 const BACK_LINKS = {
-  "que-jugamos": { path: "/que-jugamos", label: "Volver a los resultados" },
+  "que-jugamos": { path: "/que-jugamos?modo=plan", label: "Volver a los resultados" },
 };
 
 function backLink(query) {

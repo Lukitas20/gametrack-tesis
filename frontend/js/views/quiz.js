@@ -14,6 +14,8 @@ import { cover, saveToListButton } from "../components.js";
 import { navigate } from "../router.js";
 import { isLoggedIn, isDeveloper, state, displayName } from "../store.js";
 import { cauldronLoader, h, icon, mount, toast } from "../ui.js";
+import {backlogView,experienceView,playNavigation} from "./play-hub.js";
+import {playFeedbackButton,feedbackRevision} from "./play-feedback.js";
 
 /**
  * Última tirada del asistente, para poder volver a ella desde la ficha de un
@@ -39,7 +41,7 @@ function catalogArtwork() {
 export function startNewQuiz() {
   quizGeneration += 1;
   lastRun = null;
-  navigate("/que-jugamos");
+  navigate("/que-jugamos?modo=plan");
 }
 
 const QUESTIONS = [
@@ -114,7 +116,7 @@ function optionIcon(question, option, index) {
   return icon(symbols[question.key][index], 25);
 }
 
-function resultCard(pick, index, memberName) {
+function resultCard(pick, index, memberName, onFeedback) {
   const game = pick.game;
   const relaxed = pick.relaxed_criteria || [];
   return h(
@@ -163,11 +165,20 @@ function resultCard(pick, index, memberName) {
       h("div", { class: "discovery-actions" },
         h("a", { class: "btn btn-primary btn-sm", href: `#/juego/${game.id}?volver=que-jugamos` }, "Ver juego", icon("chevron", 13)),
         isLoggedIn() && !isDeveloper() ? saveToListButton(game) : null),
+      playFeedbackButton(game.id,game.name,onFeedback),
     ),
   );
 }
 
-export async function quizView() {
+export async function quizView({query=new URLSearchParams()}={}) {
+  const requested=query.get('modo');
+  const mode=['biblioteca','experiencias','plan'].includes(requested) ? requested : isLoggedIn() && !isDeveloper() ? 'hub' : 'plan';
+  if(mode!=='plan') quizGeneration+=1;
+  const view=mode==='hub' ? backlogView({hub:true}) : mode==='biblioteca' ? backlogView() : mode==='experiencias' ? experienceView() : await guidedQuizView();
+  return h('div',{class:'play-center'},playNavigation(mode),view);
+}
+
+async function guidedQuizView() {
   const generation = ++quizGeneration;
   const container = h("div", { class: "quiz-shell" });
   const answers = {};
@@ -182,7 +193,7 @@ export async function quizView() {
   let requestRevision = 0;
   const ownerId = state.user?.id ?? null;
   const isCurrent = () => generation === quizGeneration && (state.user?.id ?? null) === ownerId;
-  if (lastRun && lastRun.ownerId !== ownerId) lastRun = null;
+  if (lastRun && (lastRun.ownerId !== ownerId || lastRun.feedbackRevision !== feedbackRevision)) lastRun = null;
   if (isLoggedIn() && !isDeveloper()) {
     try { friends = (await api.friends()).friends; }
     catch (error) { friendsError = error.message; }
@@ -303,7 +314,7 @@ export async function quizView() {
       });
       if (!isCurrentRequest()) return;
       lastRun = { answers: { ...answers }, response, allowRelaxation, excluded: [...excluded],
-        ownerId, friendIds: [...friendIds], groupStrategy };
+        ownerId, friendIds: [...friendIds], groupStrategy, feedbackRevision };
       showResults(lastRun);
     } catch (error) {
       if (!isCurrentRequest()) return;
@@ -362,7 +373,7 @@ export async function quizView() {
         ? h(
             "div",
             { class: "play-results-grid" },
-            response.picks.map((pick, index) => resultCard(pick, index, memberName)),
+            response.picks.map((pick, index) => resultCard(pick, index, memberName,()=>{lastRun=null;if(isCurrent()) renderResults();})),
           )
         : h("div", { class: "play-empty-results" }, icon("search", 30), h("h2", null, "Todavía no encontramos esa combinación"), h("p", null, "Probá cambiar una respuesta arriba o empezar con otro plan.")),
       h(

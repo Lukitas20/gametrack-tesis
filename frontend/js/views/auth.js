@@ -10,6 +10,13 @@ export function accountsView({ query = new URLSearchParams() } = {}) {
   const invite = query.get("invitacion");
   if (invite && /^[A-Za-z0-9_-]{32,64}$/.test(invite)) sessionStorage.setItem("gametrack.invite", invite);
   let mode = query.get("modo") === "registro" ? "register" : "login";
+  let steamError = query.get("steam_error");
+  if (query.has("steam_error")) {
+    // Mostrar el resultado una vez, sin conservar un fallo viejo al recargar.
+    query.delete("steam_error");
+    const remaining = query.toString();
+    history.replaceState(history.state, "", `#/cuentas${remaining ? `?${remaining}` : ""}`);
+  }
   let busy = false;
   const panel = h("section", { class: "auth-panel", "aria-label": "Acceso a GameTrack" });
   function renderForm() {
@@ -20,12 +27,16 @@ export function accountsView({ query = new URLSearchParams() } = {}) {
       cancelled: "Cancelaste el acceso con Steam. Podés volver a intentarlo.",
       invalid: "No pudimos verificar el acceso con Steam. Volvé a intentarlo.",
       expired: "El intento de acceso venció. Iniciá nuevamente con Steam.",
-      unavailable: "Steam no respondió a tiempo. Intentá otra vez en unos minutos.",
+      timeout: "Steam tardó demasiado en responder. Tocá Continuar con Steam para iniciar un nuevo intento.",
+      unavailable: "No pudimos conectar con Steam. Revisá tu conexión y tocá Continuar con Steam para reintentar.",
       conflict: "Esta cuenta tiene una vinculación anterior. Entrá con tu usuario y verificá Steam desde tu perfil.",
       linked: "Esa cuenta de Steam ya está vinculada a otro usuario de GameTrack.",
       inactive: "Esta cuenta está desactivada.",
     };
-    if (query.has("steam_error")) report(errors[query.get("steam_error")] || errors.invalid);
+    if (steamError !== null) {
+      report(errors[steamError] || errors.invalid);
+      steamError = null;
+    }
     const tabs = h("div", { class: "auth-tabs", role: "group", "aria-label": "Tipo de acceso" });
     for (const [value, label] of [["login", "Iniciar sesión"], ["register", "Crear cuenta"]]) {
       tabs.append(h("button", { type: "button", class: mode === value ? "active" : "", "aria-pressed": String(mode === value), onClick: () => {
@@ -82,7 +93,10 @@ export function accountsView({ query = new URLSearchParams() } = {}) {
     panel.replaceChildren(tabs,
       h("div", { class: "auth-form-heading" },
         h("h2", { id: "auth-title", tabindex: "-1" }, creating ? "Creá tu cuenta" : "Bienvenido de nuevo")),
-      h("a", { class: "auth-steam", href: "/api/v1/auth/steam/start", onClick: e => { if (busy) e.preventDefault(); } }, steamIcon(), h("span", null, "Continuar con Steam"), icon("chevron", 17)),
+      h("a", { class: "auth-steam", href: "/api/v1/auth/steam/start", onClick: e => {
+        if (busy) { e.preventDefault(); return; }
+        error.hidden = true;
+      } }, steamIcon(), h("span", null, "Continuar con Steam"), icon("chevron", 17)),
       h("div", { class: "auth-divider" }, h("span", null, "o con tu usuario")),
       error, form, demos);
 

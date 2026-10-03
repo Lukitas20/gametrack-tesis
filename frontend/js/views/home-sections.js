@@ -1,6 +1,7 @@
 import { api } from "../api.js";
 import { cover, ratingChip } from "../components.js";
-import { h, icon } from "../ui.js";
+import { h, icon, toast } from "../ui.js";
+import { openUpcomingAnalysis } from "./game-insights.js";
 
 const number = value => new Intl.NumberFormat("es-AR").format(value);
 const catalog = (params = {}) => `#/catalogo?${new URLSearchParams(params)}`;
@@ -59,15 +60,33 @@ function criticsSection(games) {
 }
 
 function upcomingCard(game, featured = false) {
-  return h("a",{class:`home-upcoming-card${featured ? " featured" : ""}`,href:game.store_url,target:"_blank",rel:"noopener noreferrer","aria-label":`Ver ${game.name} en Steam`},
+  return h("article",{class:`home-upcoming-card${featured ? " featured" : ""}`},
     h("img",{src:game.background_image,alt:"",loading:"lazy",onError:event=>event.target.remove()}),
     h("div",{class:"home-upcoming-copy"},h("span",{class:"home-upcoming-label"},icon("clock",12),game.release_label),
-      h("h3",null,game.name),h("span",{class:"home-card-link"},featured ? "Ver en Steam ↗" : "Steam ↗")));
+      h("h3",null,game.name),h("div",{class:"prelaunch-card-actions"},
+        h("button",{type:"button",class:"btn btn-sm prelaunch-score-button","aria-label":`Ver mi GameTrackScore para ${game.name}`,onClick:()=>openUpcomingAnalysis(game.steam_app_id)},icon("sparkles",14),"Ver mi GameTrackScore"),
+        h("a",{class:"home-card-link",href:game.store_url,target:"_blank",rel:"noopener noreferrer"},"Steam ↗"))));
+}
+
+function upcomingSearch() {
+  const input=h("input",{id:"prelaunch-steam-link",placeholder:"https://store.steampowered.com/app/…",maxlength:"250",required:true});
+  return h("form",{class:"prelaunch-search",onSubmit:event=>{
+    event.preventDefault();
+    const raw=input.value.trim();let appid;
+    if(/^\d+$/.test(raw)) appid=Number(raw);
+    else {
+      try {const url=new URL(raw);if(url.protocol!=="https:" || url.hostname!=="store.steampowered.com") throw new Error();appid=Number(url.pathname.match(/^\/app\/(\d+)(?:\/|$)/)?.[1]);}
+      catch {toast("Pegá el enlace de la tienda de Steam o el App ID del juego.","error");return;}
+    }
+    if(!Number.isInteger(appid) || appid<=0 || appid>4294967295) {toast("El enlace o App ID no es válido.","error");return;}
+    openUpcomingAnalysis(appid);
+  }},h("div",null,h("label",{for:input.id},"¿Tenés otro lanzamiento en mente?"),h("p",null,"Consultá su afinidad provisional antes de comprar. No es una garantía de calidad.")),
+    h("div",{class:"prelaunch-search-controls"},input,h("button",{class:"btn btn-primary btn-sm",type:"submit"},"Consultar afinidad",icon("chevron",14))));
 }
 
 async function loadUpcoming(section) {
   const href="https://store.steampowered.com/explore/upcoming/";
-  section.append(heading("LO QUE VIENE","Próximos lanzamientos","La próxima partida también puede estar por llegar.",href,"Explorar en Steam"),
+  section.append(heading("LO QUE VIENE","Próximos lanzamientos","Explorá si sus características anunciadas encajan con tus gustos.",href,"Explorar en Steam"),upcomingSearch(),
     h("div",{class:"home-agenda-loading",role:"status"},icon("clock",18),"Consultando próximos juegos en Steam…"));
   try {
     const data=await api.upcoming();

@@ -212,6 +212,57 @@ def test_estudio_devuelve_el_reparto_por_juego(client: TestClient, db: Session, 
     assert row["distribucion"]["positivo"] == 1
 
 
+def test_estudio_reconoce_mayusculas_y_cuenta_la_muestra_guardada(client, db, data):
+    game = data['breve']
+    game.developer = '  ESTUDIO TEST  '
+    game.reviews_count = 999  # El contador desnormalizado no define la cobertura.
+    game.background_image = 'https://example.com/cover.jpg'
+    db.add(Review(user_id=data['player'].id, game_id=game.id, content='La historia es magnífica.'))
+    db.commit()
+    headers = auth(client, 'dev')
+    client.post('/api/v1/analytics/process', headers=headers)
+    db.add(Review(user_id=None, source='steam', game_id=game.id, content='El rendimiento es pésimo.'))
+    db.commit()
+    report = client.get('/api/v1/analytics/studio', headers=headers).json()
+    assert len(report['juegos']) == 1
+    assert report['resenas']['analizadas'] == 1
+    assert report['resenas']['pendientes'] == 1
+    assert report['juegos'][0]['cantidad_resenas'] == 2
+    assert report['juegos'][0]['background_image'] == game.background_image
+
+
+def test_procesar_resenas_del_estudio_no_modifica_otros_juegos(client, db, data):
+    data['breve'].developer = 'ESTUDIO TEST'
+    data['largo'].developer = 'Otro estudio'
+    own = Review(user_id=data['player'].id, game_id=data['breve'].id, content='La historia es magnífica.')
+    other = Review(user_id=data['player'].id, game_id=data['largo'].id, content='El rendimiento es pésimo.')
+    db.add_all([own, other]); db.commit()
+    response = client.post('/api/v1/analytics/process?studio=estudio%20test&limit=300', headers=auth(client,'dev'))
+    assert response.json()['procesadas'] == 1
+    db.refresh(own); db.refresh(other)
+    assert own.is_analyzed and not other.is_analyzed
+
+
+def test_estudios_y_asistente_respetan_rol_y_busqueda(client, db, data):
+    data['breve'].developer = 'Estudio Test'
+    data['largo'].developer = 'ESTUDIO TEST'
+    db.commit()
+    for path in ['/api/v1/analytics/studios']:
+        assert client.get(path).status_code == 401
+        assert client.get(path, headers=auth(client,'jugadora')).status_code == 403
+    headers = auth(client,'dev')
+    studios = client.get('/api/v1/analytics/studios?search=TEST', headers=headers).json()
+    assert len(studios) == 1 and studios[0]['games'] == 2
+    payload = {'question':'¿Qué conviene mejorar?'}
+    assert client.post('/api/v1/analytics/assistant', json=payload).status_code == 401
+    assert client.post('/api/v1/analytics/assistant', headers=auth(client,'jugadora'),json=payload).status_code == 403
+    report = client.post('/api/v1/analytics/assistant', headers=headers,json=payload).json()
+    assert report['title'] == 'Todavía falta evidencia'
+    assert report['evidence'] == []
+    assert client.post('/api/v1/analytics/assistant', headers=headers,json={'question':'x'*601}).status_code == 422
+    assert client.post('/api/v1/analytics/assistant', headers=headers,json={'question':'Ayuda','game_id':999999}).status_code == 404
+
+
 # --- Análisis de texto suelto ----------------------------------------------
 
 
@@ -284,3 +335,25 @@ def test_la_raiz_sirve_el_frontend(client: TestClient) -> None:
     assert response.status_code == 200
     assert "GameTrack" in response.text
     assert "/js/app.js" in response.text
+
+
+def test_informe_separa_votos_locales_del_indice_importado(client, db, data):
+    game = data['breve']
+    game.developer = 'Estudio Test'
+    game.avg_rating = 4.9
+    game.ratings_count = 900000
+    db.add(Rating(user_id=data['player'].id, game_id=game.id, score=3.5))
+    db.commit()
+    headers = auth(client, 'dev')
+    report = client.get(f'/api/v1/analytics/games/{game.id}', headers=headers)
+    assert report.status_code == 200
+    local = report.json()['juego']
+    assert local['cantidad_ratings_local'] == 1
+    assert local['rating_local_promedio'] == 3.5
+    assert local['cantidad_ratings'] == 900000
+    row = client.get('/api/v1/analytics/studio', headers=headers).json()['juegos'][0]
+    assert row['cantidad_ratings_local'] == 1
+    assert row['rating_local_promedio'] == 3.5
+    empty = client.get(f"/api/v1/analytics/games/{data['largo'].id}", headers=headers).json()['juego']
+    assert empty['cantidad_ratings_local'] == 0
+    assert empty['rating_local_promedio'] is None

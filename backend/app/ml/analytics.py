@@ -44,7 +44,7 @@ from app.ml.lexicon import (
     SENTIMENT_LEXICON,
     STRONG_TERM_THRESHOLD,
 )
-from app.models import Aspect, Game, Review, ReviewAspect, Sentiment
+from app.models import Aspect, Game, Rating, Review, ReviewAspect, Sentiment
 
 # Umbral de la banda neutra sobre la polaridad [-1, 1].
 NEUTRAL_BAND = 0.25
@@ -379,7 +379,8 @@ def apply_analysis(db: Session, review: Review, analysis: TextAnalysis) -> None:
 
 
 def analyze_pending_reviews(
-    db: Session, limit: int | None = None, reanalyze: bool = False
+    db: Session, limit: int | None = None, reanalyze: bool = False,
+    game_ids: list[int] | None = None,
 ) -> int:
     """Procesa las reseñas sin analizar y persiste el resultado.
 
@@ -392,8 +393,13 @@ def analyze_pending_reviews(
         La cantidad de reseñas procesadas.
     """
     query = select(Review)
+    if game_ids is not None:
+        if not game_ids:
+            return 0
+        query = query.where(Review.game_id.in_(game_ids))
     if not reanalyze:
         query = query.where(Review.is_analyzed.is_(False))
+    query = query.order_by(Review.id)
     if limit:
         query = query.limit(limit)
 
@@ -426,9 +432,9 @@ def _net_score(counts: dict[str, int]) -> float:
     return round((counts["positivo"] - counts["negativo"]) / total, 3)
 
 
-def aspect_breakdown(db: Session, game_ids: list[int]) -> list[dict]:
+def aspect_breakdown(db: Session, game_ids: list[int] | None = None) -> list[dict]:
     """Desglose por aspecto para un conjunto de juegos."""
-    if not game_ids:
+    if game_ids is not None and not game_ids:
         return []
 
     rows = db.execute(
@@ -438,7 +444,7 @@ def aspect_breakdown(db: Session, game_ids: list[int]) -> list[dict]:
             func.count(ReviewAspect.id),
             func.avg(ReviewAspect.score),
         )
-        .where(ReviewAspect.game_id.in_(game_ids))
+        .where(ReviewAspect.game_id.in_(game_ids if game_ids is not None else select(Game.id)))
         .group_by(ReviewAspect.aspect, ReviewAspect.sentiment)
     ).all()
 
@@ -570,6 +576,9 @@ def game_analytics(db: Session, game: Game) -> dict:
     )
 
     breakdown = aspect_breakdown(db, [game.id])
+    local_average, local_count = db.execute(
+        select(func.avg(Rating.score), func.count(Rating.id)).where(Rating.game_id == game.id)
+    ).one()
 
     return {
         "juego": {
@@ -577,6 +586,10 @@ def game_analytics(db: Session, game: Game) -> dict:
             "nombre": game.name,
             "slug": game.slug,
             "desarrollador": game.developer,
+            "background_image": game.background_image,
+            "steam_app_id": game.steam_app_id,
+            "rating_local_promedio": round(float(local_average), 2) if local_count else None,
+            "cantidad_ratings_local": local_count,
             "rating_promedio": game.avg_rating,
             "cantidad_ratings": game.ratings_count,
         },
@@ -595,7 +608,9 @@ def game_analytics(db: Session, game: Game) -> dict:
 
 def studio_analytics(db: Session, studio: str) -> dict:
     """Informe agregado de todos los juegos de un estudio."""
-    games = db.scalars(select(Game).where(Game.developer == studio)).all()
+    games = db.scalars(select(Game).where(
+        func.lower(func.trim(Game.developer)) == studio.strip().lower()
+    )).all()
     game_ids = [game.id for game in games]
 
     if not game_ids:
@@ -614,6 +629,18 @@ def studio_analytics(db: Session, studio: str) -> dict:
     ).all()
     distribution = _distribution([(s, c) for s, c in sentiment_rows if s is not None])
 
+    pending = db.scalar(select(func.count(Review.id)).where(
+        Review.game_id.in_(game_ids), Review.is_analyzed.is_(False)
+    )) or 0
+    totals = dict(db.execute(select(Review.game_id, func.count(Review.id))
+                            .where(Review.game_id.in_(game_ids)).group_by(Review.game_id)).all())
+    local_ratings = {
+        game_id: (round(float(average), 2), count)
+        for game_id, average, count in db.execute(
+            select(Rating.game_id, func.avg(Rating.score), func.count(Rating.id))
+            .where(Rating.game_id.in_(game_ids)).group_by(Rating.game_id)
+        )
+    }
     per_game = []
     for game in sorted(games, key=lambda g: g.popularity_score, reverse=True):
         game_distribution = _distribution(
@@ -631,8 +658,13 @@ def studio_analytics(db: Session, studio: str) -> dict:
             {
                 "id": game.id,
                 "nombre": game.name,
+                "background_image": game.background_image,
+                "steam_app_id": game.steam_app_id,
+                "rating_local_promedio": local_ratings.get(game.id, (None, 0))[0],
+                "cantidad_ratings_local": local_ratings.get(game.id, (None, 0))[1],
                 "rating_promedio": game.avg_rating,
-                "cantidad_resenas": game.reviews_count,
+                "cantidad_ratings": game.ratings_count,
+                "cantidad_resenas": totals.get(game.id, 0),
                 # Se devuelve el reparto completo, no sólo el neto: con el neto
                 # solo, el frontend tendría que reconstruirlo y el resultado
                 # sería una aproximación presentada como dato real.
@@ -647,6 +679,7 @@ def studio_analytics(db: Session, studio: str) -> dict:
         "juegos": per_game,
         "resenas": {
             "analizadas": sum(distribution.values()),
+            "pendientes": pending,
             "distribucion": distribution,
             "sentimiento_neto": _net_score(distribution),
         },
@@ -668,10 +701,9 @@ def platform_overview(db: Session) -> dict:
             if s is not None
         ]
     )
-    all_ids = list(db.scalars(select(Game.id)))
     return {
         "resenas_analizadas": sum(distribution.values()),
         "distribucion": distribution,
         "sentimiento_neto": _net_score(distribution),
-        "aspectos": aspect_breakdown(db, all_ids),
+        "aspectos": aspect_breakdown(db),
     }

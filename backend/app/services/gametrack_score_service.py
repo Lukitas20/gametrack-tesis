@@ -48,8 +48,8 @@ def reputable(game, public):
     return quality >= .80 and (n >= 5000 or (owners >= 100000 and n >= 1000))
 
 
-def score_context(db, user):
-    engine = get_engine(db)
+def score_context(db, user, engine=None):
+    engine = engine or get_engine(db)
     ratings = dict(db.execute(select(Rating.game_id, Rating.score).where(Rating.user_id == user.id)).all())
     genres = {pref.genre.slug for pref in user.preferences}
     liked = db.scalars(select(Game).join(Rating).where(Rating.user_id == user.id, Rating.score >= 4)).all()
@@ -76,6 +76,7 @@ def score_context(db, user):
             "has_positive_history": any(signal["weight"] > 0 for signal in used.values()), "specific_count": specific_count,
             "has_history": has_history, "signals": used, "similarities": similarities, "engine": engine,
             "history_games": history_games,
+            "feedback_count":sum(signal['source']=='play_feedback' for signal in used.values()),
             "steam_count": len(steam_used), "steam_review_count": sum(s["source"] == "steam_review" for s in steam_used.values()),
             "steam_played_count": sum(s["source"] == "steam_playtime" for s in steam_used.values()),
             "imported_review_count": imported_reviews, "owned": owned}
@@ -113,6 +114,8 @@ def score_game(game, context):
             reasons.append("Algunas reseñas importadas aún no tienen una ficha comparable, o ya cuentan con tu nota de GameTrack; no duplicamos esas opiniones.")
     if context["rating_count"]:
         reasons.append(f"Tiene en cuenta tus {context['rating_count']} valoraciones de GameTrack, incluidas las negativas.")
+    if context.get('feedback_count'):
+        reasons.append(f"También usa {context['feedback_count']} devoluciones propias después de jugar, sin convertir interrupciones en rechazos.")
     if context["has_history"] and not context["specific_count"]:
         reasons.append("A los juegos comparados les faltan etiquetas específicas: la estimación sigue siendo limitada aunque tu historial esté cargado.")
     elif context["has_history"] and not (context["engine"]._community_terms_by_game.get(game.id, set()) & context["engine"].personal_specific_terms):

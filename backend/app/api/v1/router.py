@@ -11,6 +11,7 @@ from app.api.v1.endpoints import (
     invites,
     lists,
     quiz,
+    play,
     recommendations,
     steam,
     steam_auth,
@@ -30,6 +31,7 @@ api_router.include_router(interactions.router)
 api_router.include_router(lists.router)
 api_router.include_router(recommendations.router)
 api_router.include_router(quiz.router)
+api_router.include_router(play.router)
 api_router.include_router(analytics.router)
 api_router.include_router(steam.router)
 api_router.include_router(steam_catalog.router)

@@ -6,7 +6,8 @@ from app.schemas.game import GameSummary
 
 class GameTrackScore(BaseModel):
     value: int | None = Field(default=None, ge=0, le=100)
-    evidence: Literal["sin_datos", "inicial", "en_desarrollo", "amplia", "valoracion_propia", "steam"]
+    evidence: Literal["sin_datos", "inicial", "en_desarrollo", "amplia", "valoracion_propia", "steam", "prelanzamiento"]
+    preliminary: bool = False
     reasons: list[str]
     version: str = "2.0"
     affinity: int | None = Field(default=None, ge=0, le=100)

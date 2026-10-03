@@ -4,6 +4,7 @@ El endpoint y el origen de retorno son fijos. Los estados y las entregas son
 aleatorios, ligados al navegador, expiran y se consumen atómicamente una vez.
 """
 import hashlib
+import logging
 import re
 import secrets
 import time
@@ -31,6 +32,7 @@ NAMESPACE = "http://specs.openid.net/auth/2.0"
 SELECT_ID = NAMESPACE + "/identifier_select"
 STATE_COOKIE = "gametrack_steam_state"
 SESSION_COOKIE = "gametrack_steam_exchange"
+logger = logging.getLogger(__name__)
 
 
 def base_url():
@@ -142,8 +144,16 @@ def verified_steam_id(params, expected_return):
     verification = {k: v for k, v in params.items() if k.startswith("openid.")}
     verification["openid.mode"] = "check_authentication"
     # Fixed HTTPS endpoint, no redirects: assertions cannot choose a server to contact.
-    with httpx.Client(timeout=12.0, follow_redirects=False) as client:
-        response = client.post(ENDPOINT, data=verification)
+    with httpx.Client(timeout=httpx.Timeout(20.0, connect=8.0), follow_redirects=False) as client:
+        for attempt in range(2):
+            try:
+                response = client.post(ENDPOINT, data=verification)
+                break
+            except (httpx.ConnectError, httpx.ConnectTimeout):
+                # Sólo repetir si no se pudo establecer la conexión. Steam
+                # consume la firma: nunca repetir un envío o una lectura fallida.
+                if attempt == 1:
+                    raise
         response.raise_for_status()
     fields = dict(line.split(":", 1) for line in response.text.splitlines() if ":" in line)
     if fields.get("is_valid") != "true" or fields.get("ns") != NAMESPACE:
@@ -219,8 +229,14 @@ def callback(request: Request, db: Session = Depends(get_db)):
         db.rollback()
         reason = str(error)
         return failure(reason if reason in {"invalid", "expired", "conflict", "linked", "inactive"} else "invalid")
-    except httpx.HTTPError:
+    except httpx.TimeoutException:
         db.rollback()
+        logger.warning("Steam OpenID: tiempo de espera agotado")
+        return failure("timeout")
+    except httpx.HTTPError as error:
+        db.rollback()
+        # No registrar la URL ni el mensaje: pueden contener la firma de acceso.
+        logger.warning("Steam OpenID: fallo de conexión (%s)", type(error).__name__)
         return failure("unavailable")
     except IntegrityError:
         db.rollback()

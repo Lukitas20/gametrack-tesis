@@ -99,8 +99,14 @@ export const api = {
   gameTrackScore: (id) => request(`/recommendations/game/${id}/score`),
   gameExplanation: (id, question) => request(`/recommendations/game/${id}/explanation`,
     question === undefined ? {} : { method: "POST", body: { question } }),
+  upcomingExplanation: (appid, question) => request(`/recommendations/upcoming/${appid}/explanation`,
+    question === undefined ? {} : { method: "POST", body: { question } }),
   quizSuggest: (payload) =>
     request("/quiz/suggest", { method: "POST", body: payload }),
+  playFeedback: (id) => request(`/play/feedback/${id}`),
+  savePlayFeedback: (id, payload) => request(`/play/feedback/${id}`, {method:"PUT",body:payload}),
+  playExperiences: () => request("/play/feedback"),
+  playBacklog: (mode="light") => request("/play/backlog", {params:{mode}}),
 
   // --- Amigos y solicitudes ---
   friends: () => request("/friends"),
@@ -136,6 +142,8 @@ export const api = {
   studioAnalytics: (studio) => request("/analytics/studio", { params: { studio } }),
   gameAnalytics: (gameId) => request(`/analytics/games/${gameId}`),
   overview: () => request("/analytics/overview"),
-  processReviews: (reanalyze = false) =>
-    request("/analytics/process", { method: "POST", params: { reanalyze } }),
+  studios: (search = "") => request("/analytics/studios", { params: { search } }),
+  developerAssistant: (body) => request("/analytics/assistant", { method: "POST", body }),
+  processReviews: (reanalyze = false, scope = {}) =>
+    request("/analytics/process", { method: "POST", params: { ...scope, reanalyze } }),
 };

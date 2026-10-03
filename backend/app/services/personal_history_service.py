@@ -1,10 +1,11 @@
 """Historial propio ya sincronizado; sin red ni opiniones de otras cuentas."""
 from math import log1p
+from datetime import timezone
 
 import numpy as np
 from sqlalchemy import select
 
-from app.models import Game, SteamProfileCache
+from app.models import Game, SteamProfileCache, PlayFeedback, Rating
 
 SOFTWARE_GENRES = {"software", "utilities", "utilidades", "audio-production", "produccion-de-audio",
                    "video-production", "produccion-de-video", "animation-modeling", "design-illustration",
@@ -14,6 +15,14 @@ SOFTWARE_GENRES = {"software", "utilities", "utilidades", "audio-production", "p
 def personal_history(db, user, ratings):
     signals = {gid: {"source": "rating", "weight": (score - 3) / 2,
                      "rating": score} for gid, score in ratings.items()}
+    rating_times={gid:(updated or created) for gid,updated,created in db.execute(
+        select(Rating.game_id,Rating.updated_at,Rating.created_at).where(Rating.user_id==user.id))}
+    def utc(value):
+        return value.replace(tzinfo=timezone.utc) if value and value.tzinfo is None else value
+    for feedback in db.scalars(select(PlayFeedback).where(PlayFeedback.user_id==user.id,PlayFeedback.taste_at.is_not(None))):
+        rated_at=rating_times.get(feedback.game_id)
+        if rated_at is None or utc(feedback.taste_at)>utc(rated_at):
+            signals[feedback.game_id]={'source':'play_feedback','weight':feedback.taste_weight or 0.}
     owned, reviews = {}, {}
     cache = db.get(SteamProfileCache, user.id) if user.steam_verified else None
     if cache and cache.steam_id == user.steam_id:
@@ -50,6 +59,11 @@ def personal_history(db, user, ratings):
 
 def history_affinities(engine, signals):
     similarities = engine.personal_history_similarities(list(signals))
+    return combine_history_affinities(similarities, signals, len(engine.game_ids))
+
+
+def combine_history_affinities(similarities, signals, candidate_count):
+    """Combina opiniones e interés igual para catálogo y candidatos anunciados."""
     used = {gid: signal for gid, signal in signals.items() if gid in similarities and signal["weight"] != 0}
     if not used:
         return None, {}, {}
@@ -68,7 +82,7 @@ def history_affinities(engine, signals):
     def interest(ids):
         return .7 * np.maximum.reduce([similarities[gid] * abs(used[gid]["weight"]) for gid in ids]) + .3 * average(ids)
 
-    positive = interest(explicit) if explicit else np.zeros(len(engine.game_ids))
+    positive = interest(explicit) if explicit else np.zeros(candidate_count)
     if implicit:
         played = interest(implicit)
         positive = .8 * positive + .2 * played if explicit else np.minimum(.8, 2 * played)
@@ -103,6 +117,8 @@ def history_reasons(game, context):
             opinion = f"valoraste {signal['rating']:g}/5 en GameTrack"
         elif signal["source"] == "steam_review":
             opinion = "recomendaste en Steam" if signal["recommended"] else "no recomendaste en Steam"
+        elif signal["source"] == "play_feedback":
+            opinion = "marcaste como una experiencia que te gustó" if signal['weight']>0 else "marcaste como una experiencia que no te gustó"
         else:
             opinion = f"jugaste {signal['minutes'] / 60:.1f} h en Steam (interés, no una valoración)"
         text = f"Comparte {', '.join(shared[:3])} con {previous.name}, que {opinion}."
