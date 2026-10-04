@@ -90,12 +90,13 @@ export const api = {
   home: (limit = 8) => request("/home", { auth: false, params: { limit } }),
   game: (id) => request(`/games/${id}`, { auth: false }),
   similar: (id, limit = 6) => request(`/games/${id}/similar`, { auth: false, params: { limit } }),
-  reviews: (id, limit = 10) => request(`/games/${id}/reviews`, { auth: false, params: { limit } }),
+  reviews: (id, limit = 10, offset = 0) => request(`/games/${id}/reviews`, { auth: false, params: { limit, offset } }),
 
   // --- Recomendaciones ---
   recommendations: (strategy = "auto", limit = 12, discovery = "balanced") =>
     request("/recommendations", { params: { strategy, limit, discovery } }),
   discovery: (mode = "affinity", friendId = null) => request("/recommendations/discovery", { params: { mode, friend_id: friendId, limit: 8 } }),
+  compareGames: (gameIds) => request("/recommendations/compare", {method:"POST",body:{game_ids:gameIds}}),
   gameTrackScore: (id) => request(`/recommendations/game/${id}/score`),
   gameExplanation: (id, question) => request(`/recommendations/game/${id}/explanation`,
     question === undefined ? {} : { method: "POST", body: { question } }),
@@ -117,6 +118,7 @@ export const api = {
 
   // --- Interacciones ---
   myRatings: () => request("/me/ratings"),
+  myReviews: (params = {}) => request("/me/reviews", { params }),
   rate: (gameId, score, extra = {}) =>
     request("/ratings", {
       method: "POST",

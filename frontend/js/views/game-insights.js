@@ -1,4 +1,5 @@
 import { api } from "../api.js";
+import { gameComparePanel } from "./game-comparison.js";
 import { state, isLoggedIn, isDeveloper } from "../store.js";
 import { h, icon, mount, openModal, modalHead } from "../ui.js";
 
@@ -98,6 +99,8 @@ function analysisContent(gameId, close, upcoming = false) {
         h("div", null, h("p", { class: "insight-local" }, icon("sparkles", 13), "TU IA LOCAL"), h("h3", null, data.game_name), h("p", null, data.summary))),
       h("div", { class: "insight-columns" }, column("Podría gustarte", data.positives, "heart", "insight-fit"),
         column("Para tener en cuenta", data.cautions, "info", "insight-caution")),
+      h("p",{class:"insight-confidence",dataset:{confidence:data.score.confidence||"low"}},icon("info",14),data.score.confidence_message||"Estimación provisional con los datos disponibles."),
+      !upcoming && gameComparePanel(gameId,data.game_name),
       h("section", { class: "insight-consult" }, h("h3", null, "Mirá más allá del número"),
         h("p", null, "Explorá los motivos, compará con tu historial y revisá las referencias."), suggestions, thread, form),
       h("details", { class: "insight-references" }, h("summary", null, "Fuentes y referencias"),

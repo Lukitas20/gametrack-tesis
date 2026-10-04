@@ -133,6 +133,25 @@ function profileActivity(user, heroMedia) {
   }).catch(() => mount(root,h("p",{class:"steam-caption"},"No pudimos cargar tu actividad."),h("a",{href:"#/valoraciones"},"Ver mis valoraciones")));
   return root;
 }
+
+function myReviewsSection(user) {
+  const root=h("section",{class:"profile-written-reviews","aria-label":"Mis reseñas"});
+  const body=h("div",{class:"profile-review-grid"});
+  const status=h("p",{class:"steam-caption",role:"status"},"Cargando tus reseñas…");
+  let offset=0;
+  const more=h("button",{class:"btn btn-sm",onClick:load,hidden:true},"Ver más reseñas");
+  root.append(h("div",{class:"profile-section-heading"},h("div",null,h("p",{class:"eyebrow"},"TU VOZ EN GAMETRACK"),h("h2",null,"Mis reseñas"))),
+    h("p",{class:"steam-caption"},"Las reseñas que escribís se guardan acá y también aparecen en la ficha de cada juego."),body,status,more);
+  async function load(){more.disabled=true;try{const rows=await api.myReviews({limit:6,offset});if(state.user?.id!==user.id)return;
+    rows.forEach(review=>body.append(h("article",{class:"profile-written-review"},
+      h("a",{class:"profile-review-game",href:`#/juego/${review.game_id}`},review.game.background_image?h("img",{src:review.game.background_image,alt:"",loading:"lazy",onError:event=>event.target.remove()}):icon("gamepad",25),h("strong",null,review.game.name)),
+      h("h3",null,review.title||"Mi experiencia"),h("p",null,review.content),
+      h("div",{class:"profile-review-footer"},h("small",null,new Date(review.created_at).toLocaleDateString("es-AR")),h("a",{class:"btn btn-ghost btn-sm",href:`#/juego/${review.game_id}?resena=editar`},"Editar mi reseña",icon("chevron",13))))));
+    offset+=rows.length;more.hidden=rows.length<6;status.replaceChildren();
+    if(offset===0)mount(status,"Todavía no escribiste una reseña. ",h("a",{href:"#/catalogo"},"Elegir un juego"));
+  }catch{mount(status,"No pudimos cargar tus reseñas. ",h("button",{class:"btn btn-sm",onClick:load},"Reintentar"));}finally{more.disabled=false;}}
+  load();return root;
+}
 let currentView = null;
 
 async function renderAgain() {
@@ -181,6 +200,7 @@ async function buildBody() {
     ),
     tastes,
     dashboard || (user.role === "jugador" ? profileActivity(user,heroMedia) : null),
+    user.role === "jugador" ? myReviewsSection(user) : null,
     user.role === "jugador" && !user.steam_verified ? steamSection(user) : null,
     h("details",{class:"profile-settings-fold"},h("summary",null,icon("user",16),"Ajustes del perfil",icon("chevronDown",14)),h("div",{class:"profile-settings"},dataSection(user))),
   );

@@ -12,7 +12,7 @@ from app.models import Game, Rating, User
 from app.schemas.game import GameSummary
 from app.schemas.recommendation import RecommendationOut, RecommendationResponse
 
-from app.schemas.gametrack_score import DiscoveryResponse, GameTrackScore, ExplanationQuestion, GameExplanation
+from app.schemas.gametrack_score import DiscoveryResponse, GameTrackScore, ExplanationQuestion, GameExplanation, GameComparison, GameComparisonRequest
 
 router = APIRouter(prefix="/recommendations", tags=["recomendaciones"])
 
@@ -62,6 +62,14 @@ def ask_about_personal_game(
     return explain_game(db, user, game_id, payload.question)
 
 
+@router.post("/compare", response_model=GameComparison)
+def compare_personal_games(payload: GameComparisonRequest, response: Response,
+                           user: User = Depends(personal_score_user), db: Session = Depends(get_db)):
+    from app.services.game_comparison_service import compare_games
+    response.headers["Cache-Control"] = "no-store"
+    return compare_games(db,user,payload.game_ids)
+
+
 @router.get("/discovery", response_model=DiscoveryResponse)
 def discover_games(
     response: Response,
@@ -90,6 +98,7 @@ def personal_game_score(
 
 @router.get("", response_model=RecommendationResponse)
 def get_recommendations(
+    response: Response,
     limit: int = Query(default=10, ge=1, le=50),
     strategy: str = Query(
         default="auto",
@@ -112,11 +121,16 @@ def get_recommendations(
     La respuesta incluye el aporte de cada estrategia y el motivo en lenguaje
     natural, para que la recomendación sea auditable y no una caja negra.
     """
-    recommendations = recommend_for_user(db, user, limit=limit, strategy=strategy, discovery=discovery)
-
-    history_size = (
-        db.scalar(select(func.count(Rating.id)).where(Rating.user_id == user.id)) or 0
-    )
+    response.headers["Cache-Control"] = "no-store"
+    personal_context = None
+    if strategy == "auto":
+        from app.services.gametrack_score_service import score_context
+        personal_context = score_context(db,user)
+    recommendations = recommend_for_user(db, user, limit=limit, strategy=strategy,
+                                        discovery=discovery, _context=personal_context)
+    history_size = db.scalar(select(func.count(Rating.id)).where(Rating.user_id == user.id)) or 0
+    if personal_context and personal_context["has_history"]:
+        history_size = personal_context["history_size"]
     games = {
         game.id: game
         for game in db.scalars(
@@ -154,6 +168,8 @@ def get_recommendations(
             "La selección usa la valoración general y la cantidad de reseñas. "
             "Elegí géneros o valorá juegos para sumar tus gustos al modo automático."
         )
+    if recommendations and personal_context and personal_context["has_history"]:
+        profile_hint = "Usamos el mismo historial que GameTrackScore: tus notas, reseñas propias, experiencias y horas de Steam. Las opiniones negativas también ajustan la selección."
     if strategy != "auto" and strategy != effective_strategy and recommendations:
         profile_hint = "La estrategia solicitada no tiene evidencia suficiente; usamos una alternativa. " + profile_hint
 

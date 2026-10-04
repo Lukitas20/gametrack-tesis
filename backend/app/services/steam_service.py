@@ -545,6 +545,21 @@ def parse_steam_game(data: dict) -> dict:
     ]
 
     name = (data.get("name") or "").strip()
+    from urllib.parse import urlsplit
+    screenshots = []
+    for shot in data.get("screenshots") or []:
+        url = shot.get("path_full") if isinstance(shot, dict) else None
+        if not isinstance(url, str):
+            continue
+        try:
+            parts = urlsplit(url)
+        except ValueError:
+            continue
+        host = (parts.hostname or "").lower()
+        if parts.scheme == "https" and any(host == root or host.endswith("." + root)
+                for root in ("steamstatic.com", "steamusercontent.com", "akamaihd.net")) and not parts.username and not parts.password:
+            if url not in screenshots:
+                screenshots.append(url)
     return {
         "name": name[:200],
         "slug": _fit_slug(slugify(name), 120),
@@ -556,6 +571,7 @@ def parse_steam_game(data: dict) -> dict:
         "publisher": ", ".join(data.get("publishers") or [])[:120] or None,
         "platforms": platforms,
         "background_image": data.get("header_image") or None,
+        "screenshots": screenshots[:16],
         "metacritic": (data.get("metacritic") or {}).get("score"),
         "genres": _dedupe_names(genres),
         "tags": _dedupe_names(tags)[:8],
@@ -813,6 +829,12 @@ def refresh_game(db: Session, game: Game) -> bool:
         return False
 
     parsed = parse_steam_game(data)
+    # Publicar las capturas oficiales antes del procesamiento de reseñas.
+    # No marcar la ficha completa ni cambiar su fecha de sincronización:
+    # un fallo posterior conserva las imágenes y deja el resto en reintento.
+    if game.screenshots != parsed["screenshots"]:
+        game.screenshots = parsed["screenshots"]
+        db.commit()
     genres = parsed.pop("genres", [])
     tags = parsed.pop("tags", [])
     # Preservar URLs y votos comunitarios al refrescar categorías de Steam.
@@ -864,9 +886,12 @@ def maybe_refresh(db: Session, game: Game) -> bool:
         last_sync = game.steam_synced_at
         if last_sync.tzinfo is None:
             last_sync = last_sync.replace(tzinfo=timezone.utc)
-        if datetime.now(timezone.utc) - last_sync < ttl and (entry is None or entry.status == "ready"):
+        if game.screenshots is not None and datetime.now(timezone.utc) - last_sync < ttl and (entry is None or entry.status == "ready"):
             return True
-    queue_game_refresh(db, game)
+    # Una galería nueva solicitada por el usuario precede a las tareas
+    # normales del catálogo, respetando el backoff si Steam no responde.
+    priority = 200 if game.is_enriched and game.screenshots is None else 100
+    queue_game_refresh(db, game, priority=priority)
     db.commit()
     return True
 

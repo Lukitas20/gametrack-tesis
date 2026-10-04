@@ -170,6 +170,8 @@ def build_preview(announced, context, question=None):
         ref(rid, previous.name, f'#/juego/{gid}', 'Juego de tu historial usado en la comparación de rasgos.')
         if signal['source'] == 'rating':
             opinion = f"valoraste {signal['rating']:g}/5 en GameTrack"
+        elif signal['source'] == 'gametrack_review':
+            opinion = 'recomendaste en tu reseña de GameTrack' if signal['recommended'] else 'no recomendaste en tu reseña de GameTrack'
         elif signal['source'] == 'steam_review':
             opinion = 'recomendaste en Steam' if signal['recommended'] else 'no recomendaste en Steam'
         elif signal['source'] == 'play_feedback':

@@ -19,20 +19,20 @@ def _plain(text):
     return "".join(c for c in unicodedata.normalize("NFKD", text.lower()) if not unicodedata.combining(c))
 
 
-def explain_game(db, user, game_id, question=None):
+def explain_game(db, user, game_id, question=None, _context=None):
     require_player(user)
     if question is not None and not question.strip():
         raise HTTPException(422, "Escribí una pregunta sobre el juego")
     game = db.get(Game, game_id)
     if game is None:
         raise HTTPException(404, "El juego no existe")
-    context = score_context(db, user)
+    context = _context if _context is not None else score_context(db, user)
     score = score_game(game, context)
     public = public_evidence(game)
     references = [ExplanationReference(id="game", title="Ficha de GameTrack", url=f"#/juego/{game.id}",
         detail="Géneros, etiquetas y datos importados del catálogo; no es una reseña crítica completa."),
         ExplanationReference(id="profile", title="Tu historial y gustos", url="#/perfil",
-        detail=f"Señales comparables: {context['rating_count']} notas de GameTrack, {context['steam_review_count']} reseñas propias de Steam y {context['steam_played_count']} juegos con horas. Sólo se consulta tu propia cuenta.")]
+        detail=f"Señales comparables: {context['rating_count']} notas y {context.get('gametrack_review_count',0)} reseñas de GameTrack, {context['steam_review_count']} reseñas propias de Steam y {context['steam_played_count']} juegos con horas. Sólo se consulta tu propia cuenta.")]
     review_ref = "game"
     if game.steam_app_id:
         references.append(ExplanationReference(id="steam", title="Ficha oficial en Steam",
@@ -72,7 +72,13 @@ def explain_game(db, user, game_id, question=None):
             cautions.append(point("Las horas muestran interés, pero no prueban que un juego te haya gustado. Las reseñas propias tienen más peso; comprar o poseer un juego no cuenta como una opinión positiva.", "profile"))
 
     own_rating = context["ratings"].get(game.id)
-    own_signal = context["signals"].get(game.id)
+    own_signal = context.get("own_signals", context["signals"]).get(game.id)
+    if own_rating is None and own_signal and own_signal["source"] == "steam_playtime":
+        positives.insert(0, point(score.reasons[0], "profile"))
+    elif own_rating is None and own_signal and own_signal["source"] == "play_feedback":
+        (positives if own_signal["weight"] > 0 else cautions).insert(0, point(score.reasons[0], "profile"))
+    if own_rating is None and own_signal and own_signal["source"] == "gametrack_review":
+        (positives if own_signal["recommended"] else cautions).insert(0, point(score.reasons[0], "profile", "game"))
     if own_rating is None and own_signal and own_signal["source"] == "steam_review":
         recommended = own_signal["recommended"]
         (positives if recommended else cautions).insert(0, point(
@@ -115,11 +121,14 @@ def explain_game(db, user, game_id, question=None):
     if question:
         q = _plain(question)
         selected = []
+        confidence_question = bool(re.search(r"confianza|confiab|segur|certeza|falt.*dato|evidencia",q))
+        if confidence_question:
+            selected.append(point(score.confidence_message, "profile", "game"))
         # Consultas acotadas al dominio. El texto de la pregunta no se ejecuta,
         # no cambia el perfil ni puede introducir nuevas fuentes o instrucciones.
         if re.search(r"no.*gust|contra|riesgo|duda|negativ|rechaz|desventaj", q):
             selected.extend(cautions)
-        elif re.search(r"gust|afinidad|recomend|encaj|favor", q):
+        elif not confidence_question and re.search(r"gust|afinidad|recomend|encaj|favor", q):
             selected.extend(positives + cautions[:2])
         if re.search(r"critica|metacritic|metascore|resena|referencia|fuente|opina|comunidad", q):
             selected.extend(p for p in positives + cautions if "Metascore" in p.text or "reseñas" in p.text)
@@ -136,6 +145,9 @@ def explain_game(db, user, game_id, question=None):
             features = [g.name for g in game.genres] + [t.name for t in game.tags[:12]]
             selected.append(point("La ficha registra: " + (", ".join(features) if features else "todavía no hay géneros o modalidades suficientes") + ". Las etiquetas describen rasgos; no garantizan que puedas compartir partida con cualquier plataforma o amigo.", "game", *(["steam"] if game.steam_app_id else [])))
         if re.search(r"horas|duracion|cuanto dura|tiempo|sesion", q):
+            if own_signal and "minutes" in own_signal:
+                selected.append(point(f"Tu biblioteca sincronizada registra {own_signal['minutes'] / 60:.1f} h en este juego. El interés por horas crece de forma logarítmica hasta 1500 h; una opinión explícita propia prevalece, aunque tengas muchas horas.", "profile"))
+            selected.append(point("En juegos nuevos comparamos rasgos específicos con los juegos que más jugás: cientos de horas en un shooter competitivo pueden influir aunque también hayas recomendado un juego de otro género. El interés por horas no crea valoraciones ni anula tus rechazos.", "profile", "game"))
             if game.median_review_hours is not None:
                 text = f"La mediana importada de horas acumuladas por reseñadores es {game.median_review_hours:g} h. No mide la duración de la campaña ni cuánto vas a tardar vos."
             else:
@@ -151,5 +163,5 @@ def explain_game(db, user, game_id, question=None):
     references = [ref for ref in references if ref.id in available]
     return GameExplanation(game_id=game.id, game_name=game.name, score=score, summary=summary, positives=positives, cautions=cautions,
         answer=answer, references=references,
-        suggested_questions=["¿Por qué podría gustarme?", "¿Qué podría no gustarme?", "Comparalo con mi historial", "¿Cómo se calcula mi puntaje?"],
+        suggested_questions=["¿Por qué podría gustarme?", "¿Qué podría no gustarme?", "Comparalo con mi historial", "¿Cómo se calcula mi puntaje?", "¿Qué tan confiable es esta recomendación?"],
         method="Análisis local del mismo perfil y señales del GameTrackScore. Las comparaciones usan el motor de contenido; las respuestas se construyen con evidencia del catálogo y tu historial. No es un chat generativo de propósito general.")

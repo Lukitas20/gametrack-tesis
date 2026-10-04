@@ -11,7 +11,7 @@ function scoreBadge(score) {
   const value = score?.value;
   return h("div", { class: "gts-badge", "aria-label": value == null ? "GameTrackScore sin datos" : `GameTrackScore ${value} de 100` },
     h("span", { class: "gts-number", style: { background: `conic-gradient(var(--brand-teal-ui) ${(value ?? 0) * 3.6}deg, var(--border) 0deg)` } }, h("b", null, value ?? "—")),
-    h("span", null, h("strong", null, "GameTrackScore"), h("small", null, EVIDENCE[score?.evidence] || "Afinidad personal")));
+    h("span", null, h("strong", null, "GameTrackScore"), h("small", null, EVIDENCE[score?.evidence] || "Afinidad personal"),score?.confidence&&h("small",{class:"gts-confidence",title:score.confidence_message},({known:"Tu opinión guardada",high:"Evidencia sólida",medium:"Evidencia moderada",low:"Estimación provisional",none:"Sin evidencia suficiente"})[score.confidence])));
 }
 
 function scoreExplanation(score) {
@@ -27,7 +27,7 @@ function scoreExplanation(score) {
     h("ul", null, score.reasons.map(reason => h("li", null, reason))));
 }
 
-export function personalScorePanel(gameId) {
+export function personalScorePanel(gameId, name="este juego", {showFeedback=true}={}) {
   const panel = h("section", { class: "card gts-detail", "aria-label": "Tu GameTrackScore" });
   let revision = 0;
   panel.refresh = async () => {
@@ -41,7 +41,8 @@ export function personalScorePanel(gameId) {
     try {
       const score = await api.gameTrackScore(gameId);
       if (request !== revision || owner !== state.user?.id) return;
-      panel.replaceChildren(scoreBadge(score), scoreExplanation(score), gameAnalysisButton(gameId),h("div",null,playFeedbackButton(gameId,"este juego",panel.refresh)));
+      panel.replaceChildren(scoreBadge(score), scoreExplanation(score), gameAnalysisButton(gameId));
+      if(showFeedback)panel.append(h("div",null,playFeedbackButton(gameId,name,panel.refresh)));
       if (score.value == null) panel.append(h("a", { href: "#/perfil" }, "Completar mis gustos"));
     } catch {
       if (request !== revision || owner !== state.user?.id) return;

@@ -224,7 +224,7 @@ def list_reviews(db: Session, game_id: int, limit: int = 20, offset: int = 0) ->
     return list(
         db.scalars(
             select(Review)
-            .where(Review.game_id == game_id)
+            .where(Review.game_id == game_id, Review.source.in_(["user", "steam"]))
             .order_by(
                 (aspectos > 0).desc(),
                 Review.helpful_count.desc(),

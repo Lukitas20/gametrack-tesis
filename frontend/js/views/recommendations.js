@@ -81,7 +81,7 @@ function personalCard(item, index, onRated) {
       h("button", { class: "btn btn-ghost btn-sm", onClick: () => openModal(close => h("div", null,
         modalHead(`¿Qué te pareció ${item.game.name}?`, "Tu valoración actualiza las próximas recomendaciones.", close),
         starRating(item.game.id, { onChange: () => { close(); onRated(); } }))) },
-      icon("star", 14), "Ya lo jugué")));
+      icon("star", 14), "Dar mi nota")));
 }
 
 export async function recommendationsView({ query } = { query: new URLSearchParams() }) {
@@ -207,7 +207,7 @@ export async function recommendationsView({ query } = { query: new URLSearchPara
           icon("sparkles", 11),
           SOURCE_LABEL[response.effective_strategy || response.items[0]?.source] || "—",
         ),
-        h("span", { class: "chip" }, `${response.history_size} juegos valorados`),
+        h("span", { class: "chip" }, `${response.history_size} juegos con señales personales`),
       ];
       if (response.cold_start) {
         parts.push(h("span", { class: "chip", style: { borderColor: "var(--serious)" } }, "Arranque en frío"));

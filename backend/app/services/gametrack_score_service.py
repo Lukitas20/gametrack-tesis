@@ -1,4 +1,4 @@
-"""GameTrackScore 2.0: historial propio primero, respaldo público secundario.
+"""GameTrackScore 2.2: historial propio primero, respaldo público secundario.
 
 Las reseñas públicas acreditan alcance, no jugadores únicos ni sesiones juntos.
 Los umbrales no se relajan para rellenar una lista sin candidatos adecuados.
@@ -13,7 +13,8 @@ from app.schemas.game import GameSummary
 from app.schemas.gametrack_score import DiscoveryItem, DiscoveryResponse, GameTrackScore
 from app.services.friendship_service import require_player, resolve_group_members
 from app.services import steam_profile_service
-from app.services.personal_history_service import personal_history, history_affinities, history_reasons
+from app.services.personal_evidence_service import confidence_for
+from app.services.personal_history_service import personal_history, history_affinities, history_reasons, own_history_affinity
 
 
 def _count(value):
@@ -57,14 +58,24 @@ def score_context(db, user, engine=None):
     values, basis = engine.personal_scores(user.id, list(genres))
     signals, owned, imported_reviews = personal_history(db, user, ratings)
     history_values, used, similarities = history_affinities(engine, signals)
-    has_history = history_values is not None
+    has_history = history_values is not None or any(gid in engine._game_index and signal["weight"] != 0
+                                                  for gid, signal in signals.items())
     if has_history:
+        if history_values is None:
+            # Una ficha sin etiquetas puede tener horas propias verificadas,
+            # pero no permite inferir interés fuerte por otros juegos.
+            history_values = values * 0 + .15
         # Los gustos manuales acompañan; los inferidos del mismo historial no
         # se cuentan dos veces. No restringen la exploración a un género amplio.
         if user.preferences_source == "manual" and genres and basis != "popularidad":
             genre_values, _ = engine.personal_scores(None, list(genres))
             history_values = .95 * history_values + .05 * genre_values
         values, basis = history_values, "historial_personal"
+        values = values.copy()
+        for gid, signal in signals.items():
+            index = engine._game_index.get(gid)
+            if index is not None:
+                values[index] = own_history_affinity(signal)
     personal = has_history or (bool(ratings or genres) and basis != "popularidad")
     steam_used = {gid: signal for gid, signal in used.items() if signal["source"].startswith("steam_")}
     history_games = {game.id: game for game in db.scalars(select(Game).where(Game.id.in_(used))).all()}
@@ -74,9 +85,10 @@ def score_context(db, user, engine=None):
             "scores": dict(zip(engine.game_ids, values)) if personal else {}, "basis": basis,
             "history_size": len(set(ratings) | set(used)), "rating_count": len(ratings), "personal": personal,
             "has_positive_history": any(signal["weight"] > 0 for signal in used.values()), "specific_count": specific_count,
-            "has_history": has_history, "signals": used, "similarities": similarities, "engine": engine,
+            "has_history": has_history, "signals": used, "own_signals": signals, "similarities": similarities, "engine": engine,
             "history_games": history_games,
             "feedback_count":sum(signal['source']=='play_feedback' for signal in used.values()),
+            "gametrack_review_count":sum(signal["source"]=="gametrack_review" for signal in used.values()),
             "steam_count": len(steam_used), "steam_review_count": sum(s["source"] == "steam_review" for s in steam_used.values()),
             "steam_played_count": sum(s["source"] == "steam_playtime" for s in steam_used.values()),
             "imported_review_count": imported_reviews, "owned": owned}
@@ -85,9 +97,10 @@ def score_context(db, user, engine=None):
 def score_game(game, context):
     public = public_evidence(game)
     metadata = dict(metascore=public["meta"], community=round(public["community"]*100) if public["community"] is not None else None,
-                    review_count=public["total"])
+                    review_count=public["total"], **confidence_for(game, context))
     own_rating = context["ratings"].get(game.id)
-    value = (own_rating - 1) / 4 if own_rating is not None else context["scores"].get(game.id)
+    own_signal = context.get("own_signals", context["signals"]).get(game.id)
+    value = (own_rating - 1) / 4 if own_rating is not None else own_history_affinity(own_signal) if own_signal else context["scores"].get(game.id)
     if value is None or not isfinite(float(value)):
         return GameTrackScore(evidence="sin_datos", reasons=[
             "Elegí tus géneros o valorá algunos juegos para calcular tu GameTrackScore."
@@ -98,6 +111,13 @@ def score_game(game, context):
             reasons=[f"Ya lo valoraste con {own_rating:g}/5; se conserva tu opinión personal."],
             explanation="Cuando ya valoraste el juego, el índice refleja tu propia opinión.", **metadata)
     reasons = []
+    if own_signal and own_signal["source"] == "steam_playtime":
+        strength = "fuerte de interés sostenido" if value >= .65 else "moderada de interés" if value >= .45 else "inicial de interés"
+        reasons.append(f"Jugaste {own_signal['minutes'] / 60:.1f} h a este juego en Steam: es una señal {strength}. Las horas pesan de forma gradual y con un límite; no se convierten en estrellas.")
+    elif own_signal and own_signal["source"] == "gametrack_review":
+        reasons.append("Tu reseña de GameTrack recomienda este juego; aprendemos de esa opinión explícita." if own_signal["recommended"] else "Tu reseña de GameTrack no recomienda este juego; ese rechazo prevalece sobre el tiempo jugado.")
+    elif own_signal and own_signal["source"] == "play_feedback":
+        reasons.append("Tu respuesta después de jugar indica que te gustó; priorizamos esa experiencia sobre las horas." if own_signal["weight"] > 0 else "Tu respuesta después de jugar indica que no te gustó; las horas no anulan esa opinión.")
     matches = [genre.name for genre in game.genres if genre.slug in context["genres"]]
     value = max(0., min(1., float(value)))
     if context["genres"] and not context["has_history"]:
@@ -114,6 +134,8 @@ def score_game(game, context):
             reasons.append("Algunas reseñas importadas aún no tienen una ficha comparable, o ya cuentan con tu nota de GameTrack; no duplicamos esas opiniones.")
     if context["rating_count"]:
         reasons.append(f"Tiene en cuenta tus {context['rating_count']} valoraciones de GameTrack, incluidas las negativas.")
+    if context.get("gametrack_review_count"):
+        reasons.append(f"También usa {context['gametrack_review_count']} reseñas propias de GameTrack. No utiliza opiniones de otras personas como si fueran tuyas.")
     if context.get('feedback_count'):
         reasons.append(f"También usa {context['feedback_count']} devoluciones propias después de jugar, sin convertir interrupciones en rechazos.")
     if context["has_history"] and not context["specific_count"]:
@@ -135,10 +157,9 @@ def score_game(game, context):
         reasons.append("Sin Metascore disponible: usamos tus gustos y las reseñas públicas, sin inventar una nota crítica.")
     if public["total"]:
         reasons.append(f"Recepción pública: {public['total']:,} reseñas de {public['source']}; su cantidad no aumenta tu afinidad.")
-    own_signal = context["signals"].get(game.id)
     if own_signal and own_signal["source"] == "steam_review":
         reasons.insert(0, "Ya lo recomendaste en Steam; esa opinión forma parte del perfil." if own_signal["recommended"] else "Ya lo marcaste como no recomendado en Steam; esa opinión reduce la afinidad.")
-    evidence = "steam" if context["steam_count"] else "amplia" if count >= 10 else "en_desarrollo" if count >= 3 else "inicial"
+    evidence = "steam" if context["steam_count"] or (own_signal and own_signal["source"].startswith("steam_")) else "amplia" if count >= 10 else "en_desarrollo" if count >= 3 else "inicial"
     if evidence == "inicial":
         reasons.append("Todavía hay poca evidencia personal comparable; los géneros solos dan una estimación provisional.")
     elif context["steam_count"] and not context["steam_review_count"]:

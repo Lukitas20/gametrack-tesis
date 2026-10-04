@@ -114,3 +114,22 @@ def test_zero_unlocked_is_real_not_missing(achievement_source):
     for item in achievement_source["playerstats"]["achievements"]: item["achieved"] = 0
     progress = service.fetch_achievements(SID, 220)
     assert progress["status"] == "ok" and progress["percentage"] == 0 and progress["total"] == 3
+
+
+def test_carga_normal_reintenta_error_transitorio_sin_forzar(client, db, player, source, achievement_source, monkeypatch):
+    user,headers=player
+    url="/api/v1/steam/me/achievements/220"
+    real_fetch=service.fetch_achievements
+    monkeypatch.setattr(service,"fetch_achievements",lambda *_:{"status":"unavailable"})
+    assert client.get(url,headers=headers).json()["status"]=="unavailable"
+    cache=db.get(SteamProfileCache,user.id)
+    monkeypatch.setattr(service,"fetch_achievements",lambda *_:pytest.fail("Respetar el plazo entre reintentos"))
+    assert client.get(url,headers=headers).json()["status"]=="unavailable"
+    library=deepcopy(cache.library)
+    library["achievement_progress"]["220"]["checked_at"]=int(time.time())-service.RETRY_DELAY-1
+    cache.library=library;db.commit()
+    monkeypatch.setattr(service,"fetch_achievements",real_fetch)
+    recovered=client.get(url,headers=headers).json()
+    assert recovered["status"]=="ok" and recovered["percentage"]==33.3
+    monkeypatch.setattr(service,"fetch_achievements",lambda *_:pytest.fail("Reutilizar los logros válidos"))
+    assert client.get(url,headers=headers).json()["percentage"]==33.3

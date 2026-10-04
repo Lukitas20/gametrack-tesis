@@ -69,6 +69,10 @@ class ReviewOut(BaseModel):
     aspects: list[ReviewAspectOut]
 
 
+class ReviewWithGame(ReviewOut):
+    game: GameSummary
+
+
 class TextAnalysisRequest(BaseModel):
     """Texto suelto para analizar sin guardarlo."""
 

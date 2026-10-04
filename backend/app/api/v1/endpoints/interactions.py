@@ -1,6 +1,8 @@
 """Valoraciones y reseñas del usuario autenticado."""
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
@@ -13,6 +15,7 @@ from app.schemas.interaction import (
     ReviewAspectOut,
     ReviewCreate,
     ReviewOut,
+    ReviewWithGame,
     TextAnalysisOut,
     TextAnalysisRequest,
 )
@@ -23,6 +26,19 @@ from app.services.interaction_service import (
 )
 
 router = APIRouter(tags=["interacciones"])
+
+
+@router.get("/me/reviews", response_model=list[ReviewWithGame])
+def get_my_reviews(response: Response, game_id: int | None = Query(default=None, ge=1),
+                   limit: int = Query(default=20, ge=1, le=100),
+                   offset: int = Query(default=0, ge=0),
+                   user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    statement = select(Review).where(Review.user_id == user.id, Review.source == "user")
+    if game_id is not None:
+        statement = statement.where(Review.game_id == game_id)
+    response.headers["Cache-Control"] = "no-store"
+    return list(db.scalars(statement.options(selectinload(Review.game))
+                           .order_by(Review.created_at.desc(), Review.id.desc()).limit(limit).offset(offset)))
 
 
 def _require_game(db: Session, game_id: int) -> Game:

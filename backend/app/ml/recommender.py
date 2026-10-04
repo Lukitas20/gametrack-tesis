@@ -664,6 +664,7 @@ class RecommenderEngine:
         strategy: str = "auto",
         exclude: set[int] | None = None,
         discovery: str = "balanced",
+        personal_affinities: dict[int, float] | None = None,
     ) -> list[Recommendation]:
         """Devuelve los mejores juegos para un usuario.
 
@@ -699,6 +700,10 @@ class RecommenderEngine:
             content = preferences
         elif preferences is not None:
             content = 0.8 * content + 0.2 * np.clip(preferences, 0.0, 1.0)
+        if personal_affinities is not None:
+            # El mismo perfil firmado del GameTrackScore, con Steam y reseñas
+            # propias. No volver a sumar géneros que ya están en ese perfil.
+            content = np.clip(np.array([personal_affinities.get(gid, .15) for gid in self.game_ids]),0.,1.)
         collaboration = (
             self._collaborative_evidence(user_id)
             if user_id is not None and strategy in {"auto", "hibrido", "colaborativo"}
@@ -928,15 +933,39 @@ def invalidate_engine() -> None:
 
 def recommend_for_user(
     db: Session, user: User, limit: int | None = None, strategy: str = "auto",
-    discovery: str = "balanced",
+    discovery: str = "balanced", _context=None,
 ) -> list[Recommendation]:
     """Recomendaciones para un usuario, resolviendo sus preferencias."""
     engine = get_engine(db)
     genre_slugs = [preference.genre.slug for preference in user.preferences]
-    return engine.recommend(
+    context = _context
+    if strategy == "auto" and context is None:
+        from app.services.gametrack_score_service import score_context
+        context = score_context(db, user, engine=engine)
+    recommendations = engine.recommend(
         user_id=user.id,
         preferred_genres=genre_slugs,
         limit=limit or settings.REC_DEFAULT_LIMIT,
         strategy=strategy,
         discovery=discovery,
+        exclude=(context["owned"] | set(context["own_signals"])) if context else None,
+        personal_affinities=context["scores"] if context and context["has_history"] else None,
     )
+    if context and context["has_history"]:
+        descriptions = {
+            "gametrack_review": "Aprende de tus reseñas de GameTrack, incluyendo los juegos que no recomendaste",
+            "steam_review": "Tiene en cuenta tus propias recomendaciones y rechazos de Steam",
+            "steam_playtime": "Usa tus horas de Steam como señal de interés; no las convierte en valoraciones",
+            "play_feedback": "Tiene en cuenta la experiencia que guardaste después de jugar",
+        }
+        additions=[text for source,text in descriptions.items() if any(signal["source"]==source for signal in context["signals"].values())]
+        from app.services.personal_history_service import history_reasons
+        games = {g.id:g for g in db.scalars(select(Game).where(Game.id.in_([r.game_id for r in recommendations])))}
+        grounded = []
+        for recommendation in recommendations:
+            comparisons = [item[3] for item in history_reasons(games[recommendation.game_id], context)]
+            signals = list(dict.fromkeys(comparisons + recommendation.signals + additions))
+            grounded.append(Recommendation(game_id=recommendation.game_id, score=recommendation.score,
+                source=recommendation.source, reason=signals[0], components=recommendation.components, signals=signals))
+        recommendations = grounded
+    return recommendations

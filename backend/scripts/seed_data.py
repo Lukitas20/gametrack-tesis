@@ -657,6 +657,7 @@ def create_reviews(
         created_at = min(created_at, datetime.now(timezone.utc))
 
         review = Review(
+            source="demo",
             user_id=rating.user_id,
             game_id=rating.game_id,
             title=title,

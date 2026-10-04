@@ -2,7 +2,7 @@
 
 from datetime import date
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class GenreOut(BaseModel):
@@ -39,6 +39,13 @@ class GameSummary(BaseModel):
 
 
 class GameDetail(GameSummary):
+    screenshots: list[str] = Field(default_factory=list)
+
+    @field_validator("screenshots", mode="before")
+    @classmethod
+    def empty_screenshots(cls, value):
+        return value or []
+
     description: str | None
     publisher: str | None
     platforms: list[str]

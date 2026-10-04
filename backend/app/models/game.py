@@ -126,6 +126,8 @@ class Game(Base):
     platforms: Mapped[list[str]] = mapped_column(JSON, default=list)
 
     background_image: Mapped[str | None] = mapped_column(Text)
+    # None = aún no consultado; [] = Steam no publica capturas para esta ficha.
+    screenshots: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
     metacritic: Mapped[int | None] = mapped_column(Integer)
     # Puntaje de la fuente externa (RAWG), escala 0-5.
     external_rating: Mapped[float | None] = mapped_column(Float)

@@ -36,72 +36,27 @@ export function cover(game, { rank = null } = {}) {
 }
 
 export function ratingChip(game) {
-  if (!game.ratings_count) {
-    return h("span", { class: "game-sub" }, "Sin valoraciones");
-  }
-  return h(
-    "span",
-    { class: "rating-inline" },
-    icon("star", 12),
-    game.avg_rating.toFixed(2),
-    h("span", { class: "muted", style: { fontWeight: "400" } }, `· ${game.ratings_count}`),
-  );
+  const count=Number(game.ratings_count || 0),score=Number(game.avg_rating);
+  if(!count || !Number.isFinite(score))return h("span",{class:"game-rating-empty"},"Sin nota de la comunidad");
+  const compact=new Intl.NumberFormat("es-AR",{notation:"compact",maximumFractionDigits:1}).format(count);
+  const value=score.toLocaleString("es-AR",{minimumFractionDigits:1,maximumFractionDigits:1});
+  return h("span",{class:"rating-inline game-community-score",title:`${count.toLocaleString("es-AR")} valoraciones públicas`,"aria-label":`Comunidad: ${value} de 5, ${count.toLocaleString("es-AR")} valoraciones`},
+    icon("star",13),h("strong",null,`${value}`),h("span",{class:"game-score-scale"},"/ 5"),h("span",{class:"game-score-label"},"Comunidad"),h("small",null,`${compact} votos`));
 }
 
-/**
- * Tarjeta de juego. El motivo de la recomendación se muestra siempre en la
- * tarjeta, no escondido en un tooltip.
- */
 export function gameCard(game, { rank = null, reason = null, source = null } = {}) {
-  const own = ratingFor(game.id);
-
-  return h(
-    "button",
-    {
-      class: "game-card",
-      onClick: () => navigate(`/juego/${game.id}`),
-      "aria-label": `Ver ${game.name}`,
-    },
-    cover(game, { rank }),
-    h(
-      "div",
-      { class: "game-meta" },
-      h("span", { class: "game-name" }, game.name),
-      h(
-        "span",
-        { class: "game-sub" },
-        `${formatYear(game.released)} · ${game.developer || "—"}`,
-      ),
-      h(
-        "div",
-        { class: "row", style: { gap: "var(--s-2)" } },
-        ratingChip(game),
-        own !== null &&
-          h("span", { class: "chip chip-accent" }, icon("star", 10), `Tu nota ${own}`),
-      ),
-      game.genres?.length
-        ? h(
-            "div",
-            { class: "row", style: { gap: "4px" } },
-            game.genres.slice(0, 2).map((genre) => h("span", { class: "chip" }, genre.name)),
-          )
-        : null,
-      game.is_enriched === false
-        ? h(
-            "span",
-            { class: "chip", title: "Todavía no se completó desde Steam" },
-            "Ficha pendiente",
-          )
-        : null,
-    ),
-    reason &&
-      h(
-        "div",
-        { class: "reason", title: source ? SOURCE_LABEL[source] : null },
-        icon("sparkles", 12),
-        h("span", null, reason),
-      ),
-  );
+  const own=ratingFor(game.id),art=cover(game,{rank});
+  if(own!==null)art.append(h("span",{class:"game-own-rating"},icon("star",11),`Tu nota · ${own}/5`));
+  const year=formatYear(game.released),meta=[year!=="—"?year:null,game.developer].filter(Boolean).join(" · ");
+  return h("button",{class:"game-card clean-game-card",type:"button",onClick:()=>navigate(`/juego/${game.id}`),"aria-label":`Ver ${game.name}`},art,
+    h("div",{class:"game-meta"},
+      h("span",{class:"game-name",title:game.name},game.name),
+      game.genres?.length?h("span",{class:"game-card-genres"},game.genres.slice(0,2).map(genre=>genre.name).join(" · ")):null,
+      meta?h("span",{class:"game-sub",title:meta},meta):null,
+      h("div",{class:"game-card-scores"},ratingChip(game)),
+      game.is_enriched===false?h("span",{class:"game-pending-label"},icon("clock",11),"Completando ficha desde Steam"):null),
+    reason?h("div",{class:"reason clean-card-reason",title:source?SOURCE_LABEL[source]:null},icon("sparkles",14),
+      h("span",null,h("small",null,"POR QUÉ TE LO SUGERIMOS"),h("span",null,reason))):null);
 }
 
 export function gameGrid(games, decorate = null) {
@@ -307,34 +262,29 @@ export function aspectChip(aspect) {
   );
 }
 
+let reviewBodySequence=0;
 export function reviewItem(review) {
-  const authorName = review.author_name || "Usuario";
-  return h(
-    "article",
-    { class: "review" },
-    h(
-      "div",
-      { class: "review-head" },
-      h("span", { class: "avatar" }, initials(authorName)),
-      h("span", { class: "review-title" }, review.title || "Reseña"),
-      h("span", { class: "muted", style: { fontSize: "var(--fs-xs)" } }, authorName),
-      review.source === "steam"
-        ? h("span", { class: "chip", title: "Reseña real importada de Steam" }, "Steam")
-        : null,
-      sentimentChip(review.sentiment),
-      h("span", { class: "spacer" }),
-      review.sentiment_score !== null &&
-        h(
-          "span",
-          { class: "muted tnum", style: { fontSize: "var(--fs-xs)" } },
-          `polaridad ${review.sentiment_score > 0 ? "+" : ""}${review.sentiment_score.toFixed(2)}`,
-        ),
-    ),
-    h("p", { class: "review-body" }, review.content),
-    review.aspects?.length
-      ? h("div", { class: "aspect-tags" }, review.aspects.map(aspectChip))
-      : null,
-  );
+  const author=review.author_name||"Jugador",steam=review.source==="steam";
+  const date=new Date(review.created_at),validDate=Number.isFinite(date.getTime());
+  const content=(review.content||"").replace(/\r\n?/g,"\n").replace(/\n[ \t]*\n(?:[ \t]*\n)+/g,"\n\n").trim();
+  const long=content.length>280||content.split("\n").length>5;
+  const body=h("p",{class:`review-body${long?" is-collapsed":""}`,id:`review-text-${++reviewBodySequence}`},content);
+  const expand=long?h("button",{class:"review-read-more",type:"button","aria-expanded":"false","aria-controls":body.id,onClick:()=>{
+    const collapsed=body.classList.toggle("is-collapsed");
+    expand.setAttribute("aria-expanded",String(!collapsed));
+    expand.textContent=collapsed?"Leer reseña completa":"Mostrar menos";
+  }},"Leer reseña completa"):null;
+  const recommendation=typeof review.is_recommended==="boolean"?h("span",{class:"game-review-verdict",dataset:{recommended:String(review.is_recommended)}},
+    icon(review.is_recommended?"check":"x",13),review.is_recommended?"Recomendado":"No recomendado"):null;
+  return h("article",{class:"review game-real-review clean-review",dataset:{reviewId:review.id}},
+    h("header",{class:"review-head"},h("span",{class:"avatar","aria-hidden":"true"},initials(author)),
+      h("div",{class:"game-review-author"},h("strong",null,author),h("span",{class:"game-review-byline"},
+        h("span",{class:"game-review-origin"},steam?"Reseña de Steam":"Reseña de GameTrack"),
+        validDate?h("time",{datetime:date.toISOString()},date.toLocaleDateString("es-AR",{day:"numeric",month:"short",year:"numeric"})):null)),recommendation),
+    review.title?h("h3",{class:"game-review-title"},review.title):null,body,expand,
+    review.is_analyzed?h("details",{class:"game-review-analysis"},h("summary",null,icon("sparkles",13),"Análisis de esta reseña",icon("chevronDown",13)),
+      h("div",{class:"review-analysis-content"},h("p",null,"La IA local interpreta el texto. Este análisis no reemplaza la opinión del autor."),sentimentChip(review.sentiment),
+        review.aspects?.length?h("div",{class:"aspect-tags"},review.aspects.map(aspectChip)):null)):null);
 }
 
 /* ------------------------------------------------------------------ *

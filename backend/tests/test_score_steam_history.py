@@ -55,7 +55,7 @@ def test_steam_opiniones_distinguen_juegos_del_mismo_genero(history):
     db, user, _, games, *_ = history
     liked, disliked = [scores.game_score(db, user, games[i].id) for i in (2, 3)]
     assert liked.affinity > disliked.affinity + 50
-    assert liked.evidence == "steam" and liked.version == "2.0"
+    assert liked.evidence == "steam" and liked.version == "2.2"
     assert liked.weights == {"affinity": .85, "metacritic": .10, "community": .05}
     assert "reach" not in liked.components
     assert "recomendaste en Steam" in " ".join(liked.reasons)
@@ -231,3 +231,76 @@ def test_genero_amplio_solo_no_genera_afinidad_alta(history):
     result = scores.game_score(db, user, games[2].id)
     assert result.evidence == "inicial" and result.affinity <= 55
     assert result.value < 65  # Metascore 96 no transforma la señal débil en fuerte.
+
+
+def test_1500_horas_reconocen_interes_en_el_propio_juego_y_en_shooters(history):
+    db, user, _, games, *_ = history
+    set_library(db, user, {"status": "ok", "items": [{"appid": 100, "minutes": 90000}]})
+    own, similar, unrelated = [scores.game_score(db, user, games[i].id) for i in (0, 2, 3)]
+    assert own.affinity >= 85 and own.value >= 85
+    assert similar.affinity >= 65 and similar.affinity > unrelated.affinity + 40
+    assert "1500.0 h a este juego" in " ".join(own.reasons)
+    assert "steam_playtime" == scores.score_context(db, user)["signals"][games[0].id]["source"]
+    assert db.scalar(select(func.count()).select_from(Rating)) == 0
+    explanation = explain_game(db, user, games[0].id, "¿Por qué con tantas horas tengo este score?")
+    assert explanation.score.model_dump() == own.model_dump()
+    assert "1500.0 h" in " ".join(p.text for p in explanation.answer)
+    assert any(p.text == own.reasons[0] for p in explanation.positives)
+
+
+def test_una_resena_de_otro_genero_no_apaga_cientos_de_horas_en_shooters(history):
+    db, user, _, games, *_ = history
+    library = {"status": "ok", "items": [{"appid": 100, "minutes": 90000}]}
+    set_library(db, user, library)
+    before = scores.game_score(db, user, games[2].id).affinity
+    set_library(db, user, {**library, "user_reviews": {"1": {"status": "ok", "items": [
+        {"appid": 101, "is_recommended": True}]}}})
+    after = scores.game_score(db, user, games[2].id).affinity
+    assert after >= 65 and abs(after - before) <= 5
+    # Conservar varios gustos es útil: la reseña positiva de puzles sigue contando.
+    assert scores.game_score(db, user, games[3].id).affinity >= 65
+
+
+def test_horas_crecen_gradualmente_sin_convertir_dos_horas_en_amor(history):
+    db, user, _, games, *_ = history
+    own, similar = [], []
+    for hours in (2, 100, 500, 1500, 15000):
+        set_library(db, user, {"status": "ok", "items": [{"appid": 100, "minutes": hours * 60}]})
+        own.append(scores.game_score(db, user, games[0].id).affinity)
+        similar.append(scores.game_score(db, user, games[2].id).affinity)
+    assert own[0] < 35 and similar[0] < 35
+    assert own[0] < own[1] < own[2] < own[3] == own[4] < 100
+    assert similar[0] < similar[1] < similar[2] < similar[3] == similar[4] < 100
+    assert own[3] - own[2] < own[2] - own[1]  # rendimiento decreciente
+
+
+def test_opiniones_negativas_y_estrellas_prevalecen_sobre_1500_horas(history):
+    db, user, _, games, *_ = history
+    library = {"status": "ok", "items": [{"appid": 100, "minutes": 90000}],
+               "user_reviews": {"1": {"status": "ok", "items": [{"appid": 100, "is_recommended": False}]}}}
+    set_library(db, user, library)
+    assert scores.game_score(db, user, games[0].id).affinity == 0
+    assert scores.game_score(db, user, games[2].id).affinity < 20
+    db.add(Rating(user_id=user.id, game_id=games[0].id, score=3)); db.commit(); invalidate_engine()
+    assert scores.game_score(db, user, games[0].id).value == 50
+    assert scores.game_score(db, user, games[0].id).evidence == "valoracion_propia"
+
+
+def test_horas_propias_no_requieren_etiquetas_pero_no_inventan_similitudes(history):
+    db, user, _, games, *_ = history
+    set_library(db, user, {"status": "ok", "items": [{"appid": 105, "minutes": 90000}]})
+    assert scores.game_score(db, user, games[5].id).affinity >= 85
+    assert scores.game_score(db, user, games[2].id).affinity < 45
+
+
+def test_biblioteca_grande_no_pierde_horas_propias_fuera_de_las_40_comparaciones(history):
+    db, user, _, games, *_ = history
+    extra = [Game(name=f"Otro {i}", slug=f"extra-{i}", steam_app_id=200+i,
+                  genres=games[1].genres, tags=games[1].tags) for i in range(40)]
+    db.add_all(extra); db.commit(); invalidate_engine()
+    set_library(db, user, {"status": "ok", "items": [{"appid": 100, "minutes": 90000}]
+        + [{"appid": 200+i, "minutes": 100000+i} for i in range(40)]})
+    context = scores.score_context(db, user)
+    assert context["steam_played_count"] == 40
+    assert scores.score_game(games[0], context).affinity >= 85
+    assert "1500.0 h a este juego" in " ".join(scores.score_game(games[0], context).reasons)

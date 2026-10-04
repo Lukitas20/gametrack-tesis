@@ -18,7 +18,7 @@ export function steamAchievementPanel(appid, name, {onUpdate = () => {}, autoLoa
   const owner = state.user?.id;
   const panel = h("section", {class:"achievement-panel", "aria-label":`Logros de ${name}`});
   const body = h("div", {"aria-live":"polite"});
-  let data = null, loading = false, revision = 0, filter = "all", shown = 12;
+  let data = null, loading = false, revision = 0, filter = "all", shown = 8, retryCount = 0, retryTimer = null;
   const refresh = h("button", {class:"btn btn-ghost btn-sm", onClick:() => load(true), "aria-label":"Actualizar logros"}, icon("refresh",14), "Actualizar");
   const notices = {
     private: "Steam no comparte los logros de tu perfil. Podés revisar la privacidad de tus detalles de juegos.",
@@ -35,7 +35,7 @@ export function steamAchievementPanel(appid, name, {onUpdate = () => {}, autoLoa
     const hasProgress = data.percentage != null && data.total > 0;
     const filters = h("div", {class:"achievement-filters",role:"group","aria-label":"Filtrar logros"});
     for (const [key,label] of [["all","Todos"],["unlocked","Desbloqueados"],["locked","Pendientes"]]) {
-      filters.append(h("button", {"aria-pressed":String(key === filter),onClick:() => {filter=key;shown=12;render();}},label));
+      filters.append(h("button", {"aria-pressed":String(key === filter),onClick:() => {filter=key;shown=8;render();}},label));
     }
     const items = (data.items || []).filter(item => filter === "all" || item.unlocked === (filter === "unlocked"));
     const list = h("div", {class:"achievement-list"}, items.slice(0,shown).map(item => {
@@ -51,7 +51,7 @@ export function steamAchievementPanel(appid, name, {onUpdate = () => {}, autoLoa
       hasProgress && achievementProgress(data),
       hasProgress && filters, hasProgress && list,
       hasProgress && !items.length && h("p",{class:"achievement-empty"},"No hay logros en este filtro."),
-      hasProgress && items.length > shown && h("button",{class:"btn btn-ghost btn-sm",onClick:() => {shown+=12;render();}},"Ver más logros"),
+      hasProgress && items.length > shown && h("button",{class:"btn btn-ghost btn-sm",onClick:() => {shown+=8;render();}},"Ver más logros"),
       h("div",{class:"achievement-footer"},h("a",{href:data.community_url,target:"_blank",rel:"noopener noreferrer"},"Ver en Steam ↗"),
         data.updated_at && h("span",null,`Consultado ${date(data.updated_at)}`)),
       data.status === "private" && h("a",{class:"steam-caption",href:"https://steamcommunity.com/my/edit/settings",target:"_blank",rel:"noopener noreferrer"},"Revisar privacidad ↗"));
@@ -63,6 +63,8 @@ export function steamAchievementPanel(appid, name, {onUpdate = () => {}, autoLoa
       body.prepend(h("p",{class:"achievement-notice achievement-cooldown",role:"status"},`Podés actualizar en ${Math.ceil(data.next_refresh_at-Date.now()/1000)} segundos.`));
       return;
     }
+    clearTimeout(retryTimer);
+    if(force)retryCount=0;
     const request=++revision; loading=true;refresh.disabled=true;render();
     try {
       const result=await (force ? api.syncSteamAchievements(appid) : api.steamAchievements(appid));
@@ -75,6 +77,13 @@ export function steamAchievementPanel(appid, name, {onUpdate = () => {}, autoLoa
       loading=false;refresh.disabled=false;return;
     }
     loading=false;refresh.disabled=false;render();
+    // Un fallo transitorio se recupera sin pedirle al usuario que recargue.
+    // Máximo dos reintentos, con el plazo informado por el servidor.
+    if(autoLoad && data?.status === "unavailable" && retryCount < 2) {
+      retryCount += 1;
+      const wait=Math.max(1000,((data.next_refresh_at || Date.now()/1000+30)-Date.now()/1000)*1000+250);
+      retryTimer=setTimeout(()=>{if(panel.isConnected && owner===state.user?.id)load();},wait);
+    }
   }
   panel.append(h("header",{class:"achievement-heading"},h("div",null,h("p",{class:"eyebrow"},"TU PROGRESO"),h("h3",null,name || "Logros de Steam")),refresh),body);
   if (autoLoad) load(); else {render();body.append(h("button",{class:"btn btn-sm",onClick:() => load()},"Consultar mis logros"));}

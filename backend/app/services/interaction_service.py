@@ -36,6 +36,7 @@ def recompute_median_review_hours(db: Session, game_id: int) -> None:
         for (value,) in db.execute(
             select(Review.hours_at_review).where(
                 Review.game_id == game_id,
+                Review.source.in_(["user", "steam"]),
                 Review.hours_at_review.is_not(None),
                 Review.hours_at_review > 0,
             )
@@ -89,7 +90,7 @@ def recompute_game_aggregates(db: Session, game_id: int) -> None:
             select(
                 func.sum(case((Review.is_recommended.is_(True), 1), else_=0)),
                 func.count(Review.id),
-            ).where(Review.game_id == game_id, Review.is_recommended.is_not(None))
+            ).where(Review.game_id == game_id, Review.source.in_(["user", "steam"]), Review.is_recommended.is_not(None))
         ).one()
         steam_count = int(steam_count or 0)
         recommended = int(recommended or 0)
@@ -120,7 +121,7 @@ def recompute_game_aggregates(db: Session, game_id: int) -> None:
     )
 
     game.reviews_count = (
-        db.scalar(select(func.count(Review.id)).where(Review.game_id == game_id)) or 0
+        db.scalar(select(func.count(Review.id)).where(Review.game_id == game_id, Review.source.in_(["user", "steam"]))) or 0
     )
 
 
@@ -166,10 +167,11 @@ def create_review(db: Session, user: User, data: ReviewCreate) -> Review:
         db.add(review)
 
     review.title = data.title
+    review.source = "user"
     review.content = data.content
     review.is_recommended = data.is_recommended
     review.hours_at_review = data.hours_at_review
-    review.author_name = user.username
+    review.author_name = (user.steam_username if user.steam_verified else None) or user.full_name or user.username
     db.flush()
 
     apply_analysis(db, review, analyze_review(review))

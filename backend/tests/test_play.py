@@ -246,5 +246,5 @@ def _check_migration(filename):
     with closing(sqlite3.connect(filename)) as connection:
         assert connection.execute('SELECT username FROM users').fetchone()[0] == 'Conservar'
         assert connection.execute('SELECT name FROM games').fetchone()[0] == 'Juego existente'
-        assert connection.execute('SELECT version_num FROM alembic_version').fetchone()[0] == 'a9d740ec812b'
+        assert connection.execute('SELECT version_num FROM alembic_version').fetchone()[0] == 'b5c208d915af'
         assert connection.execute('SELECT COUNT(*) FROM play_feedback').fetchone()[0] == 0

@@ -82,7 +82,10 @@ def achievements(db, user, appid, force=False):
         progress = library.get("achievement_progress", {})
         previous = progress.get(str(appid))
         now = int(time.time())
-        if previous and now - previous["checked_at"] < (RETRY_DELAY if force else TTL):
+        # Los errores transitorios no deben bloquear la carga automática
+        # durante los diez minutos reservados a datos válidos cacheados.
+        ttl = RETRY_DELAY if force or (previous and previous.get("status") == "unavailable") else TTL
+        if previous and now - previous["checked_at"] < ttl:
             return _payload(appid, previous)
         fresh = fetch_achievements(cache.steam_id, appid)
         if fresh["status"] == "unavailable" and previous:

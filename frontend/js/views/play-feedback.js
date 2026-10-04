@@ -10,7 +10,7 @@ export function openPlayFeedback(gameId,name="este juego",onSaved=()=>{}) {
   if(!isLoggedIn() || isDeveloper()) return;
   const owner=state.user.id;
   openModal(close=>{
-    const root=h("div",{class:"play-feedback-body"},h("p",{role:"status"},"Leyendo tu última devolución…"));
+    const root=h("div",{class:"play-feedback-body"},h("p",{role:"status"},"Buscando tu experiencia guardada…"));
     const current=()=>owner===state.user?.id && root.isConnected;
     async function load() {
       try {const data=await api.playFeedback(gameId);if(current()) render(data || {});}
@@ -23,7 +23,7 @@ export function openPlayFeedback(gameId,name="este juego",onSaved=()=>{}) {
       const replay=h("select",{id:"feedback-replay"},h("option",{value:""},"Todavía no sé"),h("option",{value:"yes"},"Sí"),h("option",{value:"no"},"No"));replay.value=data.replay==null ? "" : data.replay ? "yes" : "no";
       const minutes=h("input",{id:"feedback-minutes",type:"number",min:"0",max:"10080",step:"1",value:data.minutes ?? "",placeholder:"Opcional"});
       const note=h("textarea",{id:"feedback-note",rows:"3",maxlength:"500",placeholder:"¿Qué pasó? Podés dejar una nota para vos."},data.note || "");
-      const notice=h("p",{class:"play-learning-note"}),errorBox=h("p",{role:"alert"}),submit=h("button",{type:"submit",class:"btn btn-primary"},"Guardar devolución",icon("check",15));
+      const notice=h("p",{class:"play-learning-note"}),errorBox=h("p",{role:"alert"}),submit=h("button",{type:"submit",class:"btn btn-primary"},"Guardar mi experiencia",icon("check",15));
       function explain() {
         enjoy.disabled=!played.checked;minutes.disabled=!played.checked;
         if(!played.checked) {enjoy.value="not_sure";minutes.value="";}
@@ -33,21 +33,21 @@ export function openPlayFeedback(gameId,name="este juego",onSaved=()=>{}) {
       }
       for(const control of [played,enjoy,reason]) control.addEventListener("change",explain);explain();
       const field=(label,node)=>h("div",{class:"play-feedback-field"},h("label",{for:node.id},label),node);
-      mount(root,h("p",null,`Contanos cómo te fue con ${name}. Podés editar esta devolución más adelante.`),h("form",{class:"play-feedback-form",onSubmit:async event=>{
+      mount(root,h("p",null,`Contanos cómo te fue con ${name}. Es privado y podés editarlo más adelante.`),h("form",{class:"play-feedback-form",onSubmit:async event=>{
         event.preventDefault();if(!current() || submit.disabled) return;
         submit.disabled=true;submit.textContent="Guardando…";errorBox.textContent="";
         try {
           const result=await api.savePlayFeedback(gameId,{played:played.checked,enjoyment:enjoy.value,reason:reason.value,replay:replay.value==="" ? null : replay.value==="yes",minutes:minutes.value==="" ? null : Number(minutes.value),note:note.value.trim() || null});
           if(!current()) return;feedbackRevision+=1;close();toast(result.message);onSaved(result);
-        } catch(error) {if(current()){errorBox.textContent=error.message;submit.disabled=false;submit.textContent="Guardar devolución";}}
-      }},h("label",{class:"play-feedback-check"},played,"Llegué a jugar"),
+        } catch(error) {if(current()){errorBox.textContent=error.message;submit.disabled=false;submit.textContent="Guardar mi experiencia";}}
+      }},h("label",{class:"play-feedback-check"},played,"Sí, ya jugué este juego"),
         h("div",{class:"play-feedback-grid"},field("¿Te gustó?",enjoy),field("¿Qué explica tu experiencia?",reason),field("¿Lo volverías a jugar?",replay),field("Minutos de esta sesión (declarados por vos)",minutes)),
         field("Nota personal (opcional)",note),notice,errorBox,h("div",{class:"play-feedback-footer"},h("a",{href:"#/que-jugamos?modo=experiencias",onClick:close},"Mis opiniones"),submit)));
     }
-    load();return h("div",null,modalHead("¿Cómo estuvo la partida?","Una devolución breve para mejorar tus próximas sugerencias.",close),root);
+    load();return h("div",null,modalHead("Contar mi experiencia","Una opinión breve y privada que ayuda a recomendarte mejor.",close),root);
   });
 }
 
 export function playFeedbackButton(gameId,name,onSaved) {
-  return isLoggedIn() && !isDeveloper() ? h("button",{class:"btn btn-ghost btn-sm",type:"button",onClick:()=>openPlayFeedback(gameId,name,onSaved)},icon("heart",14),"Ya lo probé: contar cómo me fue") : null;
+  return isLoggedIn() && !isDeveloper() ? h("button",{class:"btn btn-ghost btn-sm",type:"button",onClick:()=>openPlayFeedback(gameId,name,onSaved)},icon("gamepad",14),"Lo jugué · contar mi experiencia") : null;
 }
