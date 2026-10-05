@@ -102,6 +102,9 @@ class Review(Base):
     # origen para no reimportarla al refrescar el juego. Nulo para las
     # escritas en GameTrack.
     steam_review_id: Mapped[str | None] = mapped_column(String(32), index=True)
+    # Fecha original de Steam. NULL en importaciones antiguas sin fecha conocida;
+    # created_at conserva la fecha de ingreso y no se usa como sustituto.
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
     # Nombre a mostrar: el username al momento de publicar, o el nombre de
     # perfil de Steam para las importadas. Se copia acá en vez de resolverse
     # por join porque las reseñas de Steam no tienen ``user`` al que unirse.

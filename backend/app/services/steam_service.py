@@ -640,6 +640,18 @@ def queue_game_refresh(db: Session, game: Game, *, priority: int = 100):
     return entry
 
 
+def _review_publication_date(value) -> datetime | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    try:
+        published = datetime.fromtimestamp(value, timezone.utc)
+    except (ValueError, OverflowError, OSError):
+        return None
+    if datetime(2000, 1, 1, tzinfo=timezone.utc) <= published <= datetime.now(timezone.utc):
+        return published
+    return None
+
+
 def import_reviews(db: Session, game: Game, steam_app_id: int, *, commit: bool = True) -> int:
     """Trae reseñas reales de Steam nuevas para un juego y las analiza con el
     mismo módulo NLP que las reseñas escritas en GameTrack.
@@ -659,10 +671,18 @@ def import_reviews(db: Session, game: Game, steam_app_id: int, *, commit: bool =
     imported = db.scalar(select(func.count(Review.id)).where(
         Review.game_id == game.id, Review.source == "steam"
     )) or 0
-    remaining = max(0, settings.STEAM_REVIEWS_IMPORT_LIMIT - imported)
-    if remaining == 0:
+    budget = settings.STEAM_REVIEWS_IMPORT_LIMIT
+    remaining = max(0, budget - imported)
+    existing = {review.steam_review_id: review for review in db.scalars(
+        select(Review).where(Review.game_id == game.id, Review.source == "steam",
+                             Review.steam_review_id.is_not(None))
+    )}
+    missing_dates = any(review.published_at is None for review in existing.values())
+    if budget <= 0 or (remaining == 0 and not missing_dates):
         return 0
-    raw_reviews = get_app_reviews(steam_app_id, num=remaining)
+    # Una muestra acotada también puede reparar fechas de reseñas ya guardadas.
+    # Nunca agrega nuevas reseñas por encima del presupuesto persistente.
+    raw_reviews = get_app_reviews(steam_app_id, num=budget if missing_dates else remaining)
 
     existing_ids = {
         row[0]
@@ -673,20 +693,28 @@ def import_reviews(db: Session, game: Game, steam_app_id: int, *, commit: bool =
         ).all()
     }
     new_entries = []
+    dates_updated = 0
     for entry in raw_reviews:
         review_id = entry.get("recommendationid")
         content = entry.get("review")
+        known = existing.get(str(review_id))
+        if known is not None and known.published_at is None:
+            published = _review_publication_date(entry.get("timestamp_created"))
+            if published is not None:
+                known.published_at = published
+                dates_updated += 1
         if (
             review_id is None or not 1 <= len(str(review_id)) <= 32
             or str(review_id) in existing_ids
             or not isinstance(content, str) or len(content.strip()) < 10
+            or len(new_entries) >= remaining
         ):
             continue
         existing_ids.add(str(review_id))
         new_entries.append(entry)
-        if len(new_entries) >= remaining:
-            break
     if not new_entries:
+        if dates_updated and commit:
+            db.commit()
         return 0
 
     steam_ids = [
@@ -720,6 +748,7 @@ def import_reviews(db: Session, game: Game, steam_app_id: int, *, commit: bool =
             source="steam",
             author_name=(profile.get("personaname") or "Jugador de Steam")[:120],
             steam_review_id=str(entry["recommendationid"]),
+            published_at=_review_publication_date(entry.get("timestamp_created")),
         )
         db.add(review)
         apply_analysis(db, review, analyze_review(review))

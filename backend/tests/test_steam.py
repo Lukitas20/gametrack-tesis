@@ -574,7 +574,8 @@ def test_presupuesto_resenas_es_persistente_y_no_cuenta_aportes_propios(db, user
     monkeypatch.setattr(steam_service, "get_app_reviews", fetch)
     assert steam_service.import_reviews(db, game, 444) == 1
     assert steam_service.import_reviews(db, game, 444) == 0
-    assert fetched == [1]
+    # Aun con el presupuesto completo, puede reparar fechas de muestras antiguas.
+    assert fetched == [2, 2]
     assert db.get(Review, own.id) is not None
     assert db.scalar(select(func.count(Review.id)).where(Review.game_id == game.id)) == 3
     # Bajar el límite tampoco borra las reseñas que ya estaban.

@@ -61,6 +61,7 @@ class ReviewOut(BaseModel):
     is_recommended: bool | None
     helpful_count: int
     created_at: datetime
+    published_at: datetime | None = None
 
     sentiment: Sentiment | None
     sentiment_score: float | None

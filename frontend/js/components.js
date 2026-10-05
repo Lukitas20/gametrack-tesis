@@ -265,7 +265,9 @@ export function aspectChip(aspect) {
 let reviewBodySequence=0;
 export function reviewItem(review) {
   const author=review.author_name||"Jugador",steam=review.source==="steam";
-  const date=new Date(review.created_at),validDate=Number.isFinite(date.getTime());
+  const rawDate=steam ? review.published_at : review.created_at;
+  const normalizedDate=typeof rawDate==="string"&&!/(Z|[+-]\d{2}:\d{2})$/.test(rawDate)?`${rawDate}Z`:rawDate;
+  const date=rawDate ? new Date(normalizedDate) : null,validDate=date && Number.isFinite(date.getTime());
   const content=(review.content||"").replace(/\r\n?/g,"\n").replace(/\n[ \t]*\n(?:[ \t]*\n)+/g,"\n\n").trim();
   const long=content.length>280||content.split("\n").length>5;
   const body=h("p",{class:`review-body${long?" is-collapsed":""}`,id:`review-text-${++reviewBodySequence}`},content);
@@ -279,8 +281,8 @@ export function reviewItem(review) {
   return h("article",{class:"review game-real-review clean-review",dataset:{reviewId:review.id}},
     h("header",{class:"review-head"},h("span",{class:"avatar","aria-hidden":"true"},initials(author)),
       h("div",{class:"game-review-author"},h("strong",null,author),h("span",{class:"game-review-byline"},
-        h("span",{class:"game-review-origin"},steam?"Reseña de Steam":"Reseña de GameTrack"),
-        validDate?h("time",{datetime:date.toISOString()},date.toLocaleDateString("es-AR",{day:"numeric",month:"short",year:"numeric"})):null)),recommendation),
+        h("span",{class:"game-review-origin"},steam?"Reseña de Steam":review.source==="seed"?"Reseña de demostración":"Reseña de GameTrack"),
+        validDate?h("time",{datetime:date.toISOString()},date.toLocaleDateString("es-AR",{day:"numeric",month:"short",year:"numeric",timeZone:"UTC"})):h("span",null,"Fecha de publicación desconocida"))),recommendation),
     review.title?h("h3",{class:"game-review-title"},review.title):null,body,expand,
     review.is_analyzed?h("details",{class:"game-review-analysis"},h("summary",null,icon("sparkles",13),"Análisis de esta reseña",icon("chevronDown",13)),
       h("div",{class:"review-analysis-content"},h("p",null,"La IA local interpreta el texto. Este análisis no reemplaza la opinión del autor."),sentimentChip(review.sentiment),

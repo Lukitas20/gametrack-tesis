@@ -1,6 +1,9 @@
 """Panel de analítica NLP/ABSA. Exclusivo del rol desarrollador."""
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from datetime import date
+from typing import Literal
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -19,11 +22,31 @@ from app.schemas.analytics import (
     PlatformOverviewOut,
     ProcessResult,
     StudioAnalyticsOut,
+    DeveloperReviewPage,
 )
 from app.services import steam_service
 from app.services.developer_assistant import explain_developer_report
+from app.services.developer_reviews import explore_reviews
+from app.models.enums import Aspect, Sentiment
 
 router = APIRouter(prefix="/analytics", tags=["analitica"])
+
+
+@router.get("/reviews", response_model=DeveloperReviewPage)
+def get_reviews(response: Response,
+                studio: str | None = Query(default=None, max_length=120),
+                game_id: int | None = Query(default=None, gt=0),
+                search: str = Query(default="", max_length=300),
+                aspect: Aspect | None = None, sentiment: Sentiment | None = None,
+                source: Literal["steam", "user", "seed"] | None = None,
+                date_from: date | None = None, date_to: date | None = None,
+                sort: Literal["newest", "oldest", "helpful"] = "newest",
+                limit: int = Query(default=20, ge=1, le=100), offset: int = Query(default=0, ge=0),
+                user: User = Depends(require_developer), db: Session = Depends(get_db)):
+    response.headers["Cache-Control"] = "no-store"
+    return explore_reviews(db, user, studio=studio, game_id=game_id, search=search,
+                           aspect=aspect, sentiment=sentiment, source=source,
+                           date_from=date_from, date_to=date_to, sort=sort, limit=limit, offset=offset)
 
 
 class AssistantQuestion(BaseModel):

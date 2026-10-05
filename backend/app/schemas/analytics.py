@@ -1,6 +1,21 @@
 """Schemas del panel de analítica para desarrolladores."""
 
+from datetime import datetime
 from pydantic import BaseModel
+from app.schemas.interaction import ReviewOut
+
+
+class DeveloperReviewOut(ReviewOut):
+    game_name: str
+    publication_date: datetime | None
+
+
+class DeveloperReviewPage(BaseModel):
+    items: list[DeveloperReviewOut]
+    total: int
+    limit: int
+    offset: int
+    undated: int
 
 
 class SentimentDistribution(BaseModel):

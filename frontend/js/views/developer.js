@@ -5,6 +5,7 @@ import { chartCard, divergingBar, divergingStackedBar, sentimentLegend, tableVie
 import { navigate } from "../router.js";
 import { isDeveloper, isLoggedIn, state } from "../store.js";
 import { ASPECT_LABEL, SENTIMENT_LABEL, emptyState, h, icon, mount, pct, signed, spinnerBlock, toast } from "../ui.js";
+import { developerReviewsPanel } from "./developer-reviews.js";
 
 const count = value => Number(value || 0).toLocaleString("es-AR");
 const aspectName = key => ASPECT_LABEL[key] || key;
@@ -19,16 +20,22 @@ function cover(game, className = "dev-cover") {
   const fallback = h("div", {class:`${className} dev-cover-placeholder`, "aria-hidden":"true"}, icon("gamepad",32));
   return src ? h("img", {class:className,src,alt:"",loading:"lazy",onError:e => e.currentTarget.replaceWith(fallback)}) : fallback;
 }
-function metric(label, value, caption, tone = "") {
-  return h("article", {class:`dev-metric ${tone}`}, h("span",{class:"dev-label"},label),h("strong",null,value),h("span",{class:"dev-caption"},caption));
+function metric(label, value, caption, symbol, tone = "") {
+  return h("article", {class:`dev-metric ${tone}`}, h("span",{class:"dev-label"},icon(symbol,17),label),h("strong",null,value),h("span",{class:"dev-caption"},caption));
 }
 function metricRow(report) {
   const s=report.resenas, total=s.analizadas+(s.pendientes || 0);
   return h("div",{class:"dev-metrics"},
-    metric("Reseñas analizadas",count(s.analizadas),`${count(s.pendientes)} pendientes en la muestra guardada`),
-    metric("Recepción positiva",s.analizadas ? pct(s.distribucion.positivo,s.analizadas) : "—","Clasificación local del texto","dev-metric-positive"),
-    metric("Sentimiento neto",s.analizadas ? signed(s.sentimiento_neto,2) : "—","Positivas menos negativas · escala −1 a +1"),
-    metric("Cobertura del análisis",total ? pct(s.analizadas,total) : "—",`${count(total)} reseñas guardadas · no es el total de Steam`));
+    metric("Reseñas analizadas",count(s.analizadas),`${count(s.pendientes)} pendientes en la muestra guardada`,"quote"),
+    metric("Recepción positiva",s.analizadas ? pct(s.distribucion.positivo,s.analizadas) : "—","Clasificación del texto de las reseñas","heart","dev-metric-positive"),
+    metric("Sentimiento neto",s.analizadas ? signed(s.sentimiento_neto,2) : "—","Positivas menos negativas · escala −1 a +1","trending"),
+    metric("Cobertura del análisis",total ? pct(s.analizadas,total) : "—",`${count(total)} reseñas guardadas · no es el total de Steam`,"chart"));
+}
+function studioArtwork(games) {
+  const featured=games.filter(game => game.background_image || game.steam_app_id).slice(0,3);
+  if(!featured.length) return h("div",{class:"dev-hero-emblem","aria-hidden":"true"},icon("chart",42));
+  return h("div",{class:"dev-hero-art","aria-label":"Juegos del estudio"},featured.map(game =>
+    h("a",{class:"dev-hero-tile",href:`#/dev/juego/${game.id}`,"aria-label":`Ver informe de ${game.nombre}`},cover(game,"dev-hero-art-cover"),h("span",null,game.nombre))));
 }
 function tabs(items, initial = "overview") {
   const root=h("div",{class:"dev-workspace"}), nav=h("div",{class:"dev-tabs",role:"tablist","aria-label":"Secciones del estudio"});
@@ -37,6 +44,7 @@ function tabs(items, initial = "overview") {
     current=index;
     buttons.forEach((button,i) => {button.setAttribute("aria-selected",String(i===index));button.tabIndex=i===index ? 0 : -1;panels[i].hidden=i!==index;});
     if(focus) buttons[index].focus();
+    items[index].onActivate?.();
   }
   items.forEach((item,index) => {
     const button=h("button",{type:"button",role:"tab",id:`dev-tab-${item.key}`,"aria-controls":`dev-panel-${item.key}`,onClick:() => activate(index),onKeydown:event => {
@@ -46,7 +54,18 @@ function tabs(items, initial = "overview") {
     const panel=h("section",{class:"dev-panel",role:"tabpanel",id:`dev-panel-${item.key}`,"aria-labelledby":button.id,tabindex:"0"},item.content);
     buttons.push(button);panels.push(panel);nav.append(button);
   });
-  root.append(nav,...panels);activate(current);root.activeKey=() => items[current].key;return root;
+  root.append(nav,...panels);activate(current);root.activeKey=() => items[current].key;
+  root.select=key=>{const index=items.findIndex(item=>item.key===key);if(index>=0) activate(index,true);};return root;
+}
+function prioritiesPanel(aspects, openReviews) {
+  const priorities=aspects.filter(a=>a.menciones>=5&&a.sentimiento_neto<0)
+    .sort((a,b)=>b.distribucion.negativo**2/b.menciones-a.distribucion.negativo**2/a.menciones);
+  return h("section",{class:"dev-priorities"},heading("Por dónde empezar","Ordenamos los aspectos con balance negativo por cantidad y proporción de críticas. Son señales para investigar."),
+    priorities.length ? h("div",{class:"dev-priority-list"},priorities.map((a,index)=>h("article",{class:"dev-priority"},
+      h("span",{class:"dev-priority-rank","aria-label":`Prioridad ${index+1}`},String(index+1).padStart(2,"0")),
+      h("div",null,h("h3",null,aspectName(a.aspecto)),h("p",{class:"dev-caption"},`${count(a.distribucion.negativo)} de ${count(a.menciones)} menciones negativas (${pct(a.distribucion.negativo,a.menciones)}) · neto ${signed(a.sentimiento_neto,2)}`)),
+      h("button",{class:"btn",type:"button",onClick:()=>openReviews(a.aspecto)},"Ver reseñas",icon("chevron",15))))) :
+      h("p",{class:"dev-caption"},"No hay aspectos con balance negativo y al menos cinco menciones. Podés explorar críticas puntuales en Reseñas."));
 }
 function heading(title, caption, action=null) {
   return h("div",{class:"dev-section-heading section-head"},h("div",null,h("h2",null,title),caption && h("p",null,caption)),action);
@@ -61,7 +80,7 @@ function insightCards(aspects) {
   const reliable=aspects.filter(a => a.menciones>=5);
   const negative=reliable.filter(a => a.sentimiento_neto<0).sort((a,b) => b.distribucion.negativo**2/b.menciones-a.distribucion.negativo**2/a.menciones);
   const positive=reliable.filter(a => a.sentimiento_neto>0).sort((a,b) => b.sentimiento_neto-a.sentimiento_neto);
-  const tile=(label,a,good) => h("article",{class:"dev-insight"},h("span",{class:"dev-label"},icon(good ? "trending" : "alert",16),label),h("h3",null,a ? aspectName(a.aspecto) : good ? "Sin fortaleza clara" : "Sin alerta dominante"),h("p",null,a ? `${count(a.menciones)} menciones · ${pct(a.distribucion[good ? "positivo" : "negativo"],a.menciones)} ${good ? "positivas" : "negativas"} · neto ${signed(a.sentimiento_neto,2)}` : "Ningún aspecto cumple el balance y las cinco menciones necesarias para destacarlo."));
+  const tile=(label,a,good) => h("article",{class:`dev-insight ${good ? "dev-insight-strength" : "dev-insight-attention"}`},h("span",{class:"dev-insight-mark","aria-hidden":"true"},icon(good ? "trending" : "alert",23)),h("div",{class:"dev-insight-content"},h("span",{class:"dev-label"},label),h("h3",null,a ? aspectName(a.aspecto) : good ? "Sin fortaleza clara" : "Sin alerta dominante"),h("p",null,a ? `${count(a.menciones)} menciones · ${pct(a.distribucion[good ? "positivo" : "negativo"],a.menciones)} ${good ? "positivas" : "negativas"} · neto ${signed(a.sentimiento_neto,2)}` : "Ningún aspecto cumple el balance y las cinco menciones necesarias para destacarlo.")));
   return h("div",{class:"dev-insights"},tile("Qué conviene conservar",positive[0],true),tile("Qué conviene revisar",negative[0],false));
 }
 function aspectPanel(aspects, comparison) {
@@ -93,7 +112,7 @@ function assistantPanel(scope) {
     finally {busy=false;input.disabled=submit.disabled=false;response.removeAttribute("aria-busy");suggestions.querySelectorAll("button").forEach(b => b.disabled=false);}
   }
   for(const question of ["¿Qué conviene mejorar?","¿Qué funciona mejor?","¿Hay suficiente evidencia?","Comparar con el catálogo"]) suggestions.append(h("button",{type:"button",class:"dev-suggestion",onClick:() => {input.value=question;ask(question);}},question));
-  return h("section",{class:"dev-assistant","aria-label":"Asistente local del estudio"},h("div",{class:"dev-assistant-heading"},h("span",{class:"dev-assistant-mark"},icon("sparkles",22)),h("div",null,h("h2",null,"Una segunda mirada a tu informe"),h("p",null,"Consultá prioridades, fortalezas y evidencia.")),h("span",{class:"dev-badge"},"IA local · sentimiento y aspectos")),suggestions,response,h("form",{class:"dev-question-form",onSubmit:event => {event.preventDefault();ask(input.value);}},input,submit));
+  return h("section",{class:"dev-assistant","aria-label":"Asistente del estudio"},h("div",{class:"dev-assistant-heading"},h("span",{class:"dev-assistant-mark"},icon("sparkles",22)),h("div",null,h("span",{class:"dev-eyebrow"},"De las opiniones a las decisiones"),h("h2",null,"Una segunda mirada a tu informe"),h("p",null,"Consultá prioridades, fortalezas y evidencia.")),h("span",{class:"dev-badge"},"Basado en tus reseñas")),suggestions,response,h("form",{class:"dev-question-form",onSubmit:event => {event.preventDefault();ask(input.value);}},input,submit));
 }
 function exportReport(report) {
   const rows=[["Juego","Nota GameTrack (1-5)","Valoraciones GameTrack","Reseñas guardadas","Analizadas","Positivas","Neutras","Negativas","Neto (-1 a +1)"]];
@@ -115,7 +134,9 @@ function studioPicker(current = "") {
     } catch(error) {if(request===revision) mount(choices,h("p",{role:"alert"},error.message));}
   }
   input.addEventListener("input",() => {clearTimeout(timer);++revision;timer=setTimeout(search,250);});
-  return h("details",{class:"dev-studio-picker",onToggle:event => {if(event.currentTarget.open) {search();input.focus();}}},h("summary",null,icon("search",15),"Cambiar estudio"),h("form",{onSubmit:event => {event.preventDefault();if(input.value.trim()) navigate(`/dev?estudio=${encodeURIComponent(input.value.trim())}`);}},input,h("button",{class:"btn btn-sm",type:"submit"},"Abrir")),choices);
+  return h("details",{class:"dev-studio-picker",onToggle:event => {if(event.currentTarget.open) {search();input.focus();}},onKeydown:event => {
+    if(event.key==="Escape") {event.currentTarget.open=false;event.currentTarget.querySelector("summary").focus();}
+  }},h("summary",null,icon("search",15),"Cambiar estudio"),h("div",{class:"dev-studio-popover"},h("form",{onSubmit:event => {event.preventDefault();if(input.value.trim()) navigate(`/dev?estudio=${encodeURIComponent(input.value.trim())}`);}},input,h("button",{class:"btn btn-sm",type:"submit"},"Abrir")),choices));
 }
 function processButton(scope, pending, refresh) {
   return h("button",{class:"btn btn-primary",type:"button",disabled:!pending,onClick:async event => {
@@ -142,10 +163,14 @@ function receptionChart(report) {
   return chartCard({title:report.juegos ? "Recepción por título" : "Cómo se recibe este juego",subtitle:"Comparación de la muestra guardada y analizada.",chart:games.some(g => g.resenas_analizadas) ? divergingStackedBar(games.map(g => ({label:g.nombre,gameId:g.id,...g.distribucion})),{labelWidth:170,onRowClick:report.juegos ? row => navigate(`/dev/juego/${row.gameId}`) : null}) : emptyState("Todavía no hay reseñas analizadas","Procesá las reseñas pendientes para completar el informe."),legendEntries:sentimentLegend(report.resenas.distribucion),table:tableView(["Juego","Analizadas","Positivas","Neutras","Negativas","Neto"],games.map(g => [report.juegos ? h("a",{href:`#/dev/juego/${g.id}`},g.nombre) : g.nombre,g.resenas_analizadas,g.distribucion.positivo,g.distribucion.neutro,g.distribucion.negativo,g.resenas_analizadas ? signed(g.sentimiento_neto,2) : "—"]))});
 }
 function workspaceFor(report, scope, initial, comparison) {
-  const items=[{key:"overview",label:"Resumen",icon:"chart",content:h("div",{class:"dev-overview"},insightCards(report.aspectos),receptionChart(report),h("p",{class:"dev-data-note"},icon("info",15),"El informe describe la muestra guardada. Una clasificación positiva no equivale a la recomendación de Steam ni al Metascore."))}];
+  const reviews=developerReviewsPanel(scope,report.juegos);let workspace;
+  const openReviews=aspect=>{reviews.setFilters({aspect,sentiment:"negativo"});workspace.select("reviews");};
+  const items=[{key:"overview",label:"Resumen",icon:"chart",content:h("div",{class:"dev-overview"},insightCards(report.aspectos),prioritiesPanel(report.aspectos,openReviews),receptionChart(report),h("p",{class:"dev-data-note"},icon("info",15),"El informe describe la muestra guardada. Una clasificación positiva no equivale a la recomendación de Steam ni al Metascore."))}];
   if(report.juegos) items.push({key:"games",label:`Juegos (${report.juegos.length})`,icon:"gamepad",content:gamesPanel(report.juegos)});
-  items.push({key:"aspects",label:"Aspectos",icon:"list",content:aspectPanel(report.aspectos,comparison)},{key:"evidence",label:"Evidencia",icon:"quote",content:evidencePanel(report.citas_negativas)},{key:"assistant",label:"Asistente",icon:"sparkles",content:assistantPanel(scope)});
-  return tabs(items,initial);
+  items.push({key:"aspects",label:"Aspectos",icon:"list",content:aspectPanel(report.aspectos,comparison)},
+    {key:"reviews",label:"Reseñas",icon:"quote",content:reviews,onActivate:reviews.load},
+    {key:"evidence",label:"Evidencia",icon:"quote",content:evidencePanel(report.citas_negativas)},{key:"assistant",label:"Asistente",icon:"sparkles",content:assistantPanel(scope)});
+  workspace=tabs(items,initial);return workspace;
 }
 export async function developerView({query=new URLSearchParams()} = {}) {
   const blocked=guard();if(blocked) return blocked;
@@ -156,8 +181,17 @@ export async function developerView({query=new URLSearchParams()} = {}) {
       const [studio,overview]=await Promise.all([api.studioAnalytics(target),api.overview().catch(() => null)]);
       const comparison=overview?.resenas_analizadas ? Object.fromEntries(overview.aspectos.map(a => [a.aspecto,a.sentimiento_neto])) : null;
       const scope={studio:studio.estudio};workspace=workspaceFor(studio,scope,selected,comparison);
-      mount(container,h("header",{class:"dev-hero"},h("div",{class:"dev-hero-content"},h("span",{class:"dev-eyebrow"},icon("chart",16),"GameTrack para desarrolladores"),h("h1",null,studio.estudio),h("p",null,"Entendé cómo se reciben tus juegos y convertí las opiniones en decisiones."),h("div",{class:"dev-hero-meta"},h("span",{class:"dev-badge"},`${studio.juegos.length} títulos`),h("span",{class:"dev-badge"},"Análisis local de reseñas"))),studioPicker(studio.estudio)),
-        h("div",{class:"dev-toolbar"},h("span",{class:"dev-caption"},"Tu estudio, de un vistazo"),h("div",{class:"dev-toolbar-actions"},h("button",{class:"btn",type:"button",onClick:() => exportReport(studio)},icon("list",15),"Exportar informe"),h("button",{class:"btn",type:"button",onClick:async event => {event.currentTarget.disabled=true;await load();}},icon("refresh",15),"Actualizar"),processButton(scope,studio.resenas.pendientes,load))),metricRow(studio),workspace);
+      mount(container,
+        h("header",{class:"dev-hero"},
+          h("div",{class:"dev-hero-content"},
+            h("span",{class:"dev-eyebrow"},icon("chart",16),"Tu espacio de desarrollo"),
+            h("h1",null,studio.estudio),
+            h("p",null,"Cada opinión cuenta. Descubrí qué disfrutan tus jugadores y dónde podés mejorar."),
+            h("div",{class:"dev-hero-meta"},
+              h("span",{class:"dev-badge"},icon("gamepad",14),`${studio.juegos.length} títulos`),
+              h("span",{class:"dev-badge"},icon("quote",14),`${count(studio.resenas.analizadas+studio.resenas.pendientes)} reseñas guardadas`))),
+          studioArtwork(studio.juegos)),
+        h("div",{class:"dev-toolbar"},h("div",null,h("span",{class:"dev-eyebrow"},"La voz de tus jugadores"),h("h2",null,"Tu estudio, de un vistazo")),h("div",{class:"dev-toolbar-actions"},studioPicker(studio.estudio),h("button",{class:"btn",type:"button",onClick:() => exportReport(studio)},icon("list",15),"Exportar informe"),h("button",{class:"btn",type:"button",onClick:async event => {event.currentTarget.disabled=true;await load();}},icon("refresh",15),"Actualizar"),processButton(scope,studio.resenas.pendientes,load))),metricRow(studio),workspace);
     } catch(error) {mount(container,heading("Panel del estudio","Elegí un estudio para explorar su recepción."),studioPicker(target || ""),emptyState("No pudimos abrir este informe",error.message),h("button",{class:"btn",onClick:load},"Volver a intentar"));}
   }
   await load();return container;
@@ -169,7 +203,7 @@ export async function developerGameView({params}) {
     try {
       const data=await api.gameAnalytics(Number(params.id)),game=data.juego,s=data.resenas;
       workspace=workspaceFor(data,{game_id:game.id},workspace?.activeKey());
-      mount(container,h("a",{class:"dev-back",href:`#/dev${game.desarrollador ? `?estudio=${encodeURIComponent(game.desarrollador)}` : ""}`},icon("arrowLeft",16),"Volver al estudio"),h("header",{class:"dev-hero dev-game-hero"},cover(game,"dev-hero-cover"),h("div",{class:"dev-hero-content"},h("span",{class:"dev-eyebrow"},"Informe del juego"),h("h1",null,game.nombre),h("p",null,game.desarrollador || "Desarrollador no informado"),h("div",{class:"dev-hero-meta"},h("span",{class:"dev-badge"},game.cantidad_ratings_local ? `${game.rating_local_promedio.toFixed(2)}/5 · ${count(game.cantidad_ratings_local)} valoraciones GameTrack` : "Sin valoraciones GameTrack")))),h("div",{class:"dev-toolbar"},h("a",{class:"btn",href:`#/juego/${game.id}`},"Ver ficha pública",icon("chevron",15)),h("div",{class:"dev-toolbar-actions"},h("button",{class:"btn",onClick:() => exportReport(data)},icon("list",15),"Exportar informe"),processButton({game_id:game.id},s.pendientes,load))),metricRow(data),workspace);
+      mount(container,h("a",{class:"dev-back",href:`#/dev${game.desarrollador ? `?estudio=${encodeURIComponent(game.desarrollador)}` : ""}`},icon("arrowLeft",16),"Volver al estudio"),h("header",{class:"dev-hero dev-game-hero"},cover(game,"dev-hero-cover"),h("div",{class:"dev-hero-content"},h("span",{class:"dev-eyebrow"},"Informe del juego"),h("h1",null,game.nombre),h("p",null,game.desarrollador || "Desarrollador no informado"),h("div",{class:"dev-hero-meta"},h("span",{class:"dev-badge"},game.cantidad_ratings_local ? `${game.rating_local_promedio.toFixed(2)}/5 · ${count(game.cantidad_ratings_local)} valoraciones GameTrack` : "Sin valoraciones GameTrack")))),h("div",{class:"dev-toolbar"},h("a",{class:"btn",href:`#/juego/${game.id}`},"Ver ficha pública",icon("chevron",15)),h("div",{class:"dev-toolbar-actions"},h("button",{class:"btn",onClick:() => exportReport(data)},icon("list",15),"Exportar informe"),h("button",{class:"btn",type:"button",onClick:async event => {event.currentTarget.disabled=true;await load();}},icon("refresh",15),"Actualizar"),processButton({game_id:game.id},s.pendientes,load))),metricRow(data),workspace);
     } catch(error) {mount(container,h("a",{class:"dev-back",href:"#/dev"},"Volver al estudio"),emptyState("No pudimos abrir la analítica",error.message),h("button",{class:"btn",onClick:load},"Volver a intentar"));}
   }
   await load();return container;

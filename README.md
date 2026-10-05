@@ -434,6 +434,7 @@ que lo justifica.
 | GET | `/analytics/overview` | **desarrollador** | Referencia global del catálogo |
 | GET | `/analytics/studio` | **desarrollador** | Agregado del estudio |
 | GET | `/analytics/games/{id}` | **desarrollador** | Sentimiento y aspectos de un juego |
+| GET | `/analytics/reviews` | **desarrollador** | Reseñas paginadas por estudio/juego, texto, aspecto, sentimiento, fuente y fechas |
 | POST | `/analytics/process` | **desarrollador** | Correr el NLP sobre las pendientes |
 | POST | `/steam/import/{appid}` | autenticado | Importar un juego desde Steam |
 | POST | `/auth/steam/link` | autenticado | Iniciar vinculación verificada por Steam |
@@ -579,11 +580,25 @@ al usuario de popularidad a contenido.
 
 ### Vista de desarrollador
 
-Panel del estudio con la recepción de cada título, el desglose ABSA de los
-cuatro aspectos, la comparación contra el promedio del catálogo y las citas
-textuales que respaldan cada valoración negativa. Con `dev.demo`, Cyberpunk 2077
-aparece con **historia +1,00 y optimización −0,38**, respaldado por la cita
-"Crashea cada media hora y perdí progreso más de una vez".
+Panel del estudio con recepción por título, desglose ABSA, comparación contra
+el promedio del catálogo, fragmentos de evidencia y asistente del informe.
+El resumen ordena las prioridades con balance negativo y al menos cinco
+menciones por `negativas² / menciones`; cada prioridad abre las reseñas completas
+del aspecto. El umbral orienta la revisión y no mide confianza estadística.
+
+La pestaña **Reseñas** filtra por juego, texto, aspecto, sentimiento, fuente y
+fechas, con orden y paginación. Al elegir un aspecto, el sentimiento corresponde
+al aspecto: una recomendación positiva puede incluir críticas de optimización.
+Las muestras de demostración se identifican como tales.
+
+`Review.published_at` guarda la fecha original de publicación de Steam en UTC;
+`created_at` conserva la fecha de ingreso a GameTrack. Las fechas antiguas sin
+recuperar permanecen desconocidas y se excluyen de filtros temporales. Las de
+GameTrack usan `created_at`. Los rangos incluyen ambos días y se interpretan en
+UTC. Un refresco puede completar fechas de reseñas existentes que vuelvan en la
+muestra acotada de Steam, sin superar el límite persistente ni inventar fechas.
+La muestra guardada no representa un historial completo ni todas las opiniones
+de Steam; todavía no se generan gráficos temporales ni comparaciones de parches.
 
 ### Asistente "¿Qué jugamos hoy?"
 
