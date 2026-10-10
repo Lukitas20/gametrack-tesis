@@ -1,4 +1,5 @@
 .game-page { --detail-radius:22px; }
+.game-page [hidden] {display:none!important;}
 .game-breadcrumb {display:flex;justify-content:space-between;align-items:center;gap:12px;margin:0 0 20px;font-size:12px;color:var(--ink-muted);}
 .game-breadcrumb a {display:flex;align-items:center;gap:8px;color:var(--ink-secondary);}
 .game-showcase {position:relative;isolation:isolate;display:flex;align-items:flex-end;min-height:355px;overflow:hidden;border-radius:var(--detail-radius);background:#17111e;color:#fff;box-shadow:0 20px 60px #14062020;}
@@ -44,6 +45,28 @@
 .game-gallery-empty,.game-empty {padding:34px 24px;text-align:center;border:1px dashed var(--border-strong);border-radius:17px;color:var(--ink-secondary);font-size:13px;}
 .game-gallery-empty svg,.game-empty svg {margin-bottom:10px;color:var(--brand-teal-ui);}
 .game-gallery-empty a {display:inline-block;margin-top:14px;}
+.game-gallery-art {display:flex;align-items:center;gap:20px;padding:16px;border:1px solid var(--border);border-radius:14px;background:var(--surface);}
+.game-gallery-art-image {flex:0 0 190px;max-width:40%;aspect-ratio:16/9;overflow:hidden;padding:0;border:0;border-radius:9px;background:var(--surface-sunken);cursor:zoom-in;}
+.game-gallery-art-image img {display:block;width:100%;height:100%;object-fit:contain;}
+.game-gallery-art-copy {min-width:0;font-size:12px;line-height:1.6;color:var(--ink-secondary);}
+.game-gallery-art-copy>p:first-child {font-weight:600;color:var(--ink);margin-bottom:5px;}
+.game-gallery-art-copy a,.game-gallery-unavailable a {display:inline-block;margin-top:8px;font-size:12px;}
+.game-gallery-unavailable {display:flex;align-items:flex-start;gap:12px;padding:16px;border:1px solid var(--border);border-radius:14px;color:var(--ink-secondary);}
+.game-gallery-unavailable>svg {flex-shrink:0;color:var(--brand-teal-ui);margin-top:2px;}
+.game-gallery-unavailable h2 {font-size:15px;margin-bottom:5px;color:var(--ink);}
+.game-gallery-unavailable p {font-size:12px;line-height:1.6;}
+.game-gallery button:focus-visible {outline:2px solid var(--brand-teal-ui);outline-offset:3px;}
+.game-gallery-loading {font-size:11px;color:var(--ink-secondary);margin-top:8px;}
+/* Descripción y galería fluyen juntas, sin esperar la altura de la columna personal. */
+.game-page-compact .game-overview-layout {gap:28px;}
+.game-page-compact .game-overview-main {gap:22px;}
+.game-page-compact .game-tab-content {gap:30px;}
+.game-page-compact .game-scroll-section+.game-scroll-section {padding-top:22px;}
+.game-page-compact .game-tab-content>.game-scroll-section {padding-top:22px;border-top:1px solid var(--border);}
+.game-page-compact .game-overview-main .game-tab-capturas {max-width:none;}
+.game-page-compact .game-scroll-related {padding-top:22px;}
+.game-page-compact .game-scroll-related .game-grid {grid-template-columns:repeat(2,minmax(0,1fr));}
+.game-page-compact .game-overview-side {gap:22px;}
 .game-lightbox img {width:100%;max-height:70vh;object-fit:contain;border-radius:12px;}
 .game-description {font-size:14px;line-height:1.85;color:var(--ink-secondary);}
 .game-tags-fold {margin-top:22px;border-top:1px solid var(--border);padding-top:14px;font-size:12px;}
@@ -103,3 +126,5 @@
 html[data-motion="paused"] .game-page *,html[data-animations="paused"] .game-page * {animation:none!important;transition:none!important}
 body.motion-paused .game-page * {animation:none!important;transition:none!important}
 @media(max-width:600px){.game-gallery,.game-about,.game-community,.game-review-composer,.game-review-list {scroll-margin-top:180px}}
+@media(max-width:700px){.game-page-compact .game-overview-layout {gap:24px;}.game-page-compact .game-overview-main {gap:20px;}}
+@media(max-width:500px){.game-gallery-art {gap:12px;padding:12px;}.game-gallery-art-image {flex-basis:125px;}.game-gallery-art-copy {font-size:11px;}}

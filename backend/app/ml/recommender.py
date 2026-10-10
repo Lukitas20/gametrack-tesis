@@ -933,7 +933,7 @@ def invalidate_engine() -> None:
 
 def recommend_for_user(
     db: Session, user: User, limit: int | None = None, strategy: str = "auto",
-    discovery: str = "balanced", _context=None,
+    discovery: str = "balanced", _context=None, company: str | None = None,
 ) -> list[Recommendation]:
     """Recomendaciones para un usuario, resolviendo sus preferencias."""
     engine = get_engine(db)
@@ -942,13 +942,17 @@ def recommend_for_user(
     if strategy == "auto" and context is None:
         from app.services.gametrack_score_service import score_context
         context = score_context(db, user, engine=engine)
+    excluded = (context["owned"] | set(context["own_signals"])) if context else set()
+    if company is not None:
+        from app.ml.group_recommender import compatible_game_ids
+        excluded = excluded | (set(engine.game_ids) - compatible_game_ids(db, company))
     recommendations = engine.recommend(
         user_id=user.id,
         preferred_genres=genre_slugs,
         limit=limit or settings.REC_DEFAULT_LIMIT,
         strategy=strategy,
         discovery=discovery,
-        exclude=(context["owned"] | set(context["own_signals"])) if context else None,
+        exclude=excluded,
         personal_affinities=context["scores"] if context and context["has_history"] else None,
     )
     if context and context["has_history"]:

@@ -13,7 +13,7 @@ export async function gameView({params,query}) {
   let game;
   try {game=await api.game(Number(params.id));} catch(error){return emptyState("No encontramos el juego",error.message);}
   if(!game.is_enriched)return pendingGameView(game);
-  const root=h("div",{class:"game-page game-page-simple"}),scorePanel=personalScorePanel(game.id,game.name,{showFeedback:false});
+  const root=h("div",{class:"game-page game-page-simple game-page-compact"}),scorePanel=personalScorePanel(game.id,game.name,{showFeedback:false});
   const [similar,firstReviews]=await Promise.all([api.similar(game.id,4).catch(()=>[]),api.reviews(game.id,6).catch(error=>error)]);
   const reviewBody=h("div",{class:"game-review-list"});
   let reviews=Array.isArray(firstReviews)?firstReviews:[],offset=reviews.length,hasMore=reviews.length===6;
@@ -57,45 +57,85 @@ export async function gameView({params,query}) {
     }});
     else achievementPanel=emptyState("Tus logros de Steam","Iniciá sesión con Steam para consultar tu progreso real.",h("a",{class:"btn btn-primary",href:"#/cuentas"},"Conectar con Steam"));
   }
-  addSection("resumen","Resumen",h("div",{class:"game-overview-layout"},h("div",{class:"game-overview-main"},about),
-    h("aside",{class:"game-overview-side"},scorePanel,experience,progressSummary,
-      isDeveloper()?h("a",{class:"btn",href:`#/dev/juego/${game.id}`},icon("chart",16),"Ver analítica"):null)));
-  addSection("capturas","Capturas",gameGallery(game));
+  const gallery=gameGallery(game);
+  addSection("resumen","Resumen",about);
+  addSection("capturas","Imágenes",gallery);
   if(achievementPanel)addSection("logros","Logros",achievementPanel);
   addSection("resenas","Reseñas",h("div",{class:"game-community"},sectionHead("Opiniones de jugadores","Reseñas reales de Steam y GameTrack."),composer,reviewBody,more));
   const related=similar.length?h("section",{class:"game-scroll-related"},sectionHead("Juegos parecidos"),gameGrid(similar.map(item=>item.game))):null;
+  const overview=h("div",{class:"game-overview-layout"},h("div",{class:"game-overview-main"},[...sections.values()],related),
+    h("aside",{class:"game-overview-side"},scorePanel,experience,progressSummary,
+      isDeveloper()?h("a",{class:"btn",href:`#/dev/juego/${game.id}`},icon("chart",16),"Ver analítica"):null));
   mount(root,h("div",{class:"game-breadcrumb"},h("a",{href:query?.get("volver")==="que-jugamos"?"#/que-jugamos?modo=plan":"#/catalogo"},icon("arrowLeft",14),query?.get("volver")==="que-jugamos"?"Volver a los resultados":"Explorar juegos")),
     game.steam_sync_status==="unavailable"?h("p",{class:"notice notice-warn"},"Steam no pudo actualizar la ficha. Mostramos los últimos datos guardados."):null,
     h("header",{class:"game-showcase"},h("div",{class:"game-showcase-media","aria-hidden":"true"},cover(game).firstChild.cloneNode(true)),
       h("div",{class:"game-showcase-content"},h("h1",null,game.name),
         h("div",{class:"game-showcase-meta"},game.developer&&h("span",null,game.developer),game.released&&h("span",null,new Date(game.released+"T00:00:00").getFullYear()),game.metacritic!=null&&h("span",null,`Metacritic ${game.metacritic}/100`)),
         h("div",{class:"game-showcase-actions"},isLoggedIn()&&!isDeveloper()?saveToListButton(game):h("a",{href:"#/cuentas",class:"btn btn-primary"},"Guardar en mis listas"),
-          game.steam_app_id&&h("a",{href:`https://store.steampowered.com/app/${game.steam_app_id}/`,target:"_blank",rel:"noopener noreferrer",class:"game-steam-link"},"Ver en Steam ↗")))),nav,h("div",{class:"game-tab-content"},[...sections.values()],related));
+          game.steam_app_id&&h("a",{href:`https://store.steampowered.com/app/${game.steam_app_id}/`,target:"_blank",rel:"noopener noreferrer",class:"game-steam-link"},"Ver en Steam ↗")))),nav,h("div",{class:"game-tab-content"},overview));
   buttons.get("resumen").setAttribute("aria-current","location");
+  requestAnimationFrame(()=>{if(root.isConnected)gallery.loadMedia();});
   if(composer&&query?.get("resena")==="editar"){composer.open=true;requestAnimationFrame(()=>{if(root.isConnected)composer.scrollIntoView({block:"start",behavior:"instant"});});}
   else if(query?.get("seccion")&&sections.has(query.get("seccion")))requestAnimationFrame(()=>{if(root.isConnected)scrollToSection(query.get("seccion"));});
   return root;
 }
 
 function gameGallery(game) {
-  const root=h("section",{class:"game-gallery","aria-label":`Capturas de ${game.name}`});
-  let urls=[...new Set(game.screenshots||[])],index=0,checks=0;
-  const failed=new Set(),heading=sectionHead("Dentro del juego","Capturas oficiales de la tienda de Steam.");
-  const stage=h("div",{class:"game-gallery-stage"}),thumbs=h("div",{class:"game-gallery-thumbs",role:"group","aria-label":"Elegir una captura"}),counter=h("span",{class:"game-gallery-count","aria-live":"polite"});
-  function select(next){index=(next+urls.length)%urls.length;render();}
-  function enlarge(){openModal(close=>h("div",{class:"game-lightbox"},modalHead(game.name,`Captura ${index+1} de ${urls.length} · Steam`,close),h("img",{src:urls[index],alt:`Captura ${index+1} de ${game.name}`})),{wide:true});}
-  function render(){urls=urls.filter(url=>!failed.has(url));index=Math.min(index,Math.max(0,urls.length-1));
-    if(!urls.length){mount(root,heading,h("div",{class:"game-gallery-empty",role:"status"},icon("gamepad",28),h("p",null,failed.size?"No pudimos cargar las capturas de Steam.":"Las capturas todavía no están disponibles en esta ficha."),game.steam_app_id&&h("a",{href:`https://store.steampowered.com/app/${game.steam_app_id}/`,target:"_blank",rel:"noopener noreferrer"},"Ver las imágenes en Steam ↗")));return;}
-    counter.textContent=`${index+1} / ${urls.length}`;const current=urls[index];
-    mount(stage,h("button",{class:"game-gallery-image",type:"button","aria-label":`Ampliar captura ${index+1}`,onClick:enlarge,onKeydown:event=>{if(event.key==="ArrowRight"||event.key==="ArrowLeft"){event.preventDefault();select(index+(event.key==="ArrowRight"?1:-1));stage.querySelector(".game-gallery-image")?.focus();}}},
-      h("img",{src:current,alt:`Captura ${index+1} de ${game.name}`,decoding:"async",onError:()=>{failed.add(current);render();}})),
-      urls.length>1?h("div",{class:"game-gallery-controls"},h("button",{class:"btn",type:"button","aria-label":"Captura anterior",onClick:()=>select(index-1)},icon("arrowLeft",16)),counter,h("button",{class:"btn",type:"button","aria-label":"Captura siguiente",onClick:()=>select(index+1)},icon("chevron",16))):null,
-      h("span",{class:"game-gallery-expand"},"Tocá la imagen para ampliarla"));
-    mount(thumbs,urls.map((url,i)=>h("button",{type:"button","aria-label":`Ver captura ${i+1}`,"aria-pressed":String(i===index),onClick:()=>select(i)},h("img",{src:url,alt:"",loading:"lazy",onError:()=>{failed.add(url);render();}}))));mount(root,heading,stage,thumbs);
+  const root=h("section",{class:"game-gallery","aria-label":`Imágenes de ${game.name}`});
+  const owner=state.user?.id??null,path=window.location.hash,failed=new Set(),failedScreens=new Set(),loaded=new Set(),loading=new Set();
+  const active=()=>root.isConnected&&(state.user?.id??null)===owner&&window.location.hash===path;
+  const imageUrl=value=>{if(typeof value!=="string"||!value.trim())return null;try{const url=new URL(value,window.location.origin);return ["https:","http:"].includes(url.protocol)?url.href:null;}catch{return null;}};
+  const screenshots=values=>[...new Set((Array.isArray(values)?values:[]).map(imageUrl).filter(Boolean))];
+  let urls=screenshots(game.screenshots),index=0,started=false,status=game.steam_app_id?"loading":"empty",art=imageUrl(game.background_image);
+  const steamLink=()=>game.steam_app_id?h("a",{href:`https://store.steampowered.com/app/${game.steam_app_id}/`,target:"_blank",rel:"noopener noreferrer"},"Ver imágenes en Steam ↗"):null;
+  function fail(url){if(!active())return;if(urls.includes(url))failedScreens.add(url);failed.add(url);loaded.delete(url);render();}
+  function probe(url){
+    if(!url||loaded.has(url)||loading.has(url)||failed.has(url))return;
+    loading.add(url);const image=new Image();
+    image.onload=()=>{loading.delete(url);loaded.add(url);if(active())render();};
+    image.onerror=()=>{loading.delete(url);fail(url);};
+    image.src=url;
   }
-  render();
-  if(!urls.length&&game.steam_app_id)setTimeout(async function poll(){if(!root.isConnected||checks++>=6)return;try{const updated=await api.game(game.id);if(!root.isConnected)return;if(updated.screenshots?.length){urls=updated.screenshots;render();return;}}catch{}if(root.isConnected)setTimeout(poll,10000);},10000);
-  return root;
+  function enlarge(url,caption,alt){openModal(close=>{
+    const body=h("div",{class:"game-lightbox"},modalHead(game.name,caption,close));
+    body.append(h("img",{src:url,alt,onError:()=>{body.lastElementChild.replaceWith(h("p",{role:"status"},"Esta imagen no está disponible."));fail(url);}}));
+    return body;
+  },{wide:true});}
+  function select(next){if(!urls.length)return;index=(next+urls.length)%urls.length;render();}
+  function renderFallback(){
+    const message=urls.length?"Cargando capturas oficiales…":failedScreens.size?"No pudimos cargar las capturas.":status==="loading"?"Consultando capturas de Steam…":status==="unavailable"?"No pudimos consultar las capturas de Steam.":status==="pending"?"Las capturas no están disponibles por ahora.":"No hay capturas disponibles.";
+    if(art&&!failed.has(art)){
+      const url=art;
+      mount(root,sectionHead("Arte del juego"),h("div",{class:"game-gallery-art"},
+        h("button",{class:"game-gallery-art-image",type:"button",dataset:{galleryFocus:"image"},"aria-label":`Ampliar portada de ${game.name}`,onClick:()=>enlarge(url,"Portada del juego",`Portada de ${game.name}`)},
+          h("img",{src:url,alt:`Portada de ${game.name}`,decoding:"async",onError:()=>fail(url)})),
+        h("div",{class:"game-gallery-art-copy"},h("p",null,"Portada del juego."),h("p",{role:"status"},message),steamLink())));
+    }else mount(root,h("div",{class:"game-gallery-unavailable"},icon("gamepad",22),h("div",null,h("h2",null,"Imágenes del juego"),h("p",{role:"status"},message),steamLink())));
+  }
+  function render(){
+    const focused=root.contains(document.activeElement)?document.activeElement.dataset.galleryFocus:null;
+    const restoreFocus=()=>{if(!focused||!active())return;const target=[...root.querySelectorAll("[data-gallery-focus]")].find(node=>node.dataset.galleryFocus===focused)||root.querySelector(".game-gallery-image,.game-gallery-art-image");target?.focus({preventScroll:true});};
+    const selected=urls[index];urls=urls.filter(url=>!failed.has(url));index=Math.max(0,urls.indexOf(selected));
+    const requested=urls[index],current=loaded.has(requested)?requested:urls.find(url=>loaded.has(url));
+    if(started&&active())probe(requested);
+    if(!current){renderFallback();restoreFocus();return;}
+    const shownIndex=urls.indexOf(current),counter=h("span",{class:"game-gallery-count","aria-live":"polite"},`${shownIndex+1} / ${urls.length}`);
+    const image=h("button",{class:"game-gallery-image",type:"button",dataset:{galleryFocus:"image"},"aria-label":`Ampliar captura ${shownIndex+1}`,onClick:()=>enlarge(current,`Captura ${shownIndex+1} de ${urls.length} · Steam`,`Captura de ${game.name}`),onKeydown:event=>{
+      if(event.key==="ArrowRight"||event.key==="ArrowLeft"){event.preventDefault();select(index+(event.key==="ArrowRight"?1:-1));root.querySelector(".game-gallery-image,.game-gallery-art-image")?.focus();}
+    }},h("img",{src:current,alt:`Captura ${shownIndex+1} de ${game.name}`,decoding:"async",onError:()=>fail(current)}));
+    const stage=h("div",{class:"game-gallery-stage"},image,
+      urls.length>1?h("div",{class:"game-gallery-controls"},h("button",{class:"btn",type:"button",dataset:{galleryFocus:"previous"},"aria-label":"Captura anterior",onClick:()=>select(index-1)},icon("arrowLeft",16)),counter,h("button",{class:"btn",type:"button",dataset:{galleryFocus:"next"},"aria-label":"Captura siguiente",onClick:()=>select(index+1)},icon("chevron",16))):null,
+      h("span",{class:"game-gallery-expand"},"Tocá la imagen para ampliarla"));
+    const thumbs=urls.length>1?h("div",{class:"game-gallery-thumbs",role:"group","aria-label":"Elegir una captura"},urls.map((url,i)=>h("button",{type:"button",dataset:{galleryFocus:`thumbnail-${url}`},"aria-label":`Ver captura ${i+1}`,"aria-pressed":String(i===shownIndex),onClick:()=>select(i)},h("img",{src:url,alt:"",loading:"lazy",onLoad:()=>loaded.add(url),onError:()=>fail(url)})))):null;
+    mount(root,sectionHead("Capturas del juego","Imágenes oficiales de la tienda de Steam."),stage,thumbs,current!==requested?h("p",{class:"game-gallery-loading",role:"status"},"Cargando captura…"):null);restoreFocus();
+  }
+  root.loadMedia=async()=>{
+    if(started||!active())return;started=true;probe(urls[index]);
+    if(urls.length||!game.steam_app_id)return;
+    try{const media=await api.gameMedia(game.id);if(!active())return;status=media.status;urls=screenshots(media.screenshots);render();}
+    catch{if(active()){status="unavailable";render();}}
+  };
+  render();return root;
 }
 
 function pendingGameView(game){const root=h("div",{class:"game-page game-pending card"},cover(game),h("h1",null,game.name),h("p",null,"La ficha está pendiente de completar con datos oficiales. No mostramos imágenes ni reseñas inventadas."),h("button",{class:"btn",onClick:()=>resolve()},"Ver ficha actualizada"),game.steam_app_id&&h("a",{class:"btn",target:"_blank",rel:"noopener noreferrer",href:`https://store.steampowered.com/app/${game.steam_app_id}/`},"Ver en Steam ↗"),personalScorePanel(game.id,game.name));

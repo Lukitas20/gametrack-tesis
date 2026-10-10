@@ -30,6 +30,7 @@ from app.services.interaction_service import (
     recompute_game_aggregates,
     recompute_median_review_hours,
 )
+from app.services.steam_media import extract_screenshots
 
 TIMEOUT = 15.0
 
@@ -163,7 +164,7 @@ class SteamUnavailable(RuntimeError):
         self.retry_after_seconds = max(60, min(86400, retry_after_seconds))
 
 
-def get_app_details(steam_app_id: int) -> dict | None:
+def get_app_details(steam_app_id: int, *, timeout: httpx.Timeout | None = None) -> dict | None:
     """Ficha de un juego en la tienda de Steam.
 
     Devuelve ``None`` sólo cuando Steam responde que ese AppID no existe o
@@ -174,6 +175,7 @@ def get_app_details(steam_app_id: int) -> dict | None:
         response = _http_client().get(
             f"{settings.STEAM_STORE_BASE}/appdetails",
             params={"appids": steam_app_id, "l": "spanish"},
+            **({"timeout": timeout} if timeout is not None else {}),
         )
     except httpx.HTTPError as error:
         # Nunca persistir la URL ni los parámetros de una excepción HTTP.
@@ -219,6 +221,8 @@ def get_app_details(steam_app_id: int) -> dict | None:
         for key in ("short_description", "header_image"):
             if data.get(key) is not None and not isinstance(data[key], str):
                 raise SteamUnavailable("Steam devolvió una ficha con formato inválido")
+        if data.get("screenshots") is not None and not isinstance(data["screenshots"], list):
+            raise SteamUnavailable("Steam devolvió capturas con formato inválido")
         if not isinstance((data.get("release_date") or {}).get("date", ""), str):
             raise SteamUnavailable("Steam devolvió una fecha con formato inválido")
         score = (data.get("metacritic") or {}).get("score")
@@ -545,21 +549,6 @@ def parse_steam_game(data: dict) -> dict:
     ]
 
     name = (data.get("name") or "").strip()
-    from urllib.parse import urlsplit
-    screenshots = []
-    for shot in data.get("screenshots") or []:
-        url = shot.get("path_full") if isinstance(shot, dict) else None
-        if not isinstance(url, str):
-            continue
-        try:
-            parts = urlsplit(url)
-        except ValueError:
-            continue
-        host = (parts.hostname or "").lower()
-        if parts.scheme == "https" and any(host == root or host.endswith("." + root)
-                for root in ("steamstatic.com", "steamusercontent.com", "akamaihd.net")) and not parts.username and not parts.password:
-            if url not in screenshots:
-                screenshots.append(url)
     return {
         "name": name[:200],
         "slug": _fit_slug(slugify(name), 120),
@@ -571,7 +560,7 @@ def parse_steam_game(data: dict) -> dict:
         "publisher": ", ".join(data.get("publishers") or [])[:120] or None,
         "platforms": platforms,
         "background_image": data.get("header_image") or None,
-        "screenshots": screenshots[:16],
+        "screenshots": extract_screenshots(data),
         "metacritic": (data.get("metacritic") or {}).get("score"),
         "genres": _dedupe_names(genres),
         "tags": _dedupe_names(tags)[:8],

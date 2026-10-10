@@ -28,5 +28,5 @@ def save(game_id:int,payload:FeedbackInput,response:Response,user:User=Depends(p
     response.headers['Cache-Control']='no-store';return save_feedback(db,user,game_id,payload)
 
 @router.get('/backlog',response_model=BacklogOut)
-def get_backlog(response:Response,mode:Literal['light','unplayed','pending']='light',limit:int=Query(12,ge=1,le=24),user:User=Depends(player),db:Session=Depends(get_db)):
-    response.headers['Cache-Control']='no-store';return backlog(db,user,mode,limit)
+def get_backlog(response:Response,mode:Literal['light','unplayed','pending']='light',limit:int=Query(12,ge=1,le=24),company:Literal['solo','amigos','en-linea']|None=None,user:User=Depends(player),db:Session=Depends(get_db)):
+    response.headers['Cache-Control']='no-store';return backlog(db,user,mode,limit,company)

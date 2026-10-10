@@ -37,7 +37,8 @@ def learning_context(db,user,engine=None):
     return score_context(db,user,engine=engine)
 
 
-def backlog(db,user,mode='light',limit=12):
+def backlog(db,user,mode='light',limit=12,company=None):
+    from app.ml.group_recommender import is_company_compatible
     pending=set(db.scalars(select(GameListItem.game_id).join(GameList,GameList.id==GameListItem.list_id)
         .where(GameList.user_id==user.id,GameList.list_type==ListType.BACKLOG)).all())
     cache=db.get(SteamProfileCache,user.id) if user.steam_verified else None
@@ -57,6 +58,7 @@ def backlog(db,user,mode='light',limit=12):
     feedback={item.game_id:item for item in db.scalars(select(PlayFeedback).where(PlayFeedback.user_id==user.id)).all()}
     candidates=[]
     for game in games.values():
+        if not is_company_compatible(game,company):continue
         steam=game.steam_app_id in owned;queued=game.id in pending
         minutes=owned.get(game.steam_app_id) if steam else None
         rating,experience=ratings.get(game.id),feedback.get(game.id)

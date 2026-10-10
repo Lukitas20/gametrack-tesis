@@ -83,7 +83,7 @@ const QUESTIONS = [
     // inglés), y esa unión evoluciona sin tocar el frontend.
     options: [
       { emoji: "🎧", title: "Solo", note: "Un jugador", company: "solo" },
-      { emoji: "👥", title: "Con amigos", note: "Cooperativo o pantalla partida", company: "amigos" },
+      { emoji: "👥", title: "Con amigos", note: "Multijugador o cooperativo", company: "amigos" },
       { emoji: "🌐", title: "En línea", note: "Multijugador por internet", company: "en-linea" },
     ],
   },

@@ -1,8 +1,10 @@
 """Schemas del catálogo: juegos, géneros y etiquetas."""
 
 from datetime import date
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+from app.services.steam_media import sanitize_screenshots
 
 
 class GenreOut(BaseModel):
@@ -44,7 +46,7 @@ class GameDetail(GameSummary):
     @field_validator("screenshots", mode="before")
     @classmethod
     def empty_screenshots(cls, value):
-        return value or []
+        return sanitize_screenshots(value)
 
     description: str | None
     publisher: str | None
@@ -55,6 +57,11 @@ class GameDetail(GameSummary):
     # Para armar el link directo a Steam en la ficha pendiente.
     steam_app_id: int | None
     steam_sync_status: str | None = None
+
+
+class GameMedia(BaseModel):
+    screenshots: list[str] = Field(default_factory=list)
+    status: Literal["available", "empty", "pending", "unavailable"]
 
 
 class GamePage(BaseModel):

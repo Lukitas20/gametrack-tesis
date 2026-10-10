@@ -224,6 +224,29 @@ def test_large_library_is_batched_and_does_not_invent_games(history):
     assert play.backlog(db, user).items == []
 
 
+@pytest.mark.parametrize('company,indices', [('amigos', {2, 3, 4}), ('en-linea', {3})])
+def test_backlog_compania_no_ofrece_singleplayer_desconocido_ni_online_inferido(history, company, indices):
+    from app.models import Tag
+    db, user, _, games, *_ = history
+    single = Tag(slug='un-jugador', name='Un jugador')
+    local = Tag(slug='local-co-op', name='Local Co-Op', kind='community')
+    online = Tag(slug='cooperativo-en-linea', name='Cooperativo en línea')
+    generic = Tag(slug='multijugador', name='Multijugador')
+    db.add_all([single, local, online, generic])
+    games[0].tags.append(single)
+    games[1].description = 'Online multiplayer with co-op'
+    games[2].tags.append(local)
+    games[3].tags.append(online)
+    games[4].tags.append(generic)
+    queued(db, user, games)
+    assert {row.game.id for row in play.backlog(db, user, 'pending', company=company).items} == {games[i].id for i in indices}
+    with client_for(db, user) as client:
+        body = client.get(f'/api/v1/play/backlog?mode=pending&company={company}').json()
+        assert {row['game']['id'] for row in body['items']} == {games[i].id for i in indices}
+        assert body['eligible_count'] == len(indices)
+        assert client.get('/api/v1/play/backlog?company=unknown').status_code == 422
+
+
 def test_migration_preserves_existing_data():
     with NamedTemporaryFile(suffix='.sqlite', dir=Path.cwd(), delete=False) as temp:
         filename = Path(temp.name)

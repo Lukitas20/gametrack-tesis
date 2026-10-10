@@ -16,22 +16,15 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.ml.recommender import RecommenderEngine
+from app.ml.quiz_vocab import COMPANY_FILTERS
 from app.models import Game, Rating, User
 
 GroupStrategy = Literal["balanced", "average"]
 
-# Para grupos la modalidad es innegociable. "Multiplayer" a secas puede ser
-# local; "split-screen" puede ser competitivo. Ninguno verifica online/coop.
-GROUP_PLAY_MODES = {
-    "amigos": frozenset({
-        "cooperativo", "cooperativo-en-linea", "coop-a-pantalla-com-partida",
-        "cooperativo-a-pantalla-compartida", "co-op", "online-co-op", "local-co-op",
-    }),
-    "en-linea": frozenset({
-        "jcj-en-linea", "cooperativo-en-linea", "online-co-op", "online-pvp",
-        "multijugador-masivo", "massively-multiplayer", "mmorpg",
-    }),
-}
+# Para grupos la modalidad es innegociable. Jugar con amigos incluye tanto
+# competir como cooperar; "Multiplayer" a secas también puede ser local y
+# por eso no basta para la selección específica de juego en línea.
+GROUP_PLAY_MODES = {mode: COMPANY_FILTERS[mode] for mode in ("amigos", "en-linea")}
 
 GROUP_NOTICE = (
     "Cruzamos los perfiles de los participantes; los índices de afinidad no son probabilidades. "
@@ -42,7 +35,27 @@ GROUP_NOTICE = (
 
 
 def is_group_playable(game: Game, company: str | None) -> bool:
+    # Sólo metadatos estructurados: una mención en la descripción o una
+    # afinidad alta nunca prueban que exista una modalidad compartida.
     return bool({tag.slug for tag in game.tags} & GROUP_PLAY_MODES.get(company, frozenset()))
+
+
+def is_company_compatible(game: Game, company: str | None) -> bool:
+    if company is None:
+        return True
+    if company not in COMPANY_FILTERS:
+        raise ValueError("Modalidad de compañía desconocida")
+    return bool({tag.slug for tag in game.tags} & COMPANY_FILTERS[company])
+
+
+def compatible_game_ids(db: Session, company: str) -> set[int]:
+    """Modalidad verificada antes de ordenar o recortar recomendaciones."""
+    from app.models import Tag
+    if company not in COMPANY_FILTERS:
+        raise ValueError("Modalidad de compañía desconocida")
+    return set(db.scalars(select(Game.id).where(
+        Game.tags.any(Tag.slug.in_(COMPANY_FILTERS[company])),
+    )))
 
 
 def group_scores(

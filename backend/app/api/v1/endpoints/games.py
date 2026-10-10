@@ -7,10 +7,11 @@ from sqlalchemy.orm import Session
 from app.db.database import get_db
 from app.ml.recommender import get_engine
 from app.models import Game
-from app.schemas.game import GameDetail, GamePage, GameSummary, GenreOut, TagOut
+from app.schemas.game import GameDetail, GameMedia, GamePage, GameSummary, GenreOut, TagOut
 from app.schemas.interaction import ReviewOut
 from app.schemas.recommendation import RecommendationOut
 from app.services import steam_service
+from app.services.game_media_service import get_game_media
 from app.services.game_service import (
     get_game,
     list_games,
@@ -79,6 +80,12 @@ def _require_game(db: Session, game_id: int) -> Game:
 @router.get("/games/{game_id}", response_model=GameDetail)
 def get_game_detail(game_id: int, db: Session = Depends(get_db)) -> Game:
     return _require_game(db, game_id)
+
+
+@router.get("/games/{game_id}/media", response_model=GameMedia)
+def get_game_screenshots(game_id: int, db: Session = Depends(get_db)) -> dict:
+    """Galería cacheada; completa sólo las imágenes de la ficha visitada."""
+    return get_game_media(db, _require_game(db, game_id))
 
 
 @router.get("/games/{game_id}/similar", response_model=list[RecommendationOut])

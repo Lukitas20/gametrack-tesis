@@ -3,12 +3,13 @@
 Responde al ánimo de ahora mismo con un perfil de contenido armado a partir
 de las respuestas. La consulta individual admite visitas anónimas. Al incluir
 amigos aceptados, combina ese contexto con la afinidad de cada participante
-para buscar una opción compartida; la modalidad grupal nunca se relaja.
+para buscar una opción compartida. La compañía nunca se relaja, aun cuando
+no se selecciona un amigo de GameTrack.
 
 El diseño separa dos mecanismos que antes se mezclaban:
 
-- **Filtros duros** (compañía, requisito del ánimo, duración): un juego los
-  cumple o no aparece. Si la escasez obliga a relajar alguno, se declara en
+- **Compañía obligatoria**: exige una modalidad compatible en los metadatos.
+- **Ánimo y duración**: si la escasez obliga a relajarlos, se declara en
   ``relaxed`` — nunca en silencio.
 - **Ranking blando** (perfil del ánimo + calidad + aspecto prioritario): el
   perfil es un vector ponderado sobre el vocabulario del catálogo (ver
@@ -37,7 +38,7 @@ from app.api.deps import get_optional_current_user
 from app.db.database import get_db
 from app.ml import quiz_vocab
 from app.ml.analytics import aspect_scores_by_game
-from app.ml.group_recommender import GROUP_NOTICE, GROUP_PLAY_MODES, GroupStrategy, group_scores, is_group_playable
+from app.ml.group_recommender import GROUP_NOTICE, GroupStrategy, group_scores, is_group_playable
 from app.ml.recommender import Recommendation, RecommenderEngine, get_engine
 from app.models import Aspect, Game, User
 from app.schemas.game import GameSummary
@@ -71,7 +72,7 @@ class QuizRequest(BaseModel):
     company: Literal["solo", "amigos", "en-linea"] | None = None
     max_playtime: int | None = Field(default=None, gt=0, le=10000, description="Umbral orientativo de horas registradas, o null=sin límite")
     priority_aspect: Aspect | None = Field(default=None, description="Qué aspecto pesa más al ordenar")
-    allow_relaxation: bool = Field(default=True, description="Completar con alternativas si hay menos de tres coincidencias")
+    allow_relaxation: bool = Field(default=True, description="Completar relajando ánimo o duración; nunca la compañía")
     exclude_game_ids: list[Annotated[int, Field(gt=0)]] = Field(default_factory=list, max_length=200)
     friend_ids: list[Annotated[int, Field(gt=0)]] = Field(default_factory=list, max_length=4)
     group_strategy: GroupStrategy = "balanced"
@@ -93,7 +94,7 @@ class QuizRequest(BaseModel):
         if len(self.friend_ids) != len(set(self.friend_ids)):
             raise ValueError("Elegí a cada amigo una sola vez")
         if self.friend_ids and self.company not in {"amigos", "en-linea"}:
-            raise ValueError("Para incluir amigos elegí cooperativo o multijugador en línea")
+            raise ValueError("Para incluir amigos elegí con amigos o multijugador en línea")
         return self
 
 
@@ -152,9 +153,7 @@ def _resolve_vocabulary(
         profile = {slug: 1.0 for slug in payload.genres + payload.mood_tags}
         mood_required = frozenset(payload.mood_tags)
 
-    if payload.friend_ids:
-        company = GROUP_PLAY_MODES[payload.company]
-    elif payload.company and payload.company in quiz_vocab.COMPANY_FILTERS:
+    if payload.company and payload.company in quiz_vocab.COMPANY_FILTERS:
         company = quiz_vocab.COMPANY_FILTERS[payload.company]
     else:
         company = frozenset(payload.company_tags)
@@ -264,7 +263,7 @@ def _explanation(
     if matching and "el ánimo" not in violations:
         criteria.append("Afinidad con tu ánimo")
     if company and company & tags:
-        criteria.append({"solo": "Tiene modo individual", "amigos": "Tiene cooperativo", "en-linea": "Tiene multijugador"}.get(payload.company, "Coincide con la compañía elegida"))
+        criteria.append({"solo": "Tiene modo individual", "amigos": "Tiene modo multijugador o cooperativo", "en-linea": "Tiene multijugador en línea"}.get(payload.company, "Coincide con la compañía elegida"))
 
     time_note = None
     if payload.max_playtime is not None:
@@ -347,6 +346,12 @@ def run_quiz(
             .options(selectinload(Game.tags), selectinload(Game.genres))
         )})
     candidates = [c for c in candidates if c.game_id in games]
+    evaluated_candidates = len(candidates)
+    # La compañía es una condición de uso, incluso sin amigos registrados.
+    # Filtrar también el fallback y el contrato legado antes de formar niveles:
+    # relajar el ánimo/tiempo nunca puede convertir un singleplayer en grupal.
+    if company:
+        candidates = [c for c in candidates if company & {tag.slug for tag in games[c.game_id].tags}]
     if user and not members:
         from app.services.play_service import learning_context
         context=learning_context(db,user,engine)
@@ -388,7 +393,7 @@ def run_quiz(
                if any(criterion in violations[c.game_id] for c in ranked[:3])]
     return QuizOutcome(ranked=ranked, games=games, relaxed=relaxed, aspect_scores=aspect_scores,
                        violations=violations, exact_matches=exact_matches,
-                       evaluated_candidates=len(candidates), group_fits=fits)
+                       evaluated_candidates=evaluated_candidates, group_fits=fits)
 
 
 @router.post("/suggest", response_model=QuizResponse)

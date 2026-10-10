@@ -1,5 +1,7 @@
 """Recomendaciones personalizadas para el rol jugador."""
 
+from typing import Literal
+
 from fastapi import APIRouter, Depends, Path, Query, Response
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -100,6 +102,7 @@ def personal_game_score(
 def get_recommendations(
     response: Response,
     limit: int = Query(default=10, ge=1, le=50),
+    company: Literal["solo", "amigos", "en-linea"] | None = None,
     strategy: str = Query(
         default="auto",
         pattern="^(auto|contenido|colaborativo|hibrido|popularidad|ia_local)$",
@@ -127,7 +130,7 @@ def get_recommendations(
         from app.services.gametrack_score_service import score_context
         personal_context = score_context(db,user)
     recommendations = recommend_for_user(db, user, limit=limit, strategy=strategy,
-                                        discovery=discovery, _context=personal_context)
+                                        discovery=discovery, _context=personal_context, company=company)
     history_size = db.scalar(select(func.count(Rating.id)).where(Rating.user_id == user.id)) or 0
     if personal_context and personal_context["has_history"]:
         history_size = personal_context["history_size"]

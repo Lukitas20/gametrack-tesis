@@ -9,13 +9,13 @@ CLAVE de la respuesta ("competir", "amigos") y el backend decide qué significa.
 Dos mecanismos distintos a propósito (la distinción central del rediseño):
 
 - **Filtros duros** (``MOOD_REQUIREMENTS``, ``COMPANY_FILTERS``): restricciones
-  que un juego cumple o no. Un juego sin cooperativo no aparece con puntaje
+  que un juego cumple o no. Un juego sin multijugador no aparece con puntaje
   bajo cuando pediste jugar con amigos: no aparece. Operan sobre etiquetas
   binarias — las categorías de plataforma de la tienda (curadas por el
   developer, en español) en unión con las comunitarias equivalentes de
   SteamSpy (en inglés), porque la cobertura de las categorías es incompleta:
-  el caso testigo es Counter-Strike 2, que en la tienda dice apenas
-  "Multijugador" pero la comunidad etiquetó "PvP" con 34 mil votos.
+  "Multijugador" y "PvP" a secas prueban juego compartido, pero no una
+  conexión por internet: el modo en línea exige una etiqueta explícita.
 
 - **Perfiles blandos** (``MOOD_PROFILES``): preferencias graduales. "Quiero
   relajarme" no excluye nada; acerca lo que la comunidad marcó como Relaxing
@@ -90,6 +90,8 @@ MOOD_REQUIREMENTS: dict[str, frozenset[str]] = {
 
 # Filtro duro de compañía: unión de categorías de plataforma (español) y
 # etiquetas comunitarias equivalentes (inglés). Basta con tener UNA.
+# No se usan descripción, popularidad ni ausencia de singleplayer para
+# inferir multijugador. Online excluye etiquetas que también pueden ser locales.
 COMPANY_FILTERS: dict[str, frozenset[str]] = {
     "solo": frozenset({"un-jugador", "singleplayer"}),
     "amigos": frozenset(
@@ -99,11 +101,25 @@ COMPANY_FILTERS: dict[str, frozenset[str]] = {
             "cooperativo-en-linea",
             "pantalla-partida-compartida",
             "coop-a-pantalla-com-partida",
+            "cooperativo-a-pantalla-compartida",
+            "multijugador",
+            "multijugador-masivo",
+            "multijugador-multiplataforma",
+            "jcj",
+            "jcj-en-linea",
             # Comunidad
             "co-op",
             "online-co-op",
             "local-co-op",
             "split-screen",
+            "multiplayer",
+            "multi-player",
+            "pvp",
+            "online-pvp",
+            "online-multiplayer",
+            "massively-multiplayer",
+            "mmorpg",
+            "local-multiplayer",
         }
     ),
     "en-linea": frozenset(
@@ -111,13 +127,13 @@ COMPANY_FILTERS: dict[str, frozenset[str]] = {
             # Plataforma
             "jcj-en-linea",
             "cooperativo-en-linea",
-            "multijugador",
-            "multijugador-multiplataforma",
+            "multijugador-masivo",
             # Comunidad
-            "multiplayer",
-            "pvp",
             "online-co-op",
+            "online-pvp",
+            "online-multiplayer",
             "massively-multiplayer",
+            "mmorpg",
         }
     ),
 }

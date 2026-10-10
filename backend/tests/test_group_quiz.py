@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.api.v1.endpoints import quiz
 from app.api.v1.endpoints.quiz import QuizRequest, run_quiz
 from app.core.security import create_access_token
-from app.ml.group_recommender import group_scores
+from app.ml.group_recommender import group_scores, is_group_playable
 from app.ml.recommender import Recommendation, RecommenderEngine
 from app.models import Friendship, Game, Genre, Rating, RecommendationSource, Tag, User, UserPreference
 from tests.test_quiz_golden import client, db, sin_red  # noqa: F401
@@ -142,15 +142,16 @@ def test_sin_modalidad_compartida_devuelve_vacio(db, members):
     assert outcome.ranked == []
 
 
-def test_online_exige_senal_online_y_coop_exige_coop(db, members):
+def test_online_exige_senal_online_y_amigos_admite_multijugador(db, members):
     generic = Game(slug="generic-multi", name="Multijugador local",
                    tags=[db.scalar(select(Tag).where(Tag.slug == "multijugador"))])
     db.add(generic)
     db.flush()
     engine = GroupEngine([generic], {member.id: [1.0] for member in members})
-    for company in ("amigos", "en-linea"):
-        outcome = run_quiz(db, QuizRequest(**_payload(members, company=company)), engine, members=members)
-        assert outcome.ranked == []
+    online = run_quiz(db, QuizRequest(**_payload(members, company="en-linea")), engine, members=members)
+    assert online.ranked == []
+    friends = run_quiz(db, QuizRequest(**_payload(members)), engine, members=members)
+    assert [candidate.game_id for candidate in friends.ranked] == [generic.id]
 
 
 def test_excluir_no_se_pierde_en_grupo(db, members):
@@ -249,3 +250,124 @@ def test_refresco_que_quita_coop_no_lo_ofrece_al_grupo(client, db, members, monk
     response = client.post("/api/v1/quiz/suggest", headers=_headers(members[0]), json=_payload(members))
     assert response.status_code == 200
     assert response.json()["picks"] == []
+
+
+@pytest.fixture
+def mixed_modes(db):
+    """Un catálogo donde texto/afinidad no sustituyen la modalidad real."""
+    def tag(slug, name, kind="platform"):
+        with db.no_autoflush:
+            existing = db.scalar(select(Tag).where(Tag.slug == slug))
+        if existing is not None:
+            return existing
+        item = Tag(slug=slug, name=name, kind=kind)
+        db.add(item)
+        return item
+    games = [
+        Game(slug="only-single", name="Individual", tags=[tag("un-jugador", "Un jugador")]),
+        Game(slug="unknown-mode", name="Desconocido", description="A multiplayer adventure with online co-op"),
+        Game(slug="local-coop", name="Cooperativo local", tags=[tag("local-co-op", "Local Co-Op", "community")]),
+        Game(slug="online-coop", name="Cooperativo online", tags=[tag("cooperativo-en-linea", "Cooperativo en línea")]),
+        Game(slug="generic-pvp", name="Multijugador sin conexión verificada", tags=[tag("multijugador", "Multijugador"), tag("pvp", "PvP", "community")]),
+        Game(slug="local-versus", name="Pantalla compartida", tags=[tag("pantalla-partida-compartida", "Pantalla partida/compartida")]),
+    ]
+    db.add_all(games)
+    db.commit()
+    return games
+
+
+@pytest.mark.parametrize("company,expected", [("amigos", {2, 3, 4, 5}), ("en-linea", {3})])
+@pytest.mark.parametrize("with_friends", [False, True])
+@pytest.mark.parametrize("relax", [False, True])
+def test_compania_es_obligatoria_aun_sin_ids_y_con_catalogo_mixto(
+    db, members, mixed_modes, company, expected, with_friends, relax,
+):
+    games = mixed_modes
+    engine = GroupEngine(games, {member.id: [1., .99, .8, .7, .9, .6] for member in members})
+    payload = QuizRequest(company=company, allow_relaxation=relax,
+                          friend_ids=[members[1].id] if with_friends else [])
+    outcome = run_quiz(db, payload, engine, members=members if with_friends else None)
+    assert {pick.game_id for pick in outcome.ranked} == {games[i].id for i in expected}
+    assert "con quién jugás" not in outcome.relaxed
+    assert games[0].id not in outcome.violations and games[1].id not in outcome.violations
+
+
+@pytest.mark.parametrize("company,expected", [("amigos", {2, 3, 4, 5}), ("en-linea", {3})])
+@pytest.mark.parametrize("with_friends", [False, True])
+def test_fallback_de_popularidad_no_rellena_con_individuales_o_modalidad_desconocida(
+    db, members, mixed_modes, company, expected, with_friends,
+):
+    class FallbackEngine(GroupEngine):
+        def suggest_by_mood(self, profile, limit, exclude=None):
+            return []
+
+        def recommend(self, user_id, limit, strategy, discovery):
+            return GroupEngine.suggest_by_mood(self, {}, limit)
+    games = mixed_modes
+    engine = FallbackEngine(games, {member.id: [1.] * len(games) for member in members})
+    request = QuizRequest(genres=["unknown"], company=company,
+                          friend_ids=[members[1].id] if with_friends else [])
+    outcome = run_quiz(db, request, engine, members=members if with_friends else None)
+    assert {pick.game_id for pick in outcome.ranked} == {games[i].id for i in expected}
+    assert outcome.relaxed == ["el ánimo"]
+
+
+def test_compania_legada_tampoco_se_relaja(db, members, mixed_modes):
+    engine = GroupEngine(mixed_modes, {member.id: [1.] * len(mixed_modes) for member in members})
+    outcome = run_quiz(db, QuizRequest(company_tags=["cooperativo-en-linea"]), engine)
+    assert [pick.game_id for pick in outcome.ranked] == [mixed_modes[3].id]
+    assert outcome.relaxed == []
+
+
+@pytest.mark.parametrize("company", ["amigos", "en-linea"])
+def test_sin_modalidad_conocida_no_rellena_tres_resultados(db, members, mixed_modes, company):
+    engine = GroupEngine(mixed_modes[:2], {member.id: [1., 1.] for member in members})
+    outcome = run_quiz(db, QuizRequest(company=company), engine)
+    assert outcome.ranked == []
+    assert outcome.relaxed == []
+
+
+@pytest.mark.parametrize("strategy", ["popularidad", "contenido", "ia_local"])
+@pytest.mark.parametrize("company", ["amigos", "en-linea"])
+def test_recomendacion_personal_filtra_modalidad_antes_del_limite(
+    db, members, mixed_modes, strategy, company,
+):
+    from app.ml.recommender import recommend_for_user
+    rows = recommend_for_user(db, members[0], limit=50, strategy=strategy, company=company)
+    assert rows
+    assert all(is_group_playable(db.get(Game, row.game_id), company) for row in rows)
+    assert not {mixed_modes[i].id for i in (0, 1)} & {row.game_id for row in rows}
+
+
+def test_respuesta_sin_amigo_no_atribuye_un_cruce_grupal_y_exige_online(
+    client, db, members, mixed_modes, monkeypatch,
+):
+    engine = GroupEngine(mixed_modes, {member.id: [1.] * len(mixed_modes) for member in members})
+    monkeypatch.setattr(quiz, "get_engine", lambda session: engine)
+    response = client.post("/api/v1/quiz/suggest", json={"company": "en-linea"})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["group"] is None
+    assert [pick["game"]["id"] for pick in body["picks"]] == [mixed_modes[3].id]
+    assert "Tiene multijugador en línea" in body["picks"][0]["matched_criteria"]
+    assert body["picks"][0]["group_fit"] is None
+
+
+def test_endpoint_personal_valida_y_aplica_compania(client, db, members, mixed_modes):
+    response = client.get('/api/v1/recommendations?company=en-linea&strategy=popularidad&limit=50',
+                          headers=_headers(members[0]))
+    assert response.status_code == 200, response.text
+    rows = response.json()['items']
+    assert rows
+    assert all(is_group_playable(db.get(Game, row['game']['id']), 'en-linea') for row in rows)
+    assert client.get('/api/v1/recommendations?company=unknown', headers=_headers(members[0])).status_code == 422
+
+
+@pytest.mark.parametrize('with_friends', [False, True])
+def test_amigos_incluye_juegos_competitivos_como_cs2(db, members, with_friends):
+    cs2 = db.scalar(select(Game).where(Game.slug == 'counter-strike-2'))
+    single = db.scalar(select(Game).where(Game.slug == 'unpacking'))
+    engine = GroupEngine([single, cs2], {member.id: [1., .5] for member in members})
+    payload = QuizRequest(company='amigos', friend_ids=[members[1].id] if with_friends else [])
+    outcome = run_quiz(db, payload, engine, members=members if with_friends else None)
+    assert [candidate.game_id for candidate in outcome.ranked] == [cs2.id]

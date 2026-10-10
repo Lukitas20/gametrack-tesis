@@ -41,11 +41,13 @@ class OrderedEngine:
 def test_modo_estricto_devuelve_menos_sin_saltar_restricciones(client: TestClient) -> None:
     body = suggest(client, {"mood": "competir", "company": "amigos",
                             "max_playtime": 15, "allow_relaxation": False})
-    assert [pick["game"]["slug"] for pick in body["picks"]] == ["apex-legends"]
-    assert body["exact_matches"] == 1
+    assert len(body["picks"]) == 3
+    assert body["exact_matches"] >= 3
     assert body["evaluated_candidates"] == 17
     assert body["relaxed"] == []
-    assert body["picks"][0]["relaxed_criteria"] == []
+    for pick in body["picks"]:
+        assert pick["relaxed_criteria"] == []
+        assert "Tiene modo multijugador o cooperativo" in pick["matched_criteria"]
 
 
 def test_popularidad_preserva_compania_y_tiempo_antes_de_relajar(client: TestClient, db: Session) -> None:
@@ -61,14 +63,13 @@ def test_popularidad_preserva_compania_y_tiempo_antes_de_relajar(client: TestCli
         assert "Afinidad con tu ánimo" not in pick["matched_criteria"]
 
 
-def test_fallback_declara_todas_las_restricciones_incompatibles(db: Session) -> None:
+def test_relajacion_no_ofrece_individual_cuando_se_piden_amigos(db: Session) -> None:
     witcher = db.scalar(select(Game).where(Game.slug == "the-witcher-3-wild-hunt"))
     engine = OrderedEngine([(witcher.id, 1.0)])
     payload = QuizRequest(mood="competir", company="amigos", max_playtime=15)
     outcome = run_quiz(db, payload, engine)
-    assert len(outcome.ranked) == 1
-    assert outcome.relaxed == ["la duración", "con quién jugás", "el ánimo"]
-    assert outcome.violations[witcher.id] == outcome.relaxed
+    assert outcome.ranked == []
+    assert outcome.relaxed == []
     assert outcome.exact_matches == 0
 
 

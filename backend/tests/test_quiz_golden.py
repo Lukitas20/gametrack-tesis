@@ -623,24 +623,22 @@ def test_sin_prioridad_no_hay_evidencia_ni_reordenamiento(client: TestClient) ->
     assert all(pick["aspect_score"] is None for pick in sin["picks"])
 
 
-def test_escasez_relaja_en_orden_y_lo_declara(client: TestClient) -> None:
-    """Cuando los filtros duros dejan menos de tres candidatos, el sistema
-    puede relajar, pero declarando exactamente qué soltó y en qué orden
-    (duración primero, compañía después). El requisito del ánimo (JcJ) no
-    se suelta nunca en esta rama."""
+def test_competir_con_amigos_incluye_multijugador_y_no_solo_cooperativo(client: TestClient) -> None:
+    """Una partida con amigos también puede ser competitiva. La compañía
+    nunca se relaja, aunque no se haya elegido un amigo registrado."""
     body = suggest(client, build_payload(mood="competir", company="amigos", time="tarde"))
     slugs = pick_slugs(body)
 
-    assert body["relaxed"] == ["la duración", "con quién jugás"]
-    # Apex cumple todo y AoE2 sólo relaja tiempo: aunque los populares
-    # puntúen más, no deben desplazar estas coincidencias más cercanas.
-    assert slugs[:2] == ["apex-legends", "age-of-empires-ii-definitive-edition"]
-    assert body["picks"][0]["relaxed_criteria"] == []
-    assert body["picks"][1]["relaxed_criteria"] == ["la duración"]
+    assert body["relaxed"] == []
+    assert len(slugs) == 3
+    assert "counter-strike-2" in slugs
+    assert all(pick["relaxed_criteria"] == [] for pick in body["picks"])
+    from app.ml.quiz_vocab import COMPANY_FILTERS
     for slug in slugs:
-        assert GAME_TAGS[slug] & {"jcj", "jcj-en-linea", "pvp"}, (
-            f"{slug} no es JcJ: la relajación soltó el ánimo, que es lo único innegociable"
+        assert GAME_TAGS[slug] & COMPANY_FILTERS["amigos"], (
+            f"{slug} no tiene modalidad compartida compatible"
         )
+        assert GAME_TAGS[slug] & {"jcj", "jcj-en-linea", "pvp"}
 
 
 def test_fallback_a_popularidad_declara_que_solto_el_animo(client: TestClient) -> None:

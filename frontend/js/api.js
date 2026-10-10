@@ -89,6 +89,7 @@ export const api = {
   upcoming: () => request("/home/upcoming", { auth: false }),
   home: (limit = 8) => request("/home", { auth: false, params: { limit } }),
   game: (id) => request(`/games/${id}`, { auth: false }),
+  gameMedia: (id) => request(`/games/${id}/media`, { auth: false }),
   similar: (id, limit = 6) => request(`/games/${id}/similar`, { auth: false, params: { limit } }),
   reviews: (id, limit = 10, offset = 0) => request(`/games/${id}/reviews`, { auth: false, params: { limit, offset } }),
 
