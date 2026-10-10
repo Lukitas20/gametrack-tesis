@@ -230,3 +230,121 @@ def test_exchange_rejects_cross_origin_and_expiration(client, db):
 def test_start_canonical_origin_and_link_requires_auth(client):
     assert client.get("http://127.0.0.1:8000/api/v1/auth/steam/start").headers["location"] == "http://localhost:8000/api/v1/auth/steam/start"
     assert client.post("/api/v1/auth/steam/link").status_code == 401
+
+
+def test_steam_name_is_copied_and_account_stays_the_same(db, monkeypatch):
+    monkeypatch.setattr(settings, "STEAM_API_KEY", "test-key")
+    profile = {"steamid": SID, "personaname": "  Luké 🎮  ", "avatarfull": "https://avatars.steamstatic.com/example.jpg"}
+    monkeypatch.setattr(steam, "get_player_summary", lambda _: profile)
+    user = steam.resolve_user(db, SID, None)
+    user_id = user.id
+    assert user.username == user.steam_username == user.full_name == "Luké 🎮"
+    assert user.steam_verified and user.hashed_password is None
+    profile["personaname"] = "Otro nombre de Steam"
+    again = steam.resolve_user(db, SID, None)
+    assert again.id == user_id and again.username == "Luké 🎮"
+    assert again.steam_username == "Otro nombre de Steam"
+
+
+@pytest.mark.parametrize("nickname", ["Nombre compartido", "A", "🎮", "Nombre" * 25])
+def test_steam_names_have_unique_bounded_usernames(db, monkeypatch, nickname):
+    monkeypatch.setattr(settings, "STEAM_API_KEY", "test-key")
+    monkeypatch.setattr(steam, "get_player_summary", lambda sid: {"steamid": sid, "personaname": nickname})
+    first = steam.resolve_user(db, SID, None)
+    second = steam.resolve_user(db, "76561198000000002", None)
+    assert first.username != second.username
+    assert 3 <= len(first.username) <= 50 and 3 <= len(second.username) <= 50
+    assert first.steam_username == second.steam_username == nickname[:100]
+    assert SID not in first.username
+
+
+def test_new_steam_account_without_profile_uses_friendly_fallback(db, monkeypatch):
+    monkeypatch.setattr(settings, "STEAM_API_KEY", "")
+    user = steam.resolve_user(db, SID, None)
+    assert user.username == "jugador_steam" and user.steam_verified
+    monkeypatch.setattr(settings, "STEAM_API_KEY", "test-key")
+    monkeypatch.setattr(steam, "get_player_summary", lambda _: {"personaname": "Mi nombre"})
+    assert steam.resolve_user(db, SID, None).username == "Mi nombre"
+
+
+@pytest.mark.parametrize("cached_name", [None, "Mi Steam"])
+def test_refresh_session_updates_existing_numeric_steam_account(client, db, monkeypatch, cached_name):
+    from app.api.v1.endpoints import auth
+    from app.services import steam_service
+    user = User(username=f"steam_{SID}", steam_id=SID, steam_username=cached_name, full_name=None)
+    db.add(user); db.flush()
+    db.add(SteamIdentity(steam_id=SID, user_id=user.id)); db.commit()
+    user_id = user.id
+    token = auth._token_for(user).access_token
+    monkeypatch.setattr(auth, "ensure_steam_preferences", lambda *_: None)
+    monkeypatch.setattr(settings, "STEAM_API_KEY", "test-key")
+    with patch.object(steam_service, "get_player_summary", return_value={"steamid": SID, "personaname": "Mi Steam"}) as summary:
+        response = client.get("/api/v1/auth/me", headers={"Authorization": "Bearer " + token})
+    assert summary.call_count == (0 if cached_name else 1)
+    assert response.status_code == 200
+    assert response.json()["username"] == response.json()["full_name"] == "Mi Steam"
+    assert response.json()["id"] == user_id and response.json()["steam_verified"]
+    assert db.get(SteamIdentity, SID).user_id == user_id
+
+
+def test_linked_password_account_keeps_its_login_and_custom_name(db, monkeypatch):
+    from app.services.steam_account_service import ensure_steam_account_name
+    monkeypatch.setattr(settings, "STEAM_API_KEY", "test-key")
+    monkeypatch.setattr(steam, "get_player_summary", lambda _: {"personaname": "Nombre Steam"})
+    user = User(username="mi_usuario", hashed_password="existing-password-hash", full_name="Nombre elegido")
+    db.add(user); db.commit()
+    user = steam.resolve_user(db, SID, user.id)
+    ensure_steam_account_name(db, user)
+    assert user.username == "mi_usuario" and user.full_name == "Nombre elegido"
+    assert user.steam_username == "Nombre Steam" and user.hashed_password == "existing-password-hash"
+
+
+def test_failed_or_empty_profile_keeps_the_previous_steam_name(db, monkeypatch):
+    monkeypatch.setattr(settings, "STEAM_API_KEY", "test-key")
+    monkeypatch.setattr(steam, "get_player_summary", lambda _: {"personaname": "Nombre Steam"})
+    user = steam.resolve_user(db, SID, None)
+    for profile in (None, {"personaname": None}, {"personaname": "   "}):
+        monkeypatch.setattr(steam, "get_player_summary", lambda _, result=profile: result)
+        assert steam.resolve_user(db, SID, None).steam_username == "Nombre Steam"
+    monkeypatch.setattr(steam, "get_player_summary", lambda _: (_ for _ in ()).throw(httpx.ConnectError("offline")))
+    assert steam.resolve_user(db, SID, None).username == user.username
+
+
+def test_username_collision_after_availability_check_recovers(db, monkeypatch):
+    from app.services.steam_account_service import assign_steam_username
+    db.add(User(username="Jugador")); db.commit()
+    original = db.scalar
+    calls = 0
+    def stale_lookup(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return None if calls == 1 else original(*args, **kwargs)
+    monkeypatch.setattr(db, "scalar", stale_lookup)
+    user = User(steam_id=SID)
+    assign_steam_username(db, user, "Jugador")
+    db.commit()
+    assert user.username == "Jugador_2"
+    assert db.scalar(select(User).where(User.username == "Jugador")) is not None
+
+
+def test_username_reservation_rolls_back_with_the_auth_transaction(db):
+    from app.services.steam_account_service import assign_steam_username
+    user = User(steam_id=SID)
+    assign_steam_username(db, user, "Nombre Steam")
+    db.rollback()
+    assert db.scalar(select(User).where(User.steam_id == SID)) is None
+
+
+def test_username_reservation_does_not_swallow_other_pending_conflicts(db):
+    from sqlalchemy.exc import IntegrityError
+    from app.services.steam_account_service import assign_steam_username
+    db.autoflush = False  # Igual que SessionLocal de la aplicación.
+    first = User(username="Primero", steam_id=SID)
+    second = User(username="jugador_steam")
+    db.add_all([first, second]); db.commit()
+    second.steam_id = SID
+    with pytest.raises(IntegrityError):
+        assign_steam_username(db, second, "Otro nombre")
+    db.rollback()
+    assert second.username == "jugador_steam" and second.steam_id is None
+    assert first.steam_id == SID

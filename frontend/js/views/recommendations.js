@@ -33,7 +33,7 @@ const COMPARABLE = ["ia_local", "hibrido", "contenido", "colaborativo", "popular
 /** Explicación de cada estrategia, para que la demo se sostenga sola. */
 const STRATEGY_NOTE = {
   auto: "Elige la estrategia según cuánto historial tenga el usuario.",
-  ia_local: "Factores latentes aprendidos de valoraciones en esta PC. Usa tus notas actuales y se apoya en contenido cuando faltan datos.",
+  ia_local: "Patrones aprendidos de valoraciones. Usa tus notas actuales y se apoya en contenido cuando faltan datos.",
   hibrido:
     "Combina afinidad de contenido y patrones de valoraciones. El aporte colaborativo depende de la evidencia disponible.",
   contenido:

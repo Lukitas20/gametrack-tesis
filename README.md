@@ -22,6 +22,10 @@ Prototipo funcional (MVP) con dos caras:
 
 ## IA local y amigos
 
+Para alojar la aplicación completa con la PC apagada, ver la
+[arquitectura de Google Cloud](GOOGLE_CLOUD.md) y la
+[configuración de despliegue](deploy/google-cloud/README.md).
+
 Para compartir el catálogo y actualizar Steam con la PC apagada, ver la
 [configuración gratuita sin tarjeta con Neon y GitHub Actions](NEON_GRATIS.md).
 

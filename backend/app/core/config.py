@@ -32,6 +32,10 @@ class Settings(BaseSettings):
     SQL_ECHO: bool = False
     # En servidores, Alembic prepara el esquema antes de iniciar API/worker.
     DB_AUTO_CREATE: bool = True
+    # Límites por proceso; en Cloud Run se multiplican por las instancias.
+    DB_POOL_SIZE: int = Field(default=5, ge=1, le=100)
+    DB_MAX_OVERFLOW: int = Field(default=10, ge=0, le=100)
+    DB_POOL_TIMEOUT: int = Field(default=30, ge=1, le=300)
 
     @field_validator("DATABASE_URL", mode="before")
     @classmethod

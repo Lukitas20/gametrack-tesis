@@ -104,9 +104,20 @@ def api_root() -> dict[str, str]:
     }
 
 
+class FrontendFiles(StaticFiles):
+    async def get_response(self, path, scope):
+        response = await super().get_response(path, scope)
+        # Estos archivos mantienen su URL entre publicaciones: comprobar
+        # ETag antes de reutilizarlos evita conservar una pantalla anterior.
+        # También se aplica a 304, manteniendo la descarga condicional liviana.
+        if path in {".", "", "index.html"} or path.endswith((".html", ".js", ".css")):
+            response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
 if FRONTEND_DIR.is_dir():
     # `html=True` hace que la raíz sirva index.html.
-    app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
+    app.mount("/", FrontendFiles(directory=FRONTEND_DIR, html=True), name="frontend")
 else:  # pragma: no cover - sólo si se borró la carpeta del frontend
 
     @app.get("/", tags=["meta"])

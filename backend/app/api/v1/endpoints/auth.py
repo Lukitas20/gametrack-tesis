@@ -7,6 +7,7 @@ from app.api.deps import get_current_user
 from app.core.security import create_access_token
 from app.db.database import get_db
 from app.models import User
+from app.services.steam_account_service import ensure_steam_account_name
 from app.schemas.user import (
     LoginRequest,
     PreferencesUpdate,
@@ -54,6 +55,7 @@ def login(data: LoginRequest, db: Session = Depends(get_db)) -> Token:
 @router.get("/me", response_model=UserResponse)
 def me(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> User:
     ensure_steam_preferences(db, user)
+    ensure_steam_account_name(db, user)
     return user
 
 

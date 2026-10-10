@@ -3,6 +3,7 @@
 .codex
 **/.venv
 **/.venv2
+**/.venv-local
 **/venv
 **/__pycache__
 **/.pytest_cache
@@ -20,3 +21,10 @@ backend/tests
 backend/pytest.ini
 deploy/.env
 deploy/backups
+**/.terraform
+**/*.tfstate
+**/*.tfstate.*
+**/*.tfvars
+**/*.tfvars.json
+**/*.tfplan
+deploy/google-cloud/.tools

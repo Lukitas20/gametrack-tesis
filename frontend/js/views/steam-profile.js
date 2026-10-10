@@ -4,6 +4,7 @@ import { state } from "../store.js";
 import { h, icon, initials, spinnerBlock, emptyState, toast } from "../ui.js";
 import { steamFriendsList } from "./steam-friends.js";
 import { achievementProgress, steamAchievementPanel } from "./steam-achievements.js";
+import { steamReviewsList as renderSteamReviews } from "./steam-reviews.js";
 
 const number = value => new Intl.NumberFormat("es-AR", { maximumFractionDigits: 1 }).format(value);
 const hours = minutes => minutes == null ? "Horas no disponibles" : minutes === 0 ? "Sin jugar" : minutes < 60 ? `${minutes} min` : `${number(minutes / 60)} h`;
@@ -160,22 +161,7 @@ export function steamDashboard(user) {
   }
 
   function steamReviewsList() {
-    if (!reviews) return reviewsError ? emptyState("No pudimos cargar tus reseñas de Steam", reviewsError) : spinnerBlock("Trayendo tus reseñas de Steam…");
-    const entries = reviews.items || [];
-    return h("div", null,
-      reviewsError && h("p", { class: "steam-notice", role: "status" }, reviewsError),
-      sectionNotice(reviews, "tus reseñas"),
-      reviews.total != null && h("p", { class: "steam-result-count" }, `${entries.length} de ${number(reviews.total)} reseñas de Steam`),
-      entries.length ? h("div", { class: "steam-ratings-list" }, entries.map(review => h("article", { class: "steam-review-card" },
-        h("div", { class: "steam-review-heading" },
-          h("a", { class: "steam-review-cover", href: review.game_id ? `#/juego/${review.game_id}` : `https://store.steampowered.com/app/${review.appid}/`, target: review.game_id ? null : "_blank", rel: review.game_id ? null : "noopener noreferrer", "aria-label": `Ver ${review.name}` }, cover(review.cover, review.name)),
-          h("div", null, h("h3", null, review.name), review.minutes != null && h("p", { class: "steam-caption" }, `${hours(review.minutes)} en Steam`)),
-          h("span", { class: `steam-review-verdict ${review.is_recommended ? "is-recommended" : "is-not-recommended"}` }, icon(review.is_recommended ? "check" : "x", 14), review.is_recommended ? "Recomendado" : "No recomendado")),
-        h("p", { class: "steam-review-content" }, review.content),
-        h("div", { class: "steam-review-footer" }, h("span", { class: "steam-caption" }, review.posted.replace(/Posted /g, "Publicada ").replace(/Updated /g, "Actualizada ")),
-          h("a", { href: review.url, target: "_blank", rel: "noopener noreferrer" }, "Ver reseña en Steam ↗")))))
-        : reviews.status === "ok" ? emptyState("Todavía no publicaste reseñas en Steam", "Cuando recomiendes un juego en Steam, tu reseña aparecerá acá.") : null,
-      reviews.next_page && h("button", { class: "btn btn-sm steam-more", disabled: reviewsLoading, onClick: loadMoreReviews }, reviewsLoading ? "Cargando…" : "Ver más reseñas"));
+    return renderSteamReviews(reviews, { error: reviewsError, loading: reviewsLoading, onLoadMore: loadMoreReviews });
   }
 
   async function loadMoreReviews() {

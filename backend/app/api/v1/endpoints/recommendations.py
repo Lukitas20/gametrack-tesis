@@ -145,7 +145,7 @@ def get_recommendations(
     if not recommendations:
         profile_hint = "No quedan juegos disponibles para recomendar con los datos actuales."
     elif effective_strategy == "ia_local":
-        profile_hint = "Un modelo entrenado en esta PC cruza patrones de valoraciones con tus notas actuales. No usa una API de IA externa."
+        profile_hint = "Un modelo entrenado con valoraciones cruza sus patrones con tus notas actuales. No usa una API de IA externa."
     elif effective_strategy == "hibrido":
         profile_hint = (
             "Combinamos tus gustos con patrones de valoración entre juegos. "

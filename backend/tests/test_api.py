@@ -337,6 +337,18 @@ def test_la_raiz_sirve_el_frontend(client: TestClient) -> None:
     assert "/js/app.js" in response.text
 
 
+@pytest.mark.parametrize("path", ["/", "/index.html", "/js/views/ratings.js", "/css/steam-profile.css"])
+def test_frontend_revalidates_cached_pages_and_modules(client, path):
+    response = client.get(path)
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-cache"
+    cached = client.get(path, headers={"If-None-Match": response.headers["etag"]})
+    assert cached.status_code == 304 and not cached.content
+    assert cached.headers["cache-control"] == "no-cache"
+    updated = client.get(path, headers={"If-None-Match": '"previous-release"'})
+    assert updated.status_code == 200 and updated.content == response.content
+
+
 def test_informe_separa_votos_locales_del_indice_importado(client, db, data):
     game = data['breve']
     game.developer = 'Estudio Test'

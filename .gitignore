@@ -3,6 +3,7 @@ __pycache__/
 *.py[cod]
 .venv/
 .venv2/
+.venv-local/
 venv/
 *.egg-info/
 .pytest_cache/
@@ -42,3 +43,12 @@ dist/
 .vscode/
 .idea/
 *.swp
+
+# Despliegue Google Cloud: estado y configuración de cada cuenta.
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+*.tfvars.json
+deploy/google-cloud/.tools/

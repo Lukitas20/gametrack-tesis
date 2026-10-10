@@ -24,6 +24,7 @@ from app.core.config import settings
 from app.db.database import get_db
 from app.models import SteamAuthFlow, SteamIdentity, User, UserRole
 from app.services.steam_service import get_player_summary
+from app.services.steam_account_service import apply_steam_profile, assign_steam_username
 from app.services.user_service import ensure_steam_preferences
 
 router = APIRouter(prefix="/auth/steam", tags=["auth"])
@@ -180,12 +181,8 @@ def resolve_user(db, steam_id, link_user_id):
             if other and other.steam_id != steam_id:
                 raise ValueError("linked")
         else:
-            username = f"steam_{steam_id}"
-            if db.scalar(select(User.id).where(User.username == username)):
-                username += "_" + secrets.token_hex(4)
-            user = User(username=username, role=UserRole.PLAYER, steam_id=steam_id)
-            db.add(user)
-            db.flush()
+            user = User(role=UserRole.PLAYER, steam_id=steam_id)
+            assign_steam_username(db, user)
         if not user or not user.is_active:
             # New users receive the column default at flush above.
             raise ValueError("inactive")
@@ -198,9 +195,8 @@ def resolve_user(db, steam_id, link_user_id):
         try:
             profile = get_player_summary(steam_id)
             if profile:
-                user.steam_username = str(profile.get("personaname", ""))[:100] or None
-                user.steam_avatar_url = profile.get("avatarfull")
-        except (httpx.HTTPError, ValueError, KeyError):
+                apply_steam_profile(db, user, profile)
+        except (httpx.HTTPError, ValueError, KeyError, TypeError):
             pass
     db.commit()
     db.refresh(user)

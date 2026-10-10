@@ -10,12 +10,18 @@ from app.core.config import settings
 # check_same_thread=False es necesario para que SQLite funcione con el
 # thread pool de FastAPI. No aplica a PostgreSQL.
 connect_args = {"check_same_thread": False, "timeout": 30} if settings.is_sqlite else {}
+pool_options = {} if settings.is_sqlite else {
+    "pool_size": settings.DB_POOL_SIZE,
+    "max_overflow": settings.DB_MAX_OVERFLOW,
+    "pool_timeout": settings.DB_POOL_TIMEOUT,
+}
 
 engine = create_engine(
     settings.DATABASE_URL,
     echo=settings.SQL_ECHO,
     connect_args=connect_args,
     pool_pre_ping=True,
+    **pool_options,
 )
 
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
