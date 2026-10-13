@@ -55,7 +55,7 @@ def test_steam_opiniones_distinguen_juegos_del_mismo_genero(history):
     db, user, _, games, *_ = history
     liked, disliked = [scores.game_score(db, user, games[i].id) for i in (2, 3)]
     assert liked.affinity > disliked.affinity + 50
-    assert liked.evidence == "steam" and liked.version == "2.3"
+    assert liked.evidence == "steam" and liked.version == "2.4"
     assert liked.weights == {"affinity": .85, "metacritic": .10, "community": .05}
     assert "reach" not in liked.components
     assert "recomendaste en Steam" in " ".join(liked.reasons)
@@ -229,7 +229,7 @@ def test_genero_amplio_puede_encajar_pero_conserva_confianza_provisional(history
     db, user, _, games, *_ = history
     set_library(db, user, {"status": "ok", "items": []})
     result = scores.game_score(db, user, games[2].id)
-    assert result.evidence == "inicial" and result.affinity <= 75
+    assert result.evidence == "inicial" and result.affinity <= 55
     assert result.confidence == "low"
     assert "provisional" in result.confidence_message.lower()
     assert not any("Comparte" in reason for reason in result.reasons)
@@ -237,6 +237,36 @@ def test_genero_amplio_puede_encajar_pero_conserva_confianza_provisional(history
     games[2].metacritic = 100; db.commit()
     updated = scores.game_score(db, user, games[2].id)
     assert updated.affinity == result.affinity and updated.confidence == "low"
+
+
+def test_para_vos_usa_horas_sin_requerir_resenas_y_no_cambia_la_seleccion(history, monkeypatch):
+    db, user, _, games, *_ = history
+    set_library(db, user, {"status": "ok", "items": [{"appid": 100, "minutes": 1200}], "user_reviews": {}})
+    context = scores.score_context(db, user)
+    assert context["rating_count"] == context["steam_review_count"] == context["gametrack_review_count"] == 0
+    assert context["steam_played_count"] == 1
+    result = scores.discovery(db, user)
+    assert result.items
+    assert games[2].id in {item.game.id for item in result.items}
+    assert games[3].id not in {item.game.id for item in result.items}
+    before_ids = [item.game.id for item in result.items]
+    for item in result.items:
+        score = item.gametrack_score
+        assert score.value > score.base_value and score.calibration == "compatibility"
+        assert score == scores.game_score(db, user, item.game.id)
+    # Llevar todos los puntajes visibles a 99 nunca incorpora un juego
+    # ajeno ni cambia el orden de recomendaciones basado en evidencia.
+    monkeypatch.setattr(scores, "compatibility_score", lambda _: 99)
+    exaggerated = scores.discovery(db, user)
+    assert [item.game.id for item in exaggerated.items] == before_ids
+    assert all(item.gametrack_score.value == 99 for item in exaggerated.items)
+
+
+def test_escala_global_es_monotona_y_preserva_limites():
+    values = [scores.compatibility_score(i) for i in range(101)]
+    assert values == sorted(values)
+    assert values[0] == 0 and values[-1] == 100
+    assert all(i <= value <= 100 for i, value in enumerate(values))
 
 
 def test_1500_horas_reconocen_interes_en_el_propio_juego_y_en_shooters(history):

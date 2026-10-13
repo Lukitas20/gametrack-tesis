@@ -1,4 +1,4 @@
-"""GameTrackScore 2.3: afinidad y confianza separadas, selección coherente.
+"""GameTrackScore 2.4: recomendaciones sin reseñas propias obligatorias.
 
 Las reseñas públicas acreditan alcance, no jugadores únicos ni sesiones juntos.
 Los umbrales no se relajan para rellenar una lista sin candidatos adecuados.
@@ -18,11 +18,12 @@ from app.services.personal_evidence_service import confidence_for
 from app.services.personal_history_service import personal_history, history_affinities, history_reasons, own_history_affinity
 
 
-# Un título no recibe puntos por entrar al feed. Se selecciona después de
-# calcular exactamente el mismo índice que se muestra en su ficha.
-PERSONAL_DISCOVERY_MIN_SCORE = 70
-PERSONAL_DISCOVERY_MIN_AFFINITY = 60
 LOCAL_PERSONAL_MAX_WEIGHT = .25
+
+
+def compatibility_score(base_value):
+    """Escala fija creciente; independiente del usuario y la tanda."""
+    return round(100 * sqrt(max(0, min(100, base_value)) / 100))
 
 
 def _count(value):
@@ -153,9 +154,9 @@ def score_game(game, context):
     if context["genres"] and not context["has_history"]:
         value = .85*value + .15 if matches else .65*value
     if not context["has_history"]:
-        # El puntaje estima encaje; confidence_for declara por separado que
-        # los géneros solos son evidencia provisional. No fuerza todo a 55.
-        value = min(.75, value)
+        # Conservar la escala base del selector anterior: la presentación
+        # del índice no cambia los juegos que se eligen por estos gustos.
+        value = min(.55, value)
     reasons.extend(item[3] for item in history_reasons(game, context))
     if matches and not context["has_history"]:
         reasons.append("Coincidencia amplia de géneros: " + ", ".join(matches[:3]) + ". Es una señal provisional, no demuestra tu gusto por este juego.")
@@ -184,7 +185,7 @@ def score_game(game, context):
         weights = {"affinity": .90, "metacritic": .10} if public["meta"] is not None else {"affinity": 1.}
         reasons.append("Faltan reseñas públicas verificables; no se recomienda en Descubrí.")
     if public["meta"] is not None:
-        reasons.append(f"Metascore {public['meta']}/100: aporta {round(weights['metacritic']*100)}% del índice.")
+        reasons.append(f"Metascore {public['meta']}/100: aporta {round(weights['metacritic']*100)}% del índice base.")
     else:
         reasons.append("Sin Metascore disponible: usamos tus gustos y las reseñas públicas, sin inventar una nota crítica.")
     if public["total"]:
@@ -204,7 +205,22 @@ def score_game(game, context):
         reasons.append("Todavía hay poca evidencia personal comparable; los géneros solos dan una estimación provisional.")
     elif context["steam_count"] and not context["steam_review_count"]:
         reasons.append("El historial aporta señales de interés, pero aún no tenemos reseñas tuyas comparables para distinguir qué te gustó y qué no.")
-    return GameTrackScore(value=round(sum(components[key]*weight for key, weight in weights.items())*100),
+    base_value = round(sum(components[key]*weight for key, weight in weights.items())*100)
+    # La escala de compatibilidad se aplica también en la ficha, nunca sólo
+    # al aparecer en el feed. La selección conserva el índice base y no
+    # requiere opiniones: las horas o preferencias reconocibles bastan.
+    comparable_rejection = False
+    index = context["engine"]._game_index.get(game.id)
+    if index is not None:
+        comparable_rejection = any(
+            signal["weight"] < 0 and gid in context["similarities"] and
+            float(context["similarities"][gid][index]) * abs(signal["weight"]) >= .6
+            for gid, signal in context["signals"].items())
+    calibrate = (not own_signal and not comparable_rejection and base_value >= 40 and
+                 (context["has_positive_history"] or (not context["has_history"] and bool(matches))))
+    displayed_value = compatibility_score(base_value) if calibrate else base_value
+    return GameTrackScore(value=displayed_value, base_value=base_value,
+        calibration="compatibility" if calibrate else "identity",
         affinity=round(value*100), evidence=evidence, reasons=reasons, components=components, weights=weights, **metadata)
 
 
@@ -262,13 +278,11 @@ def discovery(db, user, mode="affinity", limit=8, friend_id=None):
             continue  # Los rechazos solos no permiten afirmar afinidad positiva.
         if context["personal"] and (score.affinity is None or score.affinity < 45):
             continue
-        if mode == "affinity" and context["personal"] and (
-            score.value is None or score.value < PERSONAL_DISCOVERY_MIN_SCORE or
-            score.affinity is None or score.affinity < PERSONAL_DISCOVERY_MIN_AFFINITY
-        ):
-            continue
         quality = .7*public["meta"]/100 + .3*public["community"] if public["meta"] is not None else public["community"]
-        base = score.value/100 if score.value is not None else .95*quality + .05*public["reach"]
+        # Ordenar por evidencia estable, no por la escala visual. No hay
+        # mínimo de 70/60 ni una obligación de escribir reseñas propias.
+        selection_value = score.base_value if score.base_value is not None else score.value
+        base = selection_value/100 if selection_value is not None else .95*quality + .05*public["reach"]
         reasons = []
         if mode == "critics":
             rank = .8*base + .2*public["meta"]/100
@@ -289,7 +303,7 @@ def discovery(db, user, mode="affinity", limit=8, friend_id=None):
     if not context["personal"]:
         note = "Elegí géneros o valorá juegos para personalizar. Mientras tanto, mostramos títulos con buena crítica y suficientes reseñas públicas."
     elif mode == "affinity":
-        note += f" Para vos exige al menos {PERSONAL_DISCOVERY_MIN_SCORE}/100 de GameTrackScore y {PERSONAL_DISCOVERY_MIN_AFFINITY}/100 de afinidad. El puntaje es el mismo que en la ficha; la confianza indica cuánto respaldo personal tiene."
+        note += " Tus géneros y las horas de Steam también sirven: escribir reseñas es opcional. El GameTrackScore es el mismo al abrir el juego."
     if mode == "critics": note += " En esta vista todos tienen Metascore."
     if mode == "friends" and library_status != "ok":
         note += " Sin biblioteca pública disponible: usamos las valoraciones de GameTrack de tu amigo."

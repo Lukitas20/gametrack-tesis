@@ -134,8 +134,10 @@ def explain_game(db, user, game_id, question=None, _context=None):
             selected.extend(p for p in positives + cautions if "Metascore" in p.text or "reseñas" in p.text)
         if re.search(r"puntaje|score|calcula|peso|desglos|numero|nota", q):
             labels = {"affinity": "tus gustos", "local_model": "aprendizaje local de tus opiniones", "metacritic": "Metacritic", "community": "reseñas públicas", "reach": "respaldo público", "own_rating": "tu propia valoración"}
+            if score.calibration == "compatibility":
+                selected.append(point(f"Los componentes forman un índice base de {score.base_value}/100. La escala de compatibilidad lo expresa como GameTrackScore {score.value}/100 usando 100 × √(base/100). No cambia los juegos seleccionados ni significa una probabilidad de que te guste.", "profile", "game"))
             for key, weight in score.weights.items():
-                selected.append(point(f"{labels.get(key, key).capitalize()}: {round(score.components[key]*100)}/100, con un peso de {round(weight*100)}% del índice.", "profile" if key in {"affinity", "local_model", "own_rating"} else "game" if key == "metacritic" else review_ref))
+                selected.append(point(f"{labels.get(key, key).capitalize()}: {round(score.components[key]*100)}/100, con un peso de {round(weight*100)}% del índice base.", "profile" if key in {"affinity", "local_model", "own_rating"} else "game" if key == "metacritic" else review_ref))
             if not score.weights:
                 selected.append(point("Sin gustos reconocibles o valoraciones no calculamos un puntaje personal.", "profile"))
         if re.search(r"compara|parecid|similar|historial|jugue|valore", q):

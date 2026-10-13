@@ -187,9 +187,7 @@ def test_historial_positivo_define_generos_sin_preferencias(sample):
     db.add(Rating(user_id=user.id, game_id=games[0].id, score=5)); db.commit(); invalidate_engine()
     ids = {i.game.id for i in service.discovery(db, user).items}
     assert games[0].id not in ids and games[3].id not in ids
-    # Sólo comparten el género: son opciones para explorar con crítica,
-    # pero no alcanzan el requisito nuevo de una recomendación fuerte.
-    assert games[1].id not in ids
+    assert games[1].id in ids
     assert games[1].id in {i.game.id for i in service.discovery(db, user, "critics").items}
 
 
@@ -199,7 +197,8 @@ def test_componentes_explican_mismo_score_en_ficha_y_seleccion(sample):
     for item in service.discovery(db, user).items:
         score = item.gametrack_score
         assert sum(score.weights.values()) == pytest.approx(1)
-        assert score.value == round(sum(score.weights[k]*score.components[k] for k in score.weights)*100)
+        base = score.base_value if score.base_value is not None else score.value
+        assert base == round(sum(score.weights[k]*score.components[k] for k in score.weights)*100)
         assert service.game_score(db, user, item.game.id) == score
 
 
@@ -251,11 +250,9 @@ def test_perfil_inicial_con_varios_gustos_conserva_seleccion_sin_rellenar(sample
     for genre in (a, b, rare):
         prefs(db, user, genre)
     result = service.discovery(db, user, limit=8)
-    assert result.items and len({item.game.id for item in result.items}) == len(result.items)
+    assert len(result.items) == 8 and len({item.game.id for item in result.items}) == 8
     assert unknown.id not in {item.game.id for item in result.items}
-    assert all(item.gametrack_score.affinity >= 60 and item.gametrack_score.value >= 70 for item in result.items)
-    # Los candidatos con muchos rasgos distintos conservan su score y
-    # pueden explorarse con crítica, sin rellenar Para vos con índices bajos.
+    assert all(item.gametrack_score.affinity >= 45 for item in result.items)
     assert len(service.discovery(db, user, "critics", limit=8).items) == 8
     assert all(service.reputable(db.get(Game, item.game.id), service.public_evidence(db.get(Game, item.game.id)))
                for item in result.items)
@@ -269,7 +266,7 @@ def test_terminos_desconocidos_no_inventan_preferencias(sample):
     assert not service.discovery(db, user).items
 
 
-def test_para_vos_exige_encaje_alto_y_conserva_el_score_de_la_ficha(sample):
+def test_para_vos_conserva_el_score_de_la_ficha(sample):
     db, user, _, _, games, *_ = sample
     # Una opinión buena, no sólo perfecta, debe transferir su fuerza a una
     # experiencia equivalente; la crítica alta no rescata un género ajeno.
@@ -281,8 +278,7 @@ def test_para_vos_exige_encaje_alto_y_conserva_el_score_de_la_ficha(sample):
     assert games[1].id in {item.game.id for item in result.items}
     assert games[3].id not in {item.game.id for item in result.items}
     for item in result.items:
-        assert item.gametrack_score.value >= 70
-        assert item.gametrack_score.affinity >= 60
+        assert item.gametrack_score.value > item.gametrack_score.base_value
         assert item.gametrack_score == service.game_score(db, user, item.game.id)
 
 
@@ -293,17 +289,17 @@ def test_preferencias_tienen_score_util_sin_fingir_confianza(sample):
     assert result.items
     assert all(item.gametrack_score.value >= 70 for item in result.items)
     assert all(item.gametrack_score.confidence == "low" for item in result.items)
-    assert all(item.gametrack_score.affinity <= 75 for item in result.items)
+    assert all(item.gametrack_score.affinity <= 55 for item in result.items)
 
 
-def test_para_vos_no_rellena_con_afinidad_moderada(sample):
+def test_para_vos_recupera_candidatos_que_el_minimo_nuevo_ocultaba(sample):
     db, user, _, _, games, *_ = sample
-    db.add(Rating(user_id=user.id, game_id=games[0].id, score=3.5))
+    db.add(Rating(user_id=user.id, game_id=games[0].id, score=5))
     db.commit(); invalidate_engine()
-    # Aunque las otras fichas tengan reseñas y crítica excelentes, una
-    # experiencia con encaje moderado no se vende como próximo favorito.
-    assert service.game_score(db, user, games[1].id).value < 70
-    assert service.discovery(db, user).items == []
+    score = service.game_score(db, user, games[1].id)
+    assert 45 <= score.affinity < 60 and score.base_value < 70
+    assert score.value > score.base_value
+    assert games[1].id in {item.game.id for item in service.discovery(db, user).items}
 
 
 def test_ia_local_aporta_al_historial_y_su_desglose_es_consistente(sample, monkeypatch):
@@ -323,7 +319,7 @@ def test_ia_local_aporta_al_historial_y_su_desglose_es_consistente(sample, monke
     assert score.affinity > round(context["content_scores"][games[1].id] * 100)
     assert 0 < score.weights["local_model"] <= .25
     assert sum(score.weights.values()) == pytest.approx(1.)
-    assert score.value == round(sum(score.components[k] * w for k, w in score.weights.items()) * 100)
+    assert score.base_value == round(sum(score.components[k] * w for k, w in score.weights.items()) * 100)
     assert service.score_game(games[0], context).value == 75
     assert "local_model" not in service.score_game(games[0], context).weights
 

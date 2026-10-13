@@ -16,6 +16,8 @@ function scoreBadge(score) {
 
 function scoreExplanation(score) {
   const labels = { affinity: "Afinidad con tu historial y gustos", local_model: "Aprendizaje local de tus opiniones", metacritic: "Metacritic", community: "Reseñas públicas de Steam", reach: "Respaldo público", own_rating: "Tu valoración" };
+  const compatibility = score.calibration === "compatibility" && Number.isFinite(score.base_value) && Number.isFinite(score.value);
+  const calibrationNote = compatibility ? h("p", null, `Índice base ${score.base_value.toLocaleString("es-AR", { maximumFractionDigits: 1 })}/100 → GameTrackScore ${score.value}/100: escala de compatibilidad. No es una garantía ni una probabilidad.`) : null;
   const breakdown = Object.entries(score.weights || {}).map(([key, weight]) => {
     const value = Math.round((score.components?.[key] ?? 0) * 100);
     return h("div", { class: "gts-component" },
@@ -23,7 +25,7 @@ function scoreExplanation(score) {
       h("div", { class: "gts-component-track", "aria-hidden": "true" }, h("span", { style: { width: `${value}%` } })));
   });
   return h("details", { class: "gts-explanation" }, h("summary", null, "¿Por qué este puntaje?"),
-    h("p", null, score.explanation), h("p", null, "La confianza indica cuánta evidencia respalda la estimación y se evalúa por separado del puntaje."), breakdown.length ? h("div", { class: "gts-breakdown" }, breakdown) : null,
+    h("p", null, score.explanation), calibrationNote, h("p", null, "La confianza indica cuánta evidencia respalda la estimación y se evalúa por separado del puntaje."), breakdown.length ? h("div", { class: "gts-breakdown" }, compatibility && h("strong", null, "Componentes del índice base"), breakdown) : null,
     h("ul", null, score.reasons.map(reason => h("li", null, reason))));
 }
 
@@ -75,16 +77,12 @@ export function discoverySection() {
       class: "gts-tab", "aria-pressed": String(mode === key), onClick: () => { mode = key; renderTabs(); load(); },
     }, icon(symbol, 15), label)));
   }
-  function emptyDiscovery(data, currentMode) {
+  function emptyDiscovery(currentMode) {
     if (currentMode !== "affinity") return h("div", { class: "gts-empty" }, icon("search", 26), h("h3", null, "Todavía no hay coincidencias"),
       h("p", null, currentMode === "friends" ? "No encontramos juegos multijugador compartibles con los datos disponibles. Probá otro amigo o el asistente de partidas." : "No hay juegos nuevos con Metascore disponible para esta selección."));
-    const historySize = typeof data.history_size === "number" ? data.history_size : null;
-    const reviewRatings = data.personal_data === true || historySize > 0;
-    const hasHistory = historySize > 0;
-    return h("div", { class: "gts-empty" }, icon("search", 26), h("h3", null, "Todavía no hay opciones para vos"),
-      h("p", null, "Puede haber menos opciones cuando faltan datos o coincidencias con tus gustos."),
-      h("p", null, reviewRatings ? hasHistory ? "Revisá tus valoraciones y sumá juegos que hayas probado para afinar tus gustos." : "Valorá juegos que hayas probado, incluidos los que no te gustaron." : "Conectá Steam desde tu perfil para usar tu historial de juego."),
-      h("a", { class: "btn btn-sm", href: reviewRatings ? "#/valoraciones" : "#/perfil", style: { marginTop: "14px" } }, reviewRatings ? hasHistory ? "Revisar mis valoraciones" : "Valorar juegos" : "Ir a mi perfil"));
+    return h("div", { class: "gts-empty" }, icon("search", 26), h("h3", null, "Por ahora no encontramos coincidencias"),
+      h("p", null, "Podés personalizar con tus gustos y las horas de Steam; valorar juegos es opcional."),
+      h("a", { class: "btn btn-sm", href: "#/catalogo", style: { marginTop: "14px" } }, "Explorar catálogo"));
   }
   async function load() {
     const request = ++revision, owner = state.user?.id, currentMode = mode;
@@ -120,7 +118,7 @@ export function discoverySection() {
             h("p", { class: "gts-public" }, `${new Intl.NumberFormat("es-AR").format(item.gametrack_score.review_count)} reseñas públicas`),
             item.reasons.length ? h("ul", { class: "gts-reasons" }, item.reasons.map(reason => h("li", null, reason))) : null,
             scoreExplanation(item.gametrack_score), gameAnalysisButton(item.game.id), saveToListButton(item.game)))))
-        : emptyDiscovery(data, currentMode));
+        : emptyDiscovery(currentMode));
     } catch (error) {
       if (request !== revision || owner !== state.user?.id) return;
       body.replaceChildren(h("p", { role: "status" }, error.message || "No pudimos cargar la selección."), h("button", { class: "btn", onClick: load }, "Reintentar"));

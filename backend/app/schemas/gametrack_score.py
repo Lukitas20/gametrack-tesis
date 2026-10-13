@@ -6,10 +6,12 @@ from app.schemas.game import GameSummary
 
 class GameTrackScore(BaseModel):
     value: int | None = Field(default=None, ge=0, le=100)
+    base_value: int | None = Field(default=None, ge=0, le=100, description="Índice de los componentes, antes de expresar compatibilidad")
+    calibration: Literal["identity", "compatibility"] = "identity"
     evidence: Literal["sin_datos", "inicial", "en_desarrollo", "amplia", "valoracion_propia", "steam", "prelanzamiento"]
     preliminary: bool = False
     reasons: list[str]
-    version: str = "2.3"
+    version: str = "2.4"
     confidence: Literal["none", "low", "medium", "high", "known"] = "low"
     confidence_message: str = "Estimación provisional. La confianza indica respaldo de evidencia, no una probabilidad de acertar."
     affinity: int | None = Field(default=None, ge=0, le=100)
@@ -18,7 +20,7 @@ class GameTrackScore(BaseModel):
     review_count: int = Field(default=0, ge=0)
     components: dict[str, float] = Field(default_factory=dict)
     weights: dict[str, float] = Field(default_factory=dict)
-    explanation: str = "Índice de 0 a 100: tus gustos y el aprendizaje local validado aportan al menos 85%; la crítica y la recepción pública, hasta 15%. Una coincidencia con un juego que valoraste 4/5 conserva la fuerza de esa opinión. Las horas refuerzan el interés de forma gradual y tus rechazos prevalecen. El puntaje estima afinidad; la confianza indica el respaldo disponible. No es una probabilidad ni una valoración creada a partir de las horas."
+    explanation: str = "Tus gustos e historial forman al menos 85% del índice base; la crítica y las reseñas públicas, hasta 15%. Para expresar compatibilidad en estimaciones positivas, GameTrackScore usa 100 × √(índice base / 100). La selección mantiene el índice base: no exige reseñas tuyas ni un mínimo nuevo. Las opiniones propias y los rechazos fuertes conservan su escala. La confianza indica el respaldo disponible; el puntaje no es una probabilidad."
 
 
 class DiscoveryItem(BaseModel):
