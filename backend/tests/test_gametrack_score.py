@@ -11,6 +11,7 @@ from app.db.database import Base, get_db
 from app.ml.recommender import invalidate_engine
 from app.models import Friendship, Game, Genre, Rating, SteamIdentity, SteamProfileCache, Tag, User, UserPreference
 from app.services import gametrack_score_service as service
+import numpy as np
 
 
 @pytest.fixture
@@ -186,7 +187,10 @@ def test_historial_positivo_define_generos_sin_preferencias(sample):
     db.add(Rating(user_id=user.id, game_id=games[0].id, score=5)); db.commit(); invalidate_engine()
     ids = {i.game.id for i in service.discovery(db, user).items}
     assert games[0].id not in ids and games[3].id not in ids
-    assert games[1].id in ids
+    # Sólo comparten el género: son opciones para explorar con crítica,
+    # pero no alcanzan el requisito nuevo de una recomendación fuerte.
+    assert games[1].id not in ids
+    assert games[1].id in {i.game.id for i in service.discovery(db, user, "critics").items}
 
 
 def test_componentes_explican_mismo_score_en_ficha_y_seleccion(sample):
@@ -229,7 +233,7 @@ def test_mas_gustos_no_diluyen_la_afinidad_sin_historial(sample):
     assert all(item.gametrack_score.evidence == "inicial" for item in result.items)
 
 
-def test_perfil_inicial_con_varios_gustos_completa_ocho_sin_rellenar(sample):
+def test_perfil_inicial_con_varios_gustos_conserva_seleccion_sin_rellenar(sample):
     db, user, _, _, games, a, b = sample
     other = [Genre(slug=f"otro-{i}", name=f"Otro {i}") for i in range(20)]
     rare = Genre(slug="violencia", name="Violencia")
@@ -247,10 +251,12 @@ def test_perfil_inicial_con_varios_gustos_completa_ocho_sin_rellenar(sample):
     for genre in (a, b, rare):
         prefs(db, user, genre)
     result = service.discovery(db, user, limit=8)
-    assert len(result.items) == 8
-    assert len({item.game.id for item in result.items}) == 8
+    assert result.items and len({item.game.id for item in result.items}) == len(result.items)
     assert unknown.id not in {item.game.id for item in result.items}
-    assert all(item.gametrack_score.affinity >= 45 for item in result.items)
+    assert all(item.gametrack_score.affinity >= 60 and item.gametrack_score.value >= 70 for item in result.items)
+    # Los candidatos con muchos rasgos distintos conservan su score y
+    # pueden explorarse con crítica, sin rellenar Para vos con índices bajos.
+    assert len(service.discovery(db, user, "critics", limit=8).items) == 8
     assert all(service.reputable(db.get(Game, item.game.id), service.public_evidence(db.get(Game, item.game.id)))
                for item in result.items)
 
@@ -261,3 +267,76 @@ def test_terminos_desconocidos_no_inventan_preferencias(sample):
     db.add(genre); db.commit(); prefs(db, user, genre)
     assert not service.score_context(db, user)["personal"]
     assert not service.discovery(db, user).items
+
+
+def test_para_vos_exige_encaje_alto_y_conserva_el_score_de_la_ficha(sample):
+    db, user, _, _, games, *_ = sample
+    # Una opinión buena, no sólo perfecta, debe transferir su fuerza a una
+    # experiencia equivalente; la crítica alta no rescata un género ajeno.
+    feature = Tag(slug="open-world", name="Mundo abierto", kind="community")
+    games[0].tags.append(feature); games[1].tags.append(feature)
+    db.add(Rating(user_id=user.id, game_id=games[0].id, score=4))
+    db.commit(); invalidate_engine()
+    result = service.discovery(db, user, limit=8)
+    assert games[1].id in {item.game.id for item in result.items}
+    assert games[3].id not in {item.game.id for item in result.items}
+    for item in result.items:
+        assert item.gametrack_score.value >= 70
+        assert item.gametrack_score.affinity >= 60
+        assert item.gametrack_score == service.game_score(db, user, item.game.id)
+
+
+def test_preferencias_tienen_score_util_sin_fingir_confianza(sample):
+    db, user, _, _, games, genre, _ = sample
+    prefs(db, user, genre)
+    result = service.discovery(db, user)
+    assert result.items
+    assert all(item.gametrack_score.value >= 70 for item in result.items)
+    assert all(item.gametrack_score.confidence == "low" for item in result.items)
+    assert all(item.gametrack_score.affinity <= 75 for item in result.items)
+
+
+def test_para_vos_no_rellena_con_afinidad_moderada(sample):
+    db, user, _, _, games, *_ = sample
+    db.add(Rating(user_id=user.id, game_id=games[0].id, score=3.5))
+    db.commit(); invalidate_engine()
+    # Aunque las otras fichas tengan reseñas y crítica excelentes, una
+    # experiencia con encaje moderado no se vende como próximo favorito.
+    assert service.game_score(db, user, games[1].id).value < 70
+    assert service.discovery(db, user).items == []
+
+
+def test_ia_local_aporta_al_historial_y_su_desglose_es_consistente(sample, monkeypatch):
+    db, user, _, _, games, *_ = sample
+    db.add(Rating(user_id=user.id, game_id=games[0].id, score=4))
+    db.commit(); invalidate_engine()
+    engine = service.get_engine(db)
+    seen = []
+    def learned(signals):
+        seen.append(signals[games[0].id]["rating"])
+        return np.full(len(engine.game_ids), .9), np.full(len(engine.game_ids), .8)
+    monkeypatch.setattr(engine, "personal_local_scores", learned)
+    context = service.score_context(db, user, engine)
+    score = service.score_game(games[1], context)
+    assert seen == [4]
+    assert context["basis"] == "historial_personal_ia_local"
+    assert score.affinity > round(context["content_scores"][games[1].id] * 100)
+    assert 0 < score.weights["local_model"] <= .25
+    assert sum(score.weights.values()) == pytest.approx(1.)
+    assert score.value == round(sum(score.components[k] * w for k, w in score.weights.items()) * 100)
+    assert service.score_game(games[0], context).value == 75
+    assert "local_model" not in service.score_game(games[0], context).weights
+
+
+def test_ia_local_no_levanta_un_rechazo_personal(sample, monkeypatch):
+    db, user, _, _, games, *_ = sample
+    db.add_all([Rating(user_id=user.id, game_id=games[0].id, score=1),
+                Rating(user_id=user.id, game_id=games[3].id, score=5)])
+    db.commit(); invalidate_engine()
+    engine = service.get_engine(db)
+    monkeypatch.setattr(engine, "personal_local_scores", lambda _: (
+        np.full(len(engine.game_ids), 1.), np.ones(len(engine.game_ids))))
+    context = service.score_context(db, user, engine)
+    assert context["local_weights"][games[1].id] == 0.
+    assert service.score_game(games[1], context).affinity == 0
+    assert games[1].id not in {item.game.id for item in service.discovery(db, user).items}

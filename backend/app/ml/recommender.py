@@ -607,6 +607,10 @@ class RecommenderEngine:
         observed, ratings = self._history(row)
         history = [(self.game_ids[i], float(score)) for i, score in zip(observed, ratings)]
         prediction = self.local_model.predict(history)
+        return self._align_local_prediction(prediction)
+
+    def _align_local_prediction(self, prediction: np.ndarray | None) -> tuple[np.ndarray, np.ndarray] | None:
+        """Alinea los factores al catálogo sin dar soporte a ítems desconocidos."""
         if prediction is None:
             return None
         values, support = np.zeros(len(self.game_ids)), np.zeros(len(self.game_ids))
@@ -617,6 +621,50 @@ class RecommenderEngine:
                 values[index] = (prediction[pos] - 1.0) / 4.0
                 support[index] = count / (count + 5.0)
         return (values, support) if support.any() else None
+
+    def personal_local_scores(
+        self, signals: dict[int, dict],
+    ) -> tuple[np.ndarray, np.ndarray] | None:
+        """Canal local para GTS, resuelto con opiniones explícitas actuales.
+
+        Sólo usa un artefacto fresco, entrenado con datos observados y que
+        superó la validación automática. No reutiliza el snapshot de Rating:
+        la señal vigente por juego ya resolvió notas y experiencias nuevas.
+        Las horas no se convierten en notas ni completan el mínimo de tres
+        opiniones comparables. El resultado no reemplaza opiniones propias;
+        su mezcla y las restricciones de rechazo corresponden al consumidor.
+        """
+        status = self.local_model_status
+        if (self.local_model is None or status.get("status") != "ready"
+                or status.get("data_label") != "observed" or status.get("automatic_eligible") is not True):
+            return None
+        known = {int(gid) for gid in self.local_model.game_ids}
+        history = []
+        for gid, signal in signals.items():
+            if gid not in known or gid not in self._game_index or not isinstance(signal, dict):
+                continue
+            weight = signal.get("weight")
+            if type(weight) not in (int, float) or not np.isfinite(weight) or not -1 <= weight <= 1 or weight == 0:
+                continue
+            source = signal.get("source")
+            if source == "rating":
+                score = signal.get("rating")
+                if type(score) not in (int, float) or not np.isfinite(score) or not 1 <= score <= 5:
+                    continue
+            elif source in {"gametrack_review", "steam_review"}:
+                recommended = signal.get("recommended")
+                if type(recommended) is not bool:
+                    continue
+                score = 5.0 if recommended else 1.0
+            elif source == "play_feedback":
+                score = 3.0 + 2.0 * weight
+            else:
+                continue
+            history.append((gid, float(score)))
+        if len(history) < 3:
+            return None
+        history.sort()
+        return self._align_local_prediction(self.local_model.predict(history))
 
     def personal_scores(self, user_id: int, preferred_genres: list[str]) -> tuple[np.ndarray, str]:
         """Afinidad de TODOS los juegos, incluidos los jugados, para grupos.

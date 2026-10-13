@@ -1,9 +1,10 @@
-"""GameTrackScore 2.2: historial propio primero, respaldo público secundario.
+"""GameTrackScore 2.3: afinidad y confianza separadas, selección coherente.
 
 Las reseñas públicas acreditan alcance, no jugadores únicos ni sesiones juntos.
 Los umbrales no se relajan para rellenar una lista sin candidatos adecuados.
 """
 from math import isfinite, log10, sqrt
+import numpy as np
 from fastapi import HTTPException
 from sqlalchemy import func, or_, select
 from app.ml.recommender import get_engine, _recommendable_game_filter
@@ -15,6 +16,13 @@ from app.services.friendship_service import require_player, resolve_group_member
 from app.services import steam_profile_service
 from app.services.personal_evidence_service import confidence_for
 from app.services.personal_history_service import personal_history, history_affinities, history_reasons, own_history_affinity
+
+
+# Un título no recibe puntos por entrar al feed. Se selecciona después de
+# calcular exactamente el mismo índice que se muestra en su ficha.
+PERSONAL_DISCOVERY_MIN_SCORE = 70
+PERSONAL_DISCOVERY_MIN_AFFINITY = 60
+LOCAL_PERSONAL_MAX_WEIGHT = .25
 
 
 def _count(value):
@@ -58,6 +66,9 @@ def score_context(db, user, engine=None):
     values, basis = engine.personal_scores(user.id, list(genres))
     signals, owned, imported_reviews = personal_history(db, user, ratings)
     history_values, used, similarities = history_affinities(engine, signals)
+    local_values = np.zeros(len(engine.game_ids))
+    local_weights = np.zeros(len(engine.game_ids))
+    content_values = None
     has_history = history_values is not None or any(gid in engine._game_index and signal["weight"] != 0
                                                   for gid, signal in signals.items())
     if has_history:
@@ -70,12 +81,28 @@ def score_context(db, user, engine=None):
         if user.preferences_source == "manual" and genres and basis != "popularidad":
             genre_values, _ = engine.personal_scores(None, list(genres))
             history_values = .95 * history_values + .05 * genre_values
+        content_values = history_values.copy()
         values, basis = history_values, "historial_personal"
+        local = engine.personal_local_scores(signals)
+        if local is not None:
+            local_values, support = local
+            local_weights = LOCAL_PERSONAL_MAX_WEIGHT * support
+            # La IA no puede levantar una comparación que tus rechazos
+            # explícitos desaconsejan. Sí puede aportar evidencia negativa.
+            rejected = [similarities[gid] * abs(signal["weight"])
+                        for gid, signal in used.items() if signal["weight"] < 0]
+            if rejected:
+                conflict = np.maximum.reduce(rejected) >= .25
+                local_weights[conflict & (local_values > history_values)] = 0.
+            values = (1. - local_weights) * history_values + local_weights * local_values
+            if local_weights.any():
+                basis = "historial_personal_ia_local"
         values = values.copy()
         for gid, signal in signals.items():
             index = engine._game_index.get(gid)
             if index is not None:
                 values[index] = own_history_affinity(signal)
+                local_weights[index] = 0.
     personal = has_history or (bool(ratings or genres) and basis != "popularidad")
     steam_used = {gid: signal for gid, signal in used.items() if signal["source"].startswith("steam_")}
     history_games = {game.id: game for game in db.scalars(select(Game).where(Game.id.in_(used))).all()}
@@ -83,6 +110,9 @@ def score_context(db, user, engine=None):
                          for gid in history_games) if used else 0
     return {"ratings": ratings, "genres": genres, "target_genres": target_genres,
             "scores": dict(zip(engine.game_ids, values)) if personal else {}, "basis": basis,
+            "content_scores": dict(zip(engine.game_ids, content_values)) if content_values is not None else {},
+            "local_predictions": dict(zip(engine.game_ids, local_values)),
+            "local_weights": dict(zip(engine.game_ids, local_weights)),
             "history_size": len(set(ratings) | set(used)), "rating_count": len(ratings), "personal": personal,
             "has_positive_history": any(signal["weight"] > 0 for signal in used.values()), "specific_count": specific_count,
             "has_history": has_history, "signals": used, "own_signals": signals, "similarities": similarities, "engine": engine,
@@ -123,7 +153,9 @@ def score_game(game, context):
     if context["genres"] and not context["has_history"]:
         value = .85*value + .15 if matches else .65*value
     if not context["has_history"]:
-        value = min(.55, value)  # Géneros solos no acreditan afinidad fuerte.
+        # El puntaje estima encaje; confidence_for declara por separado que
+        # los géneros solos son evidencia provisional. No fuerza todo a 55.
+        value = min(.75, value)
     reasons.extend(item[3] for item in history_reasons(game, context))
     if matches and not context["has_history"]:
         reasons.append("Coincidencia amplia de géneros: " + ", ".join(matches[:3]) + ". Es una señal provisional, no demuestra tu gusto por este juego.")
@@ -159,6 +191,14 @@ def score_game(game, context):
         reasons.append(f"Recepción pública: {public['total']:,} reseñas de {public['source']}; su cantidad no aumenta tu afinidad.")
     if own_signal and own_signal["source"] == "steam_review":
         reasons.insert(0, "Ya lo recomendaste en Steam; esa opinión forma parte del perfil." if own_signal["recommended"] else "Ya lo marcaste como no recomendado en Steam; esa opinión reduce la afinidad.")
+    local_weight = context.get("local_weights", {}).get(game.id, 0.) if not own_signal else 0.
+    if local_weight:
+        personal_weight = weights["affinity"]
+        components["affinity"] = float(context["content_scores"][game.id])
+        components["local_model"] = float(context["local_predictions"][game.id])
+        weights["affinity"] = personal_weight * (1. - local_weight)
+        weights["local_model"] = personal_weight * local_weight
+        reasons.append(f"La IA local validada aprende de tus opiniones actuales y aporta {round(weights['local_model'] * 100)}% del índice. El resto de la afinidad compara tus gustos e historial; las horas no se convierten en estrellas.")
     evidence = "steam" if context["steam_count"] or (own_signal and own_signal["source"].startswith("steam_")) else "amplia" if count >= 10 else "en_desarrollo" if count >= 3 else "inicial"
     if evidence == "inicial":
         reasons.append("Todavía hay poca evidencia personal comparable; los géneros solos dan una estimación provisional.")
@@ -222,6 +262,11 @@ def discovery(db, user, mode="affinity", limit=8, friend_id=None):
             continue  # Los rechazos solos no permiten afirmar afinidad positiva.
         if context["personal"] and (score.affinity is None or score.affinity < 45):
             continue
+        if mode == "affinity" and context["personal"] and (
+            score.value is None or score.value < PERSONAL_DISCOVERY_MIN_SCORE or
+            score.affinity is None or score.affinity < PERSONAL_DISCOVERY_MIN_AFFINITY
+        ):
+            continue
         quality = .7*public["meta"]/100 + .3*public["community"] if public["meta"] is not None else public["community"]
         base = score.value/100 if score.value is not None else .95*quality + .05*public["reach"]
         reasons = []
@@ -243,6 +288,8 @@ def discovery(db, user, mode="affinity", limit=8, friend_id=None):
     note = "Tus gustos tienen el mayor peso. Sólo sugerimos fichas completas con suficiente respaldo público; Metacritic influye cuando está disponible."
     if not context["personal"]:
         note = "Elegí géneros o valorá juegos para personalizar. Mientras tanto, mostramos títulos con buena crítica y suficientes reseñas públicas."
+    elif mode == "affinity":
+        note += f" Para vos exige al menos {PERSONAL_DISCOVERY_MIN_SCORE}/100 de GameTrackScore y {PERSONAL_DISCOVERY_MIN_AFFINITY}/100 de afinidad. El puntaje es el mismo que en la ficha; la confianza indica cuánto respaldo personal tiene."
     if mode == "critics": note += " En esta vista todos tienen Metascore."
     if mode == "friends" and library_status != "ok":
         note += " Sin biblioteca pública disponible: usamos las valoraciones de GameTrack de tu amigo."

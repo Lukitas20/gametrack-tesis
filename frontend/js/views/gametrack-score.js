@@ -11,11 +11,11 @@ function scoreBadge(score) {
   const value = score?.value;
   return h("div", { class: "gts-badge", "aria-label": value == null ? "GameTrackScore sin datos" : `GameTrackScore ${value} de 100` },
     h("span", { class: "gts-number", style: { background: `conic-gradient(var(--brand-teal-ui) ${(value ?? 0) * 3.6}deg, var(--border) 0deg)` } }, h("b", null, value ?? "—")),
-    h("span", null, h("strong", null, "GameTrackScore"), h("small", null, EVIDENCE[score?.evidence] || "Afinidad personal"),score?.confidence&&h("small",{class:"gts-confidence",title:score.confidence_message},({known:"Tu opinión guardada",high:"Evidencia sólida",medium:"Evidencia moderada",low:"Estimación provisional",none:"Sin evidencia suficiente"})[score.confidence])));
+    h("span", null, h("strong", null, "GameTrackScore"), h("small", null, EVIDENCE[score?.evidence] || "Afinidad personal"),score?.confidence&&h("small",{class:"gts-confidence",title:score.confidence_message},({known:"Confianza: tu opinión guardada",high:"Confianza alta",medium:"Confianza moderada",low:"Confianza provisional",none:"Confianza: sin evidencia suficiente"})[score.confidence])));
 }
 
 function scoreExplanation(score) {
-  const labels = { affinity: "Afinidad con tu historial y gustos", metacritic: "Metacritic", community: "Reseñas públicas de Steam", reach: "Respaldo público", own_rating: "Tu valoración" };
+  const labels = { affinity: "Afinidad con tu historial y gustos", local_model: "Aprendizaje local de tus opiniones", metacritic: "Metacritic", community: "Reseñas públicas de Steam", reach: "Respaldo público", own_rating: "Tu valoración" };
   const breakdown = Object.entries(score.weights || {}).map(([key, weight]) => {
     const value = Math.round((score.components?.[key] ?? 0) * 100);
     return h("div", { class: "gts-component" },
@@ -23,7 +23,7 @@ function scoreExplanation(score) {
       h("div", { class: "gts-component-track", "aria-hidden": "true" }, h("span", { style: { width: `${value}%` } })));
   });
   return h("details", { class: "gts-explanation" }, h("summary", null, "¿Por qué este puntaje?"),
-    h("p", null, score.explanation), breakdown.length ? h("div", { class: "gts-breakdown" }, breakdown) : null,
+    h("p", null, score.explanation), h("p", null, "La confianza indica cuánta evidencia respalda la estimación y se evalúa por separado del puntaje."), breakdown.length ? h("div", { class: "gts-breakdown" }, breakdown) : null,
     h("ul", null, score.reasons.map(reason => h("li", null, reason))));
 }
 
@@ -75,6 +75,17 @@ export function discoverySection() {
       class: "gts-tab", "aria-pressed": String(mode === key), onClick: () => { mode = key; renderTabs(); load(); },
     }, icon(symbol, 15), label)));
   }
+  function emptyDiscovery(data, currentMode) {
+    if (currentMode !== "affinity") return h("div", { class: "gts-empty" }, icon("search", 26), h("h3", null, "Todavía no hay coincidencias"),
+      h("p", null, currentMode === "friends" ? "No encontramos juegos multijugador compartibles con los datos disponibles. Probá otro amigo o el asistente de partidas." : "No hay juegos nuevos con Metascore disponible para esta selección."));
+    const historySize = typeof data.history_size === "number" ? data.history_size : null;
+    const reviewRatings = data.personal_data === true || historySize > 0;
+    const hasHistory = historySize > 0;
+    return h("div", { class: "gts-empty" }, icon("search", 26), h("h3", null, "Todavía no hay opciones para vos"),
+      h("p", null, "Puede haber menos opciones cuando faltan datos o coincidencias con tus gustos."),
+      h("p", null, reviewRatings ? hasHistory ? "Revisá tus valoraciones y sumá juegos que hayas probado para afinar tus gustos." : "Valorá juegos que hayas probado, incluidos los que no te gustaron." : "Conectá Steam desde tu perfil para usar tu historial de juego."),
+      h("a", { class: "btn btn-sm", href: reviewRatings ? "#/valoraciones" : "#/perfil", style: { marginTop: "14px" } }, reviewRatings ? hasHistory ? "Revisar mis valoraciones" : "Valorar juegos" : "Ir a mi perfil"));
+  }
   async function load() {
     const request = ++revision, owner = state.user?.id, currentMode = mode;
     friendRow.hidden = mode !== "friends"; note.textContent = "";
@@ -109,8 +120,7 @@ export function discoverySection() {
             h("p", { class: "gts-public" }, `${new Intl.NumberFormat("es-AR").format(item.gametrack_score.review_count)} reseñas públicas`),
             item.reasons.length ? h("ul", { class: "gts-reasons" }, item.reasons.map(reason => h("li", null, reason))) : null,
             scoreExplanation(item.gametrack_score), gameAnalysisButton(item.game.id), saveToListButton(item.game)))))
-        : h("div", { class: "gts-empty" }, icon("search", 26), h("h3", null, "Todavía no hay coincidencias"),
-          h("p", null, currentMode === "friends" ? "No encontramos juegos multijugador compartibles con los datos disponibles. Probá otro amigo o el asistente de partidas." : currentMode === "critics" ? "No hay juegos nuevos con Metascore disponible para esta selección." : "Probá otra forma de descubrir juegos.")));
+        : emptyDiscovery(data, currentMode));
     } catch (error) {
       if (request !== revision || owner !== state.user?.id) return;
       body.replaceChildren(h("p", { role: "status" }, error.message || "No pudimos cargar la selección."), h("button", { class: "btn", onClick: load }, "Reintentar"));

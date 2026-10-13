@@ -111,8 +111,20 @@ def combine_history_affinities(similarities, signals, candidate_count):
     implicit = [gid for gid, signal in used.items() if signal["source"] == "steam_playtime"]
     negative = [gid for gid, signal in used.items() if signal["weight"] < 0]
 
-    def average(ids):
-        weights = np.array([abs(used[gid]["weight"]) for gid in ids])
+    def strengths(ids):
+        # El peso firmado expresa la opinión alrededor de 3/5, no una
+        # probabilidad ni la confianza en esa opinión. Para los positivos
+        # explícitos, anclar la escala a la afinidad propia evita comprimir
+        # un 4/5 (75) a 57.5 aun cuando la semejanza sea perfecta.
+        # El interés por horas mantiene su escala gradual e independiente.
+        return np.array([
+            (own_history_affinity(used[gid]) - .15) / .85
+            if used[gid]["source"] != "steam_playtime"
+            else abs(used[gid]["weight"])
+            for gid in ids
+        ])
+
+    def average(ids, weights):
         # La media conserva la fuerza absoluta: dos horas no pasan a ser
         # evidencia máxima sólo por ser el único juego del historial.
         return sum(similarities[gid] * weight * weight for gid, weight in zip(ids, weights)) / weights.sum()
@@ -120,7 +132,8 @@ def combine_history_affinities(similarities, signals, candidate_count):
     # Máximo + promedio preserva distintos intereses sin depender de un único
     # juego. Los pesos absolutos moderan las notas de 4/5 y las horas escasas.
     def interest(ids):
-        return .85 * np.maximum.reduce([similarities[gid] * abs(used[gid]["weight"]) for gid in ids]) + .15 * average(ids)
+        weights = strengths(ids)
+        return .85 * np.maximum.reduce([similarities[gid] * weight for gid, weight in zip(ids, weights)]) + .15 * average(ids, weights)
 
     positive = interest(explicit) if explicit else np.zeros(candidate_count)
     if implicit:

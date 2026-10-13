@@ -55,7 +55,7 @@ def test_steam_opiniones_distinguen_juegos_del_mismo_genero(history):
     db, user, _, games, *_ = history
     liked, disliked = [scores.game_score(db, user, games[i].id) for i in (2, 3)]
     assert liked.affinity > disliked.affinity + 50
-    assert liked.evidence == "steam" and liked.version == "2.2"
+    assert liked.evidence == "steam" and liked.version == "2.3"
     assert liked.weights == {"affinity": .85, "metacritic": .10, "community": .05}
     assert "reach" not in liked.components
     assert "recomendaste en Steam" in " ".join(liked.reasons)
@@ -225,12 +225,18 @@ def test_gustos_inferidos_no_duplican_historial_y_manuales_son_secundarios(histo
     assert abs(scores.game_score(db, user, games[2].id).affinity - before) <= 5
 
 
-def test_genero_amplio_solo_no_genera_afinidad_alta(history):
+def test_genero_amplio_puede_encajar_pero_conserva_confianza_provisional(history):
     db, user, _, games, *_ = history
     set_library(db, user, {"status": "ok", "items": []})
     result = scores.game_score(db, user, games[2].id)
-    assert result.evidence == "inicial" and result.affinity <= 55
-    assert result.value < 65  # Metascore 96 no transforma la señal débil en fuerte.
+    assert result.evidence == "inicial" and result.affinity <= 75
+    assert result.confidence == "low"
+    assert "provisional" in result.confidence_message.lower()
+    assert not any("Comparte" in reason for reason in result.reasons)
+    # La crítica no altera el encaje personal ni transforma la confianza.
+    games[2].metacritic = 100; db.commit()
+    updated = scores.game_score(db, user, games[2].id)
+    assert updated.affinity == result.affinity and updated.confidence == "low"
 
 
 def test_1500_horas_reconocen_interes_en_el_propio_juego_y_en_shooters(history):

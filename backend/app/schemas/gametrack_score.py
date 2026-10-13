@@ -9,7 +9,7 @@ class GameTrackScore(BaseModel):
     evidence: Literal["sin_datos", "inicial", "en_desarrollo", "amplia", "valoracion_propia", "steam", "prelanzamiento"]
     preliminary: bool = False
     reasons: list[str]
-    version: str = "2.2"
+    version: str = "2.3"
     confidence: Literal["none", "low", "medium", "high", "known"] = "low"
     confidence_message: str = "Estimación provisional. La confianza indica respaldo de evidencia, no una probabilidad de acertar."
     affinity: int | None = Field(default=None, ge=0, le=100)
@@ -18,7 +18,7 @@ class GameTrackScore(BaseModel):
     review_count: int = Field(default=0, ge=0)
     components: dict[str, float] = Field(default_factory=dict)
     weights: dict[str, float] = Field(default_factory=dict)
-    explanation: str = "Índice de 0 a 100: tu afinidad aporta al menos 85%; la crítica y la recepción pública, hasta 15%. Las horas refuerzan gradualmente el interés por tus juegos y sus rasgos, con un límite. Tus opiniones explícitas prevalecen sobre el tiempo jugado. Es una estimación, no una probabilidad ni una valoración creada a partir de las horas."
+    explanation: str = "Índice de 0 a 100: tus gustos y el aprendizaje local validado aportan al menos 85%; la crítica y la recepción pública, hasta 15%. Una coincidencia con un juego que valoraste 4/5 conserva la fuerza de esa opinión. Las horas refuerzan el interés de forma gradual y tus rechazos prevalecen. El puntaje estima afinidad; la confianza indica el respaldo disponible. No es una probabilidad ni una valoración creada a partir de las horas."
 
 
 class DiscoveryItem(BaseModel):
