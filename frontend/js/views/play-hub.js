@@ -71,7 +71,7 @@ function selectionReason(item) {
     item.source === "steam_pending" ? "Ya lo tenés en Steam y lo guardaste en Pendientes." :
     "Ya lo tenés en Steam y registra como máximo 2 horas jugadas.";
   return origin + (item.score.value == null ? " Todavía faltan datos para estimar si te gustaría." :
-    " Está primero al ordenar estos juegos por tu GameTrackScore.");
+    " Es la primera propuesta según tu afinidad y el historial disponible.");
 }
 
 function achievementsButton(item) {

@@ -18,6 +18,7 @@ from app.db.database import get_db
 from app.ml.recommender import invalidate_engine
 from app.models import GameList, GameListItem, GameStatus, ListType, PlayFeedback, Rating, SteamProfileCache, UserRole
 from app.schemas.play import FeedbackInput
+from app.schemas.gametrack_score import GameTrackScore
 from app.services import play_service as play
 from app.services.gametrack_score_service import game_score, score_context
 from app.services.game_explanation_service import explain_game
@@ -179,6 +180,27 @@ def test_backlog_uses_only_own_verified_library_and_pending(history):
     assert play.backlog(db, user).unmapped_games == 1
     assert [row.game.id for row in play.backlog(db, user, 'unplayed').items] == [games[0].id]
     assert {row.game.id for row in play.backlog(db, user, 'pending').items} == {games[i].id for i in (1, 2, 3)}
+
+
+def test_backlog_preserves_evidence_order_when_visible_score_is_calibrated(history, monkeypatch):
+    db, user, _, games, *_ = history
+    set_library(db, user, {'status': 'ok', 'items': []})
+    queued(db, user, [games[0], games[2]])
+    db.add(Rating(user_id=user.id, game_id=games[0].id, score=4, status=GameStatus.PLAYING))
+    db.commit(); invalidate_engine()
+    original = play.score_game
+    def score(game, context):
+        if game.id == games[2].id:
+            return GameTrackScore(value=80, base_value=64, calibration='compatibility', affinity=64,
+                evidence='en_desarrollo', components={'affinity': .64}, weights={'affinity': 1.}, reasons=[])
+        return original(game, context)
+    monkeypatch.setattr(play, 'score_game', score)
+    result = play.backlog(db, user, 'pending')
+    assert result.eligible_count == 2
+    assert [item.game.id for item in result.items] == [games[0].id, games[2].id]
+    assert [item.score.value for item in result.items] == [75, 80]
+    assert result.items[0].score.calibration == 'identity' and result.items[0].score.base_value is None
+    assert result.items[1].score.base_value == 64
 
 
 @pytest.mark.parametrize('state', ['private', 'unavailable', 'wrong_identity', 'unverified'])

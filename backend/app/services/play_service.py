@@ -77,8 +77,11 @@ def backlog(db,user,mode='light',limit=12,company=None):
         if queued and steam:reason+=' También está en tu lista de Pendientes.'
         source='steam_pending' if steam and queued else 'steam' if steam else 'pending'
         rows.append(BacklogItem(game=GameSummary.model_validate(game),score=score,source=source,minutes=minutes,steam_app_id=game.steam_app_id,reason=reason))
-    rows.sort(key=lambda item:(-(item.score.value if item.score.value is not None else -1),item.minutes if item.minutes is not None else 999999,item.game.id))
+    def selection_score(item):
+        base=item.score.base_value if item.score.base_value is not None else item.score.value
+        return base if base is not None else -1
+    rows.sort(key=lambda item:(-selection_score(item),item.minutes if item.minutes is not None else 999999,item.game.id))
     return BacklogOut(items=rows[:limit],eligible_count=len(rows),library_status=status,checked_at=cache.checked_at if valid else None,
         unmapped_games=len(set(owned)-matched),
-        note='Ordenamos por tu GameTrackScore entre tus juegos de Steam con pocas horas y tus Pendientes. Excluimos completados, abandonados y rechazos explícitos. Las horas provienen de la última sincronización; no indican progreso de campaña.' if rows else
+        note='Priorizamos tu afinidad entre tus juegos de Steam con pocas horas y tus Pendientes. Excluimos completados, abandonados y rechazos explícitos. Las horas provienen de la última sincronización; no indican progreso de campaña.' if rows else
         'No encontramos juegos elegibles en la biblioteca sincronizada o en Pendientes. Podés sincronizar Steam o guardar títulos en esa lista. No rellenamos con juegos que no sean tuyos o que no hayas guardado.')
