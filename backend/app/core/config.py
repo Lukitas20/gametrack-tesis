@@ -99,6 +99,7 @@ class Settings(BaseSettings):
     # Clasificador propio entrenado con reseñas reales de Steam; empaquetado
     # con la aplicación y separado del recomendador de valoraciones.
     REVIEW_MODEL_PATH: str = str(BASE_DIR / "models" / "review_model.npz")
+    STEAM_AFFINITY_MODEL_PATH: str = str(BASE_DIR / "models" / "steam_affinity.json")
 
     model_config = SettingsConfigDict(
         env_file=BASE_DIR / ".env",

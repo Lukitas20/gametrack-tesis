@@ -158,6 +158,13 @@ class RecommenderEngine:
         }
 
         self._build_content_model(db, games)
+        # Rasgos públicos, sin IDs de usuario ni estadísticas de popularidad.
+        # Se comparte el mismo extractor con el entrenamiento del modelo real.
+        self.affinity_features = {
+            game.id: dict(genres=sorted(self._genre_slugs[game.id]),
+                          tags=sorted(self._community_terms_by_game.get(game.id, set())))
+            for game in games
+        }
         self._build_collaborative_model(db)
         self._build_popularity_model(games)
         self.local_model, self.local_model_status = load_for_database(db)

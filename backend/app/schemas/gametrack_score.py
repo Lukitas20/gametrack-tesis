@@ -4,6 +4,18 @@ from pydantic import BaseModel, Field, ConfigDict
 from app.schemas.game import GameSummary
 
 
+class AffinityLearning(BaseModel):
+    status: str = 'missing'
+    used: bool = False
+    model_version: str | None = None
+    source: str = 'steam_public_review_api'
+    training_observations: int = Field(default=0, ge=0)
+    training_examples: int = Field(default=0, ge=0)
+    history_examples: int = Field(default=0, ge=0)
+    weight: float = Field(default=0., ge=0, le=1)
+    message: str = 'El cálculo usa tus gustos y el historial disponible.'
+
+
 class GameTrackScore(BaseModel):
     value: int | None = Field(default=None, ge=0, le=100)
     base_value: int | None = Field(default=None, ge=0, le=100, description="Índice de los componentes, antes de expresar compatibilidad")
@@ -11,7 +23,7 @@ class GameTrackScore(BaseModel):
     evidence: Literal["sin_datos", "inicial", "en_desarrollo", "amplia", "valoracion_propia", "steam", "prelanzamiento"]
     preliminary: bool = False
     reasons: list[str]
-    version: str = "2.4"
+    version: str = "2.5"
     confidence: Literal["none", "low", "medium", "high", "known"] = "low"
     confidence_message: str = "Estimación provisional. La confianza indica respaldo de evidencia, no una probabilidad de acertar."
     affinity: int | None = Field(default=None, ge=0, le=100)
@@ -20,6 +32,7 @@ class GameTrackScore(BaseModel):
     review_count: int = Field(default=0, ge=0)
     components: dict[str, float] = Field(default_factory=dict)
     weights: dict[str, float] = Field(default_factory=dict)
+    learning: AffinityLearning = Field(default_factory=AffinityLearning)
     explanation: str = "Tus gustos e historial forman al menos 85% del índice base; la crítica y las reseñas públicas, hasta 15%. Para expresar compatibilidad en estimaciones positivas, GameTrackScore usa 100 × √(índice base / 100). La selección mantiene el índice base: no exige reseñas tuyas ni un mínimo nuevo. Las opiniones propias y los rechazos fuertes conservan su escala. La confianza indica el respaldo disponible; el puntaje no es una probabilidad."
 
 

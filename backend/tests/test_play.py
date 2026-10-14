@@ -7,6 +7,7 @@ from contextlib import closing
 
 from alembic import command
 from alembic.config import Config
+from alembic.script import ScriptDirectory
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 import pytest
@@ -284,12 +285,15 @@ def _check_migration(filename):
                                  "INSERT INTO alembic_version VALUES ('f7a31d908c42');"
                                  "CREATE TABLE users(id INTEGER PRIMARY KEY, username TEXT);"
                                  "CREATE TABLE games(id INTEGER PRIMARY KEY, name TEXT);"
+                                 "CREATE TABLE reviews(id INTEGER PRIMARY KEY, content TEXT);"
                                  "INSERT INTO users VALUES (1, 'Conservar');"
-                                 "INSERT INTO games VALUES (1, 'Juego existente');")
+                                 "INSERT INTO games VALUES (1, 'Juego existente');"
+                                 "INSERT INTO reviews VALUES (1, 'Reseña existente');")
     config = Config('alembic.ini'); config.set_main_option('sqlalchemy.url', 'sqlite:///' + filename.as_posix())
     command.upgrade(config, 'head')
     with closing(sqlite3.connect(filename)) as connection:
         assert connection.execute('SELECT username FROM users').fetchone()[0] == 'Conservar'
         assert connection.execute('SELECT name FROM games').fetchone()[0] == 'Juego existente'
-        assert connection.execute('SELECT version_num FROM alembic_version').fetchone()[0] == 'b5c208d915af'
+        assert connection.execute('SELECT version_num FROM alembic_version').fetchone()[0] == ScriptDirectory.from_config(config).get_current_head()
         assert connection.execute('SELECT COUNT(*) FROM play_feedback').fetchone()[0] == 0
+        assert connection.execute('SELECT content, published_at FROM reviews').fetchone() == ('Reseña existente', None)

@@ -1,4 +1,4 @@
-"""GameTrackScore 2.4: recomendaciones sin reseñas propias obligatorias.
+"""GameTrackScore 2.5: afinidad aprendida de observaciones reales de Steam.
 
 Las reseñas públicas acreditan alcance, no jugadores únicos ni sesiones juntos.
 Los umbrales no se relajan para rellenar una lista sin candidatos adecuados.
@@ -16,6 +16,7 @@ from app.services.friendship_service import require_player, resolve_group_member
 from app.services import steam_profile_service
 from app.services.personal_evidence_service import confidence_for
 from app.services.personal_history_service import personal_history, history_affinities, history_reasons, own_history_affinity
+from app.services.steam_affinity_service import affinity_scores, learning_status
 
 
 LOCAL_PERSONAL_MAX_WEIGHT = .25
@@ -70,6 +71,8 @@ def score_context(db, user, engine=None):
     local_values = np.zeros(len(engine.game_ids))
     local_weights = np.zeros(len(engine.game_ids))
     content_values = None
+    affinity_values, affinity_support, affinity_details, affinity_status = affinity_scores(engine, signals)
+    affinity_weights = np.zeros(len(engine.game_ids))
     has_history = history_values is not None or any(gid in engine._game_index and signal["weight"] != 0
                                                   for gid, signal in signals.items())
     if has_history:
@@ -98,12 +101,33 @@ def score_context(db, user, engine=None):
             values = (1. - local_weights) * history_values + local_weights * local_values
             if local_weights.any():
                 basis = "historial_personal_ia_local"
+        # El nuevo modelo aprende relaciones entre historial y rasgos usando
+        # votos reales. Se usa su afinidad relativa al prior, no el porcentaje
+        # positivo general de Steam, y sustituye al canal anterior si aporta.
+        supported = affinity_support > 0
+        if supported.any():
+            proposed = LOCAL_PERSONAL_MAX_WEIGHT * affinity_support
+            rejected = [similarities[gid] * abs(signal['weight'])
+                        for gid, signal in used.items() if signal['weight'] < 0]
+            if rejected:
+                conflict = np.maximum.reduce(rejected) >= .25
+                proposed[conflict & (affinity_values > history_values)] = 0.
+            supported = proposed > 0
+            values[supported] = ((1. - proposed[supported]) * history_values[supported]
+                                 + proposed[supported] * affinity_values[supported])
+            local_values[supported] = affinity_values[supported]
+            local_weights[supported] = proposed[supported]
+            affinity_weights[supported] = proposed[supported]
+            if supported.any():
+                basis = 'historial_personal_steam_entrenado'
         values = values.copy()
         for gid, signal in signals.items():
             index = engine._game_index.get(gid)
             if index is not None:
                 values[index] = own_history_affinity(signal)
                 local_weights[index] = 0.
+                affinity_weights[index] = 0.
+    affinity_status['used'] = bool(affinity_weights.any())
     personal = has_history or (bool(ratings or genres) and basis != "popularidad")
     steam_used = {gid: signal for gid, signal in used.items() if signal["source"].startswith("steam_")}
     history_games = {game.id: game for game in db.scalars(select(Game).where(Game.id.in_(used))).all()}
@@ -114,6 +138,8 @@ def score_context(db, user, engine=None):
             "content_scores": dict(zip(engine.game_ids, content_values)) if content_values is not None else {},
             "local_predictions": dict(zip(engine.game_ids, local_values)),
             "local_weights": dict(zip(engine.game_ids, local_weights)),
+            "affinity_weights": dict(zip(engine.game_ids, affinity_weights)),
+            "affinity_details": affinity_details, "affinity_status": affinity_status,
             "history_size": len(set(ratings) | set(used)), "rating_count": len(ratings), "personal": personal,
             "has_positive_history": any(signal["weight"] > 0 for signal in used.values()), "specific_count": specific_count,
             "has_history": has_history, "signals": used, "own_signals": signals, "similarities": similarities, "engine": engine,
@@ -135,12 +161,14 @@ def score_game(game, context):
     if value is None or not isfinite(float(value)):
         return GameTrackScore(evidence="sin_datos", reasons=[
             "Elegí tus géneros o valorá algunos juegos para calcular tu GameTrackScore."
-            if not context["personal"] else "Este juego todavía no tiene suficientes rasgos en el catálogo."], **metadata)
+            if not context["personal"] else "Este juego todavía no tiene suficientes rasgos en el catálogo."],
+            learning=learning_status(context, game.id), **metadata)
     if own_rating is not None:
         return GameTrackScore(value=round(value*100), affinity=round(value*100), evidence="valoracion_propia",
             components={"own_rating": value}, weights={"own_rating": 1.},
             reasons=[f"Ya lo valoraste con {own_rating:g}/5; se conserva tu opinión personal."],
-            explanation="Cuando ya valoraste el juego, el índice refleja tu propia opinión.", **metadata)
+            explanation="Cuando ya valoraste el juego, el índice refleja tu propia opinión.",
+            learning=learning_status(context, game.id, own=True), **metadata)
     reasons = []
     if own_signal and own_signal["source"] == "steam_playtime":
         strength = "fuerte de interés sostenido" if value >= .65 else "moderada de interés" if value >= .45 else "inicial de interés"
@@ -195,11 +223,15 @@ def score_game(game, context):
     local_weight = context.get("local_weights", {}).get(game.id, 0.) if not own_signal else 0.
     if local_weight:
         personal_weight = weights["affinity"]
+        channel = "steam_affinity" if context.get("affinity_weights", {}).get(game.id, 0.) > 0 else "local_model"
         components["affinity"] = float(context["content_scores"][game.id])
-        components["local_model"] = float(context["local_predictions"][game.id])
+        components[channel] = float(context["local_predictions"][game.id])
         weights["affinity"] = personal_weight * (1. - local_weight)
-        weights["local_model"] = personal_weight * local_weight
-        reasons.append(f"La IA local validada aprende de tus opiniones actuales y aporta {round(weights['local_model'] * 100)}% del índice. El resto de la afinidad compara tus gustos e historial; las horas no se convierten en estrellas.")
+        weights[channel] = personal_weight * local_weight
+        if channel == 'steam_affinity':
+            reasons.append(f"El modelo propio entrenado con votos reales de Steam compara este juego con tu historial y aporta {round(weights[channel] * 100)}% del índice base. Descontamos la tendencia positiva general de la muestra; las horas indican interés y no se convierten en reseñas.")
+        else:
+            reasons.append(f"La IA local validada cruza sus patrones con tus opiniones actuales y aporta {round(weights[channel] * 100)}% del índice base. Las horas no se convierten en estrellas.")
     evidence = "steam" if context["steam_count"] or (own_signal and own_signal["source"].startswith("steam_")) else "amplia" if count >= 10 else "en_desarrollo" if count >= 3 else "inicial"
     if evidence == "inicial":
         reasons.append("Todavía hay poca evidencia personal comparable; los géneros solos dan una estimación provisional.")
@@ -221,7 +253,8 @@ def score_game(game, context):
     displayed_value = compatibility_score(base_value) if calibrate else base_value
     return GameTrackScore(value=displayed_value, base_value=base_value,
         calibration="compatibility" if calibrate else "identity",
-        affinity=round(value*100), evidence=evidence, reasons=reasons, components=components, weights=weights, **metadata)
+        affinity=round(value*100), evidence=evidence, reasons=reasons, components=components, weights=weights,
+        learning=learning_status(context, game.id, own=bool(own_signal), weight=weights.get('steam_affinity', 0.)), **metadata)
 
 
 def game_score(db, user, game_id):

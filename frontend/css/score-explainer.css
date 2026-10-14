@@ -45,6 +45,14 @@
 .insight-source strong { flex:1; color:var(--accent); font-weight:550; }
 .insight-source span { width:100%; order:2; }
 .insight-method { font-size:10px; margin:15px 0 0; }
+.affinity-learning { margin:14px 0; padding:12px 0; border-block:1px solid var(--border); color:var(--ink-secondary); font-size:11px; line-height:1.65; }
+.affinity-learning > summary { display:flex; align-items:center; gap:7px; color:var(--ink-secondary); cursor:pointer; font-size:11px; list-style:none; }
+.affinity-learning > summary::-webkit-details-marker { display:none; }
+.affinity-learning > summary::after { content:"+"; margin-left:auto; color:var(--ink-secondary); }
+.affinity-learning[open] > summary::after { content:"−"; }
+.affinity-learning[data-used="true"] > summary { color:var(--brand-teal-ui); }
+.affinity-learning p { margin:10px 0 0; }
+.affinity-learning-source { font-size:10px; }
 @keyframes insight-arrive { from { opacity:0; transform:translateY(5px); } to { opacity:1; transform:translateY(0); } }
 @media (max-width:600px) { .insight-columns { grid-template-columns:1fr; gap:12px; } .insight-overview { padding:14px; gap:12px; } .insight-score { width:65px; } .insight-score strong { font-size:32px; } .insight-column { padding:14px; } .insight-form-footer { align-items:flex-start; } }
 @media (prefers-reduced-motion:reduce) { .insight-message { animation:none; } .insight-prompts button { transition:none; } }

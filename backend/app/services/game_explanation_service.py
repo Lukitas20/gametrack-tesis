@@ -50,6 +50,30 @@ def explain_game(db, user, game_id, question=None, _context=None):
     def point(text, *ids):
         return ExplanationPoint(text=text, reference_ids=list(ids))
 
+    learning = getattr(score, "learning", {}) or {}
+    if hasattr(learning, "model_dump"):
+        learning = learning.model_dump()
+    learning_weight = learning.get("weight", 0)
+    learning_used = (learning.get("used") is True and isinstance(learning_weight, (float, int))
+                     and 0 < learning_weight <= 1)
+    learning_refs = ["profile"]
+    training_count = learning.get("training_observations", 0)
+    if (learning.get("source") == "steam_public_review_api" and
+            type(training_count) is int and training_count > 0):
+        references.append(ExplanationReference(id="affinity-training", title="Opiniones reales de Steam: entrenamiento",
+            url="https://store.steampowered.com/reviews/",
+            detail=f"Corpus de {training_count:,} opiniones reales obtenidas de Steam; sólo se entrenan casos con historial anterior comparable. "
+                   "Son evidencia de aprendizaje de otros jugadores; no se presentan como opiniones tuyas ni se publican en tu perfil."))
+        learning_refs.append("affinity-training")
+    learning_point = None
+    if learning:
+        message = learning.get("message") or ("El modelo no aporta una predicción personal a este puntaje; "
+                                              "el motor sigue usando los datos disponibles de tu perfil.")
+        if learning_used:
+            message += (f" Su aporte es {learning_weight * 100:.1f}% del índice base del GameTrackScore. "
+                        "No equivale a una probabilidad de que te guste.")
+        learning_point = point(message, *learning_refs)
+
     common = [g.name for g in game.genres if g.slug in context["genres"]]
     if common and not context["has_history"]:
         positives.append(point("Coincidencia amplia con tus géneros: " + ", ".join(common) + ". Es una señal provisional; dos juegos del mismo género pueden sentirse distintos.", "profile", "game"))
@@ -115,12 +139,16 @@ def explain_game(db, user, game_id, question=None, _context=None):
         summary = f"Tu GameTrackScore es {score.value}/100 porque ya diste tu opinión sobre este juego."
     else:
         fit = "buena" if score.affinity is not None and score.affinity >= 65 else "moderada" if score.affinity is not None and score.affinity >= 45 else "baja"
-        summary = f"El modelo encuentra una afinidad {fit} con tu perfil. El GameTrackScore es {score.value}/100 al combinar tus gustos y el respaldo público disponible; no representa una probabilidad de que te guste."
+        summary = f"El análisis encuentra una afinidad {fit} con tu perfil. El GameTrackScore es {score.value}/100 al combinar tus gustos y el respaldo público disponible; no representa una probabilidad de que te guste."
 
-    answer = [point(summary, "profile", "game")]
+    answer = [point(summary, "profile", "game")] + ([learning_point] if learning_point else [])
     if question:
         q = _plain(question)
         selected = []
+        if re.search(r"\bia\b|modelo|entrena|aprende|aprendizaje", q):
+            if learning_point:
+                selected.append(learning_point)
+            selected.append(point("La IA de afinidad aprende patrones a partir de opiniones reales y complementa al motor cuando hay evidencia personal suficiente. Es distinta del modelo que clasifica reseñas para desarrolladores. Estas respuestas organizan evidencia disponible: no son un chat generativo.", *learning_refs))
         confidence_question = bool(re.search(r"confianza|confiab|segur|certeza|falt.*dato|evidencia",q))
         if confidence_question:
             selected.append(point(score.confidence_message, "profile", "game"))
@@ -133,11 +161,14 @@ def explain_game(db, user, game_id, question=None, _context=None):
         if re.search(r"critica|metacritic|metascore|resena|referencia|fuente|opina|comunidad", q):
             selected.extend(p for p in positives + cautions if "Metascore" in p.text or "reseñas" in p.text)
         if re.search(r"puntaje|score|calcula|peso|desglos|numero|nota", q):
-            labels = {"affinity": "tus gustos", "local_model": "aprendizaje local de tus opiniones", "metacritic": "Metacritic", "community": "reseñas públicas", "reach": "respaldo público", "own_rating": "tu propia valoración"}
+            labels = {"affinity": "tus gustos", "local_model": "aprendizaje local de tus opiniones", "steam_affinity": "IA de afinidad con opiniones reales", "metacritic": "Metacritic", "community": "reseñas públicas", "reach": "respaldo público", "own_rating": "tu propia valoración"}
+            if learning_point:
+                selected.append(learning_point)
             if score.calibration == "compatibility":
                 selected.append(point(f"Los componentes forman un índice base de {score.base_value}/100. La escala de compatibilidad lo expresa como GameTrackScore {score.value}/100 usando 100 × √(base/100). No cambia los juegos seleccionados ni significa una probabilidad de que te guste.", "profile", "game"))
             for key, weight in score.weights.items():
-                selected.append(point(f"{labels.get(key, key).capitalize()}: {round(score.components[key]*100)}/100, con un peso de {round(weight*100)}% del índice base.", "profile" if key in {"affinity", "local_model", "own_rating"} else "game" if key == "metacritic" else review_ref))
+                refs = learning_refs if key == "steam_affinity" else ["profile"] if key in {"affinity", "local_model", "own_rating"} else ["game"] if key == "metacritic" else [review_ref]
+                selected.append(point(f"{labels.get(key, key).capitalize()}: {round(score.components[key]*100)}/100, con un peso de {round(weight*100)}% del índice base.", *refs))
             if not score.weights:
                 selected.append(point("Sin gustos reconocibles o valoraciones no calculamos un puntaje personal.", "profile"))
         if re.search(r"compara|parecid|similar|historial|jugue|valore", q):
@@ -165,5 +196,8 @@ def explain_game(db, user, game_id, question=None, _context=None):
     references = [ref for ref in references if ref.id in available]
     return GameExplanation(game_id=game.id, game_name=game.name, score=score, summary=summary, positives=positives, cautions=cautions,
         answer=answer, references=references,
-        suggested_questions=["¿Por qué podría gustarme?", "¿Qué podría no gustarme?", "Comparalo con mi historial", "¿Cómo se calcula mi puntaje?", "¿Qué tan confiable es esta recomendación?"],
-        method="Análisis local del mismo perfil y señales del GameTrackScore. Las comparaciones usan el motor de contenido; las respuestas se construyen con evidencia del catálogo y tu historial. No es un chat generativo de propósito general.")
+        suggested_questions=["¿Por qué podría gustarme?", "¿Qué podría no gustarme?", "Comparalo con mi historial", "¿Cómo se calcula mi puntaje?", "¿Cómo participa la IA de afinidad?"],
+        method="Análisis local del mismo perfil y señales del GameTrackScore. Las comparaciones usan el motor de contenido; "
+               + ("el modelo de afinidad entrenado con opiniones reales aporta en este puntaje. " if learning_used else
+                  "el modelo de afinidad no aporta una predicción a este puntaje. ")
+               + "Las respuestas se construyen con evidencia del catálogo, el cálculo y tu historial. No es un chat generativo de propósito general.")

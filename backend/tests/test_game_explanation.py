@@ -16,6 +16,7 @@ from app.models import Game, Genre, Rating, Tag, User, UserPreference
 from app.models.enums import UserRole
 from app.services.game_explanation_service import explain_game
 from app.services.gametrack_score_service import game_score
+from app.schemas.gametrack_score import AffinityLearning
 
 
 @pytest.fixture
@@ -112,6 +113,34 @@ def test_critica_baja_es_advertencia_no_motivo_a_favor(example):
     assert "Metascore de 40/100" in texts(result.cautions)
     assert "Metascore" not in texts(result.positives)
     assert "40/100" in texts(result.answer)
+
+
+@pytest.mark.parametrize("used,weight", [(True, .17), (False, 0.)])
+def test_explicacion_distingue_modelo_disponible_de_aporte_real(example, monkeypatch, used, weight):
+    """Metadatos aislados: no entrenan ni publican un modelo o interacciones."""
+    db, user, _, games = example
+    score = game_score(db, user, games[0].id)
+    learning = {"status": "ready", "used": used, "weight": weight,
+                "source": "steam_public_review_api", "training_observations": 12,
+                "history_examples": 3 if used else 0,
+                "message": "Aporte de aprendizaje disponible." if used else "No hay suficiente historial personal comparable."}
+    monkeypatch.setattr("app.services.game_explanation_service.score_game",
+                        lambda *args: score.model_copy(update={"learning": AffinityLearning(**learning)}))
+    result = explain_game(db, user, games[0].id, "¿Cómo participa la IA de afinidad?")
+    answer = texts(result.answer)
+    assert learning["message"] in answer
+    assert "distinta del modelo que clasifica reseñas" in answer
+    assert "no son un chat generativo" in answer
+    if used:
+        assert "17.0% del índice base" in answer
+        assert "aporta en este puntaje" in result.method
+    else:
+        assert "17.0%" not in answer
+        assert "no aporta una predicción" in result.method
+    reference = next(ref for ref in result.references if ref.id == "affinity-training")
+    assert "no se presentan como opiniones tuyas" in reference.detail
+    ids = {ref.id for ref in result.references}
+    assert all(set(p.reference_ids) <= ids for p in result.answer)
 
 
 def test_api_privada_validacion_y_no_cache(example):

@@ -1,6 +1,7 @@
 """Recomendaciones personalizadas para el rol jugador."""
 
 from typing import Literal
+from math import isfinite
 
 from fastapi import APIRouter, Depends, Path, Query, Response
 from sqlalchemy import func, select
@@ -17,6 +18,29 @@ from app.schemas.recommendation import RecommendationOut, RecommendationResponse
 from app.schemas.gametrack_score import DiscoveryResponse, GameTrackScore, ExplanationQuestion, GameExplanation, GameComparison, GameComparisonRequest
 
 router = APIRouter(prefix="/recommendations", tags=["recomendaciones"])
+
+
+def _public_affinity_status(status, *, used_items=0):
+    """Publicar procedencia y disponibilidad, nunca datos o rutas del artefacto."""
+    allowed = {"status", "source", "model_version", "trained_at", "training_observations",
+               "training_examples", "history_examples", "dataset_fingerprint", "message"}
+    public = {key: value for key, value in status.items() if key in allowed}
+    public["heads"] = {key: value for key, value in status.get("heads", {}).items()
+                       if key in {"explicit", "hours"} and type(value) is bool}
+    public.update(used=used_items > 0, used_items=used_items)
+    return public
+
+
+@router.get("/affinity-model")
+def affinity_model_status(response: Response, user: User = Depends(get_current_user)):
+    """Estado de sólo lectura, disponible para jugadores y desarrolladores."""
+    from app.services.steam_affinity_service import load_affinity_model
+    response.headers["Cache-Control"] = "no-store"
+    _, status = load_affinity_model()
+    public = _public_affinity_status(status)
+    public["message"] = ("El modelo está disponible; consultar su estado no calcula una recomendación personal."
+                         if status.get("status") == "ready" else status.get("message", "El motor sigue disponible."))
+    return public
 
 
 def personal_score_user(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -140,6 +164,26 @@ def get_recommendations(
             select(Game).where(Game.id.in_([r.game_id for r in recommendations]))
         )
     }
+    if personal_context is not None:
+        weights = personal_context.get("affinity_weights", {})
+        supported = set()
+        for item in recommendations:
+            try:
+                weight = float(weights.get(item.game_id, 0.))
+            except (TypeError, ValueError, OverflowError):
+                continue
+            if item.game_id in games and isfinite(weight) and weight > 0:
+                supported.add(item.game_id)
+        affinity_model = _public_affinity_status(personal_context.get("affinity_status", {}), used_items=len(supported))
+        if supported:
+            affinity_model["message"] = "El modelo de afinidad aporta a juegos de esta selección según tu historial."
+        elif affinity_model.get("status") == "ready":
+            affinity_model["message"] = "Esta selección conserva el motor: ninguno de los juegos devueltos tiene un aporte del modelo de afinidad."
+    else:
+        from app.services.steam_affinity_service import load_affinity_model
+        _, model_status = load_affinity_model()
+        affinity_model = _public_affinity_status(model_status)
+        affinity_model["message"] = "Esta estrategia usa el motor; el modelo de afinidad no participa en esta selección."
     sources = {r.source.value for r in recommendations}
     effective_strategy = next(
         (name for name in ("ia_local", "hibrido", "colaborativo", "contenido", "popularidad") if name in sources),
@@ -173,6 +217,10 @@ def get_recommendations(
         )
     if recommendations and personal_context and personal_context["has_history"]:
         profile_hint = "Usamos el mismo historial que GameTrackScore: tus notas, reseñas propias, experiencias y horas de Steam. Las opiniones negativas también ajustan la selección."
+    if affinity_model["used"]:
+        count = affinity_model["used_items"]
+        profile_hint += (f" La IA de afinidad entrenada con opiniones reales de Steam también aporta a {count} "
+                         + ("juego de esta selección." if count == 1 else "juegos de esta selección."))
     if strategy != "auto" and strategy != effective_strategy and recommendations:
         profile_hint = "La estrategia solicitada no tiene evidencia suficiente; usamos una alternativa. " + profile_hint
 
@@ -182,6 +230,7 @@ def get_recommendations(
         discovery=discovery,
         profile_hint=profile_hint,
         local_model=get_engine(db).local_model_status,
+        affinity_model=affinity_model,
         history_size=history_size,
         cold_start=history_size < settings.REC_COLD_START_THRESHOLD,
         items=[

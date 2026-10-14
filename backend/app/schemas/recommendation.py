@@ -22,6 +22,7 @@ class RecommendationResponse(BaseModel):
     discovery: str = "balanced"
     profile_hint: str = ""
     local_model: dict = Field(default_factory=dict)
+    affinity_model: dict = Field(default_factory=dict)
     # Cantidad de juegos valorados por el usuario: explica por qué se eligió
     # esa estrategia y si hubo arranque en frío.
     history_size: int

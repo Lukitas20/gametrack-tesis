@@ -23,14 +23,14 @@ import {
 } from "../ui.js";
 import { coldStartNotice, openOnboarding } from "./onboarding.js";
 import { startNewQuiz } from "./quiz.js";
-import { discoverySection } from "./gametrack-score.js?v=score-explainer-1";
+import { discoverySection } from "./gametrack-score.js";
 
 import { loadHomeCollections } from "./home-sections.js";
 
 const STRATEGIES = ["auto", "hibrido", "contenido", "colaborativo", "popularidad"];
 const COMPARABLE = ["hibrido", "contenido", "colaborativo", "popularidad"];
 
-/** Explicación de cada estrategia, para que la demo se sostenga sola. */
+/** Explicación de las señales que intervienen en cada estrategia. */
 const STRATEGY_NOTE = {
   auto: "Elige la estrategia según cuánto historial tenga el usuario.",
   hibrido:
@@ -170,7 +170,7 @@ export async function recommendationsView({ query } = { query: new URLSearchPara
     });
     compareButton.setAttribute("aria-pressed", String(comparing));
     note.textContent = comparing
-      ? "Mismo perfil y mismo momento: compará el modelo local y las otras estrategias."
+      ? "Mismo perfil y mismo momento: compará las estrategias del motor. El aporte de la IA de afinidad se explica en el GameTrackScore de cada juego."
       : STRATEGY_NOTE[strategy];
     const params = new URLSearchParams();
     if (strategy !== "auto") params.set("estrategia", strategy);

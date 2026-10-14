@@ -2,7 +2,7 @@ import { api } from "../api.js";
 import { gameCard, saveToListButton } from "../components.js";
 import { isLoggedIn, isDeveloper, state } from "../store.js";
 import { h, icon } from "../ui.js";
-import { gameAnalysisButton } from "./game-insights.js";
+import { affinityLearningNote, gameAnalysisButton } from "./game-insights.js";
 import {playFeedbackButton} from "./play-feedback.js";
 
 const EVIDENCE = { sin_datos: "Falta evidencia personal", inicial: "Afinidad provisional", en_desarrollo: "Perfil en desarrollo", amplia: "Más historial disponible", valoracion_propia: "Según tu valoración", steam: "Usa tu historial de Steam" };
@@ -15,7 +15,7 @@ function scoreBadge(score) {
 }
 
 function scoreExplanation(score) {
-  const labels = { affinity: "Afinidad con tu historial y gustos", local_model: "Aprendizaje local de tus opiniones", metacritic: "Metacritic", community: "Reseñas públicas de Steam", reach: "Respaldo público", own_rating: "Tu valoración" };
+  const labels = { affinity: "Afinidad con tu historial y gustos", local_model: score.learning?.used ? "IA de afinidad con opiniones reales" : "Aprendizaje local de tus opiniones", steam_affinity: "IA de afinidad con opiniones reales", metacritic: "Metacritic", community: "Reseñas públicas de Steam", reach: "Respaldo público", own_rating: "Tu valoración" };
   const compatibility = score.calibration === "compatibility" && Number.isFinite(score.base_value) && Number.isFinite(score.value);
   const calibrationNote = compatibility ? h("p", null, `Índice base ${score.base_value.toLocaleString("es-AR", { maximumFractionDigits: 1 })}/100 → GameTrackScore ${score.value}/100: escala de compatibilidad. No es una garantía ni una probabilidad.`) : null;
   const breakdown = Object.entries(score.weights || {}).map(([key, weight]) => {
@@ -26,7 +26,7 @@ function scoreExplanation(score) {
   });
   return h("details", { class: "gts-explanation" }, h("summary", null, "¿Por qué este puntaje?"),
     h("p", null, score.explanation), calibrationNote, h("p", null, "La confianza indica cuánta evidencia respalda la estimación y se evalúa por separado del puntaje."), breakdown.length ? h("div", { class: "gts-breakdown" }, compatibility && h("strong", null, "Componentes del índice base"), breakdown) : null,
-    h("ul", null, score.reasons.map(reason => h("li", null, reason))));
+    affinityLearningNote(score.learning), h("ul", null, score.reasons.map(reason => h("li", null, reason))));
 }
 
 export function personalScorePanel(gameId, name="este juego", {showFeedback=true}={}) {

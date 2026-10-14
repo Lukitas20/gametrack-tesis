@@ -3,6 +3,35 @@ import { gameComparePanel } from "./game-comparison.js";
 import { state, isLoggedIn, isDeveloper } from "../store.js";
 import { h, icon, mount, openModal, modalHead } from "../ui.js";
 
+/** Sólo el cálculo del servidor puede confirmar si el modelo aportó al puntaje. */
+export function affinityLearningNote(learning) {
+  if (!learning || typeof learning !== "object") return null;
+  const weight = Number(learning.weight);
+  const used = learning.used === true && Number.isFinite(weight) && weight > 0 && weight <= 1;
+  const percent = used ? new Intl.NumberFormat("es-AR", { maximumFractionDigits: 1 }).format(weight * 100) : null;
+  const trainingCount = Number(learning.training_observations);
+  const trainingExamples = Number(learning.training_examples);
+  const historyCount = Number(learning.history_examples);
+  const details = [];
+  if (learning.source === "steam_public_review_api" && Number.isFinite(trainingCount) && trainingCount > 0) {
+    details.push(`Corpus de ${new Intl.NumberFormat("es-AR").format(trainingCount)} opiniones reales de Steam; sólo se entrenan casos con historial anterior comparable.`);
+    if (Number.isFinite(trainingExamples) && trainingExamples > 0) {
+      details.push(`${new Intl.NumberFormat("es-AR").format(trainingExamples)} casos utilizados para entrenar.`);
+    }
+  }
+  if (Number.isFinite(historyCount) && historyCount > 0) {
+    details.push(`${new Intl.NumberFormat("es-AR").format(historyCount)} señales personales reconocidas para esta estimación.`);
+  }
+  return h("details", { class: "affinity-learning", dataset: { used: String(used) } },
+    h("summary", null, icon("sparkles", 13), used ? `IA de afinidad · aporte del ${percent}%` : "IA de afinidad · sin aporte a este puntaje"),
+    h("p", null, learning.message || (used
+      ? "El aprendizaje con opiniones reales complementa al motor según tu historial."
+      : "Este puntaje se calcula con el motor y los datos disponibles; el modelo no aporta una predicción personal.")),
+    used && h("p", null, `El ${percent}% corresponde al índice base del GameTrackScore. No es una probabilidad de que te guste.`),
+    details.length ? h("p", { class: "affinity-learning-source" }, details.join(" ")) : null,
+    h("p", { class: "affinity-learning-source" }, "Modelo de recomendación distinto del que analiza reseñas en el panel de desarrollador. Las horas indican interés; no se convierten en opiniones positivas."));
+}
+
 function referenceLink(ref, compact = false) {
   const external = ref.url.startsWith("https://");
   return h("a", { href: ref.url, target: external ? "_blank" : null,
@@ -51,7 +80,7 @@ function analysisContent(gameId, close, upcoming = false) {
       event.preventDefault();
       if (input.value.trim()) ask(input.value.trim());
     } }, h("label", { for: inputId }, "Preguntá sobre este juego"), input,
-      h("div", { class: "insight-form-footer" }, h("span", null, "Tus gustos y datos del juego. Todo local."), submit));
+      h("div", { class: "insight-form-footer" }, h("span", null, "Explicaciones con evidencia. Sin servicios de IA externos."), submit));
 
     function setBusy(value) {
       busy = value; submit.disabled = value; input.disabled = value;
@@ -73,7 +102,7 @@ function analysisContent(gameId, close, upcoming = false) {
       try {
         const response = await explain(gameId, question);
         if (version !== revision || !current()) return;
-        message.lastElementChild.replaceChildren(h("span", { class: "insight-reply-label" }, icon("sparkles", 13), "IA local · evidencia"),
+        message.lastElementChild.replaceChildren(h("span", { class: "insight-reply-label" }, icon("sparkles", 13), "Análisis local · evidencia"),
           h("ul", { class: "insight-points" }, response.answer.map(point => evidencePoint(point, response.references))));
       } catch (error) {
         if (version !== revision || !current()) return;
@@ -96,7 +125,8 @@ function analysisContent(gameId, close, upcoming = false) {
       data.score.preliminary && h("p", { class: "prelaunch-notice" }, icon("clock",14), "PREVIO AL LANZAMIENTO · Estimación provisional"),
       h("div", { class: "insight-overview" }, h("div", { class: "insight-score", "aria-label": `GameTrackScore ${data.score.value ?? 'sin datos'}` },
         h("strong", null, data.score.value ?? "—"), h("span", null, "GameTrackScore")),
-        h("div", null, h("p", { class: "insight-local" }, icon("sparkles", 13), "TU IA LOCAL"), h("h3", null, data.game_name), h("p", null, data.summary))),
+        h("div", null, h("p", { class: "insight-local" }, icon("sparkles", 13), "TU AFINIDAD, EXPLICADA"), h("h3", null, data.game_name), h("p", null, data.summary))),
+      affinityLearningNote(data.score.learning),
       h("div", { class: "insight-columns" }, column("Podría gustarte", data.positives, "heart", "insight-fit"),
         column("Para tener en cuenta", data.cautions, "info", "insight-caution")),
       h("p",{class:"insight-confidence",dataset:{confidence:data.score.confidence||"low"}},icon("info",14),data.score.confidence_message||"Estimación provisional con los datos disponibles."),
@@ -125,5 +155,5 @@ export function openGameAnalysis(gameId) {
 
 export function gameAnalysisButton(gameId) {
   return h("button", { type: "button", class: "btn btn-ghost btn-sm gts-consult-button", onClick: () => openGameAnalysis(gameId) },
-    icon("sparkles", 15), "Consultarle a la IA local", icon("chevron", 13));
+    icon("sparkles", 15), "Entender mi afinidad", icon("chevron", 13));
 }
