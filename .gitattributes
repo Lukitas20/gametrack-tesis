@@ -14,3 +14,7 @@
 *.sqlite3 binary
 *.pkl binary
 *.joblib binary
+
+# Estos artefactos auditados deben conservar sus bytes también con autocrlf.
+backend/models/review_model.json -text whitespace=cr-at-eol
+backend/models/review_model.npz -text

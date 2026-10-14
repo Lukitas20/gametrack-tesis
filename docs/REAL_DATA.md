@@ -21,8 +21,10 @@ El script `seed_data.py` fue retirado. Para importar catálogo y reseñas reales
 También se retiraron el corpus generador y la evaluación contra etiquetas sintéticas
 del seed; `analyze_reviews.py --evaluate` rechaza ese flujo antes de abrir la base.
 
-Esto no reintegra el modelo de reseñas reales entrenado el 5 de octubre: su artefacto
-se conserva separado. No es un LLM, ni debe confundirse con el recomendador demo.
+El modelo de reseñas reales entrenado el 5 de octubre se integra por separado en
+el análisis de reseñas, con pesos auditados incluidos en la imagen. No es un LLM
+ni reemplaza al recomendador demo con su misma función. La procedencia, sus
+límites y el procedimiento de empaquetado se documentan en [IA_REAL.md](IA_REAL.md).
 
 Los fixtures de pruebas unitarias viven en bases temporales y nunca se incorporan al
 servicio, al corpus de entrenamiento operativo ni a una evaluación de datos reales.

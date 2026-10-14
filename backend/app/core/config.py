@@ -96,6 +96,9 @@ class Settings(BaseSettings):
     REC_DEFAULT_LIMIT: int = 10
     # Artefacto entrenado offline con scripts/train_local_model.py.
     LOCAL_MODEL_PATH: str = str(DATA_DIR / "generated" / "local_model.npz")
+    # Clasificador propio entrenado con reseñas reales de Steam; empaquetado
+    # con la aplicación y separado del recomendador de valoraciones.
+    REVIEW_MODEL_PATH: str = str(BASE_DIR / "models" / "review_model.npz")
 
     model_config = SettingsConfigDict(
         env_file=BASE_DIR / ".env",

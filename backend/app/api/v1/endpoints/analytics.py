@@ -27,9 +27,19 @@ from app.schemas.analytics import (
 from app.services import steam_service
 from app.services.developer_assistant import explain_developer_report
 from app.services.developer_reviews import explore_reviews
+from app.services.trained_ai_service import review_model_report
 from app.models.enums import Aspect, Sentiment
 
 router = APIRouter(prefix="/analytics", tags=["analitica"])
+
+
+@router.get("/review-model")
+def get_review_model_status(response: Response, _: User = Depends(require_developer)):
+    """Procedencia y disponibilidad del clasificador que usan los informes."""
+    from app.ml.trained_reviews import load_model
+    response.headers["Cache-Control"] = "no-store"
+    _, status = load_model()
+    return status
 
 
 @router.get("/reviews", response_model=DeveloperReviewPage)
@@ -76,11 +86,13 @@ def assistant(payload: AssistantQuestion, user: User = Depends(require_developer
         if game is None:
             raise HTTPException(404, 'El juego no existe')
         report = game_analytics(db, game)
+        report["trained_ai"] = review_model_report(db, game_id=game.id)
     else:
         target = (payload.studio or user.studio or '').strip()
         if not target:
             raise HTTPException(400, 'Elegí un estudio para consultar el informe')
         report = studio_analytics(db, target)
+        report["trained_ai"] = review_model_report(db, studio=target)
     # No actualizar desde Steam al preguntar: explicar la muestra ya guardada.
     import unicodedata
     question = ''.join(c for c in unicodedata.normalize('NFD', payload.question.lower())
@@ -111,7 +123,9 @@ def get_studio_analytics(
             status_code=400,
             detail="El usuario no tiene estudio asignado; indicá uno con ?studio=",
         )
-    return studio_analytics(db, target)
+    report = studio_analytics(db, target)
+    report["trained_ai"] = review_model_report(db, studio=target)
+    return report
 
 
 @router.get("/games/{game_id}", response_model=GameAnalyticsOut)
@@ -129,7 +143,9 @@ def get_game_analytics(
     # es una ficha pendiente que todavía no se enriqueció).
     if not steam_service.maybe_refresh(db, game):
         raise HTTPException(status_code=404, detail="El juego no existe")
-    return game_analytics(db, game)
+    report = game_analytics(db, game)
+    report["trained_ai"] = review_model_report(db, game_id=game.id)
+    return report
 
 
 @router.post("/process", response_model=ProcessResult)

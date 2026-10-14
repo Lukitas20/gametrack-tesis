@@ -4,6 +4,7 @@ import { cover } from '../components.js';
 import { state, isDeveloper } from '../store.js';
 import { ASPECT_LABEL, h, icon, modalHead, mount, signed, spinnerBlock } from '../ui.js';
 import { aspectComparisons, comparisonHighlights, reviewMetrics } from './developer-comparison-data.js';
+import { trainedReviewInsights } from './developer-trained-insights.js';
 
 const number = (value, digits = 1) => Number(value).toLocaleString('es-AR', { maximumFractionDigits: digits });
 const missing = value => value === null || value === undefined;
@@ -97,7 +98,11 @@ function openDeveloperGame(game, ownGames, studio) {
     return section('Qué dicen de cada aspecto', 'Balance positivo menos negativo, de −1 a +1. Las menciones pertenecen a cada aspecto, no son jugadores únicos.',
       metricTable(rows.map(row => [ASPECT_LABEL[row.key] || row.key, cell(row.catalog), cell(row.own),
         missing(row.delta) ? 'No comparable' : h('span', null, signed(row.delta, 2), !row.comparable && h('small', null, 'Muestra pequeña'))])),
-      h('p', { class: 'dev-compare-note' }, 'Sin menciones significa que falta evidencia; no equivale a un balance de cero.'));
+      h('p', { class: 'dev-compare-note' }, 'Sin menciones significa que falta evidencia; no equivale a un balance de cero.'),
+      h('div', { class: 'dev-trained-comparison' },
+        trainedReviewInsights(catalog.trained_ai, { title: `Temas detectados · ${catalog.juego.nombre}`, compact: true }),
+        reference && trainedReviewInsights(reference.trained_ai, { title: `Temas detectados · ${reference.juego.nombre}`, compact: true })),
+      catalog.trained_ai && h('p', { class: 'dev-compare-note' }, 'Cada título usa su propia muestra reciente. Compará las menciones junto con la cantidad de reseñas; los conteos no son una nota de calidad.'));
   }
   function market() {
     const left = details.get(catalog.juego.id), right = reference && details.get(reference.juego.id);

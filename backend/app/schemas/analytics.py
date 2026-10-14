@@ -1,6 +1,7 @@
 """Schemas del panel de analítica para desarrolladores."""
 
 from datetime import datetime
+from typing import Any
 from pydantic import BaseModel
 from app.schemas.interaction import ReviewOut
 
@@ -54,6 +55,37 @@ class GameHeader(BaseModel):
     cantidad_ratings: int
 
 
+class TrainedReviewEvidence(BaseModel):
+    review_id: int
+    game_id: int
+    game: str
+    quote: str
+    recommended: bool | None
+    source: str
+
+
+class TrainedReviewTopic(BaseModel):
+    topic: str
+    label: str
+    mentions: int
+    not_recommended: int
+    recommended: int
+    without_recommendation: int
+    examples: list[TrainedReviewEvidence]
+
+
+class TrainedReviewReport(BaseModel):
+    model: dict[str, Any]
+    scope: dict[str, Any]
+    language: str
+    sample_order: str
+    sampled: int
+    total: int
+    topics: list[TrainedReviewTopic]
+    reception: dict[str, int]
+    limitations: list[str]
+
+
 class GameAnalyticsOut(BaseModel):
     juego: GameHeader
     resenas: ReviewSummary
@@ -62,6 +94,7 @@ class GameAnalyticsOut(BaseModel):
     punto_fuerte: str | None
     # Aspecto -> citas textuales que respaldan la valoración negativa.
     citas_negativas: dict[str, list[str]]
+    trained_ai: TrainedReviewReport | None = None
 
 
 class StudioGameRow(BaseModel):
@@ -86,6 +119,7 @@ class StudioAnalyticsOut(BaseModel):
     resenas: ReviewSummary
     aspectos: list[AspectBreakdown]
     citas_negativas: dict[str, list[str]] = {}
+    trained_ai: TrainedReviewReport | None = None
 
 
 class PlatformOverviewOut(BaseModel):

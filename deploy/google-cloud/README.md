@@ -40,6 +40,14 @@ valores de secretos no forman parte de ese estado. `settings.auto.tfvars.json`,
 planes, credenciales, bases y entornos Python se excluyen de Git, Docker y de
 la subida a Cloud Build.
 
+El clasificador local de reseñas reales se versiona en `backend/models` y se
+incluye en cada imagen. Docker verifica sus pesos y metadatos antes de terminar
+la construcción; no ejecuta entrenamiento ni incorpora corpus, bases o pesos
+del recomendador demo. Ver [procedencia, hashes y límites](../../docs/IA_REAL.md).
+`REVIEW_MODEL_PATH` y `LOCAL_MODEL_PATH` corresponden a modelos distintos:
+el primero usa el artefacto de reseñas de la imagen; el segundo permanece sin
+modelo activo hasta disponer de un recomendador entrenado con datos reales.
+
 ## Ejecución por etapas
 
 En esta PC las herramientas portables están en `deploy/google-cloud/.tools`.

@@ -38,6 +38,10 @@ dist/
 # Modelos entrenados
 *.pkl
 *.joblib
+*.npz
+backend/models/*
+!backend/models/review_model.npz
+!backend/models/review_model.json
 
 # IDE
 .vscode/

@@ -6,7 +6,7 @@ LABELS = {'jugabilidad': 'jugabilidad', 'graficos': 'gráficos',
 MIN_MENTIONS = 5
 
 
-def explain_developer_report(report: dict, question: str, overview: dict | None = None) -> dict:
+def _explain_rule_report(report: dict, question: str, overview: dict | None = None) -> dict:
     query = ''.join(c for c in unicodedata.normalize('NFD', question.lower())
                     if unicodedata.category(c) != 'Mn')
     summary = report['resenas']
@@ -99,3 +99,36 @@ def explain_developer_report(report: dict, question: str, overview: dict | None 
     return {'title': title, 'answer': answer, 'actions': actions, 'evidence': evidence,
             'basis': f'{label} · {count:,} reseñas · análisis local de sentimiento y aspectos',
             'limitation': 'Las clasificaciones son automáticas y pueden fallar con ironía, contexto o lenguaje ambiguo. No equivalen a Metacritic ni a una auditoría técnica.'}
+
+
+def explain_developer_report(report: dict, question: str, overview: dict | None = None) -> dict:
+    """Enriquece el mismo asistente con inferencia y citas del modelo real."""
+    response = _explain_rule_report(report, question, overview)
+    trained_report = report.get('trained_ai')
+    if trained_report is None:
+        return response
+    from app.services.trained_ai_service import explain_trained_report
+    trained = explain_trained_report(trained_report, question)
+    response['trained_ai_used'] = trained['trained_ai_used']
+    response['model_status'] = trained['model_status']
+    if not trained['trained_ai_used']:
+        response['answer'] += ' ' + trained['answer']
+        return response
+    if report['resenas']['analizadas']:
+        response['answer'] += '\n\n' + trained['answer']
+    else:
+        # Las inferencias no dependen del procesamiento histórico por reglas.
+        response['title'] = trained['title']
+        response['answer'] = trained['answer']
+        response['actions'] = []
+    for action in trained['actions']:
+        if action not in response['actions']:
+            response['actions'].append(action)
+    seen = {item['quote'] for item in response['evidence']}
+    for item in trained['evidence']:
+        if item['quote'] not in seen:
+            response['evidence'].append(item)
+            seen.add(item['quote'])
+    response['basis'] += ' · ' + trained['basis']
+    response['limitation'] += ' ' + trained['limitation']
+    return response

@@ -6,13 +6,14 @@ RUN --mount=type=secret,id=build_ca --mount=type=cache,target=/root/.cache/pip \
     pip wheel --retries 10 --timeout 120 --progress-bar off --wheel-dir /wheels -r requirements-postgres.txt
 
 FROM python:3.13-slim
-ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 REVIEW_MODEL_PATH=/app/backend/models/review_model.npz
 RUN useradd --create-home --uid 10001 gametrack
 COPY --from=builder /wheels /wheels
 RUN pip install --no-cache-dir --no-index /wheels/*.whl && rm -rf /wheels
 WORKDIR /app/backend
 COPY --chown=gametrack:gametrack backend /app/backend
 COPY --chown=gametrack:gametrack frontend /app/frontend
+RUN python scripts/verify_review_model.py
 RUN mkdir -p data/generated && chown gametrack:gametrack data/generated
 USER gametrack
 EXPOSE 8000
