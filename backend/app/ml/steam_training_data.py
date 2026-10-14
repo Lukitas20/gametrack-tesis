@@ -222,10 +222,14 @@ class SteamReviewClient:
         self, client: httpx.Client, *, delay: float = 1.0, max_requests: int = 300,
         retries: int = 2, sleep: Callable[[float], None] = time.sleep,
         monotonic: Callable[[], float] = time.monotonic,
+        review_type: int = 0,
     ):
         if delay < 1.0 or max_requests < 1 or retries < 0 or retries > 3:
             raise ValueError("Pausa mínima 1s; solicitudes positivas y entre 0 y 3 reintentos.")
         self.client, self.delay, self.max_requests, self.retries = client, delay, max_requests, retries
+        if type(review_type) is not int or review_type not in (0, 1, 2):
+            raise ValueError("Tipo de reseña Steam inválido")
+        self.review_type = review_type
         self.sleep, self.monotonic = sleep, monotonic
         self.requests = 0
         self._last_started: float | None = None
@@ -250,7 +254,7 @@ class SteamReviewClient:
 
     def page(self, appid: int, cursor: str, *, page_size: int = 100) -> tuple[list[dict[str, Any]], str, str]:
         params = {
-            "appid": appid, "filter": 1, "languages": ["all"], "review_type": 0,
+            "appid": appid, "filter": 1, "languages": ["all"], "review_type": self.review_type,
             "purchase_type": 1, "num_per_page": page_size, "cursor": cursor,
             "filter_offtopic_activity": True,
         }
@@ -310,9 +314,14 @@ def collect(
     run_counts: Counter[str] = Counter()
     error: str | None = None
     pages = 0
+    query_type = getattr(client, 'review_type', 0)
+    # Cursors belong to a query. Never resume a negative-only query with the
+    # cursor of the all-reviews query. The shared store deduplicates real votes.
+    query_games = (store.checkpoint['games'] if query_type == 0 else
+                   store.checkpoint.setdefault('filtered_games', {}).setdefault(str(query_type), {}))
     try:
         for game_index, appid in enumerate(appids, start=1):
-            state = store.checkpoint["games"].setdefault(str(appid), {"cursor": "*", "pages": 0, "exhausted": False})
+            state = query_games.setdefault(str(appid), {"cursor": "*", "pages": 0, "exhausted": False})
             if state["exhausted"]:
                 continue
             for _ in range(pages_per_game):
@@ -334,7 +343,7 @@ def collect(
                 state["pages"] += 1
                 store.checkpoint["totals"] = dict(totals)
                 store.checkpoint["page_receipts"].append({
-                    "steam_appid": appid, "page": state["pages"], "retrieved_at": retrieved_at,
+                    "steam_appid": appid, "review_type": query_type, "page": state["pages"], "retrieved_at": retrieved_at,
                     "response_sha256": response_sha, "received": len(raw_reviews),
                 })
                 store.persist()
@@ -352,7 +361,7 @@ def collect(
         "started_at": started_at, "finished_at": utc_now(), "key_id": store.key_id,
         "parameters": {"appids": appids, "max_games": max_games, "pages_per_game": pages_per_game,
                        "max_pages": max_pages, "max_requests": client.max_requests, "delay_seconds": client.delay,
-                       "retries": client.retries, "filter": 1, "languages": ["all"], "review_type": 0,
+                       "retries": client.retries, "filter": 1, "languages": ["all"], "review_type": query_type,
                        "purchase_type": 1, "num_per_page": 100, "filter_offtopic_activity": True},
         "run_counts": dict(run_counts), "cumulative_counts": dict(totals),
         "requests_this_run": client.requests, "summary": store.summary(),

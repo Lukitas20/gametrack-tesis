@@ -28,6 +28,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--max-requests", type=int, default=120, help="Includes HTTP retries.")
     parser.add_argument("--delay", type=float, default=1.0, help="Minimum seconds between request starts (>=1).")
     parser.add_argument("--retries", type=int, choices=range(4), default=2)
+    parser.add_argument("--review-type", type=int, choices=(0, 1, 2), default=0,
+                        help="Steam real votes: 0=all, 1=positive, 2=negative. Separate query cursors; votes never fabricated.")
     args = parser.parse_args(argv)
     if min(args.max_games, args.pages_per_game, args.max_pages, args.max_requests) < 1 or args.delay < 1:
         parser.error("Budgets must be positive and --delay must be >=1 second.")
@@ -37,7 +39,8 @@ def main(argv: list[str] | None = None) -> int:
         ]
         truststore.inject_into_ssl()
         with httpx.Client(timeout=httpx.Timeout(25.0), headers={"User-Agent": "GameTrack-Thesis-Research/1.0"}, follow_redirects=False) as http:
-            client = SteamReviewClient(http, delay=args.delay, max_requests=args.max_requests, retries=args.retries)
+            client = SteamReviewClient(http, delay=args.delay, max_requests=args.max_requests, retries=args.retries,
+                                       review_type=args.review_type)
             manifest = collect(appids, args.output_dir, client, max_games=args.max_games,
                                pages_per_game=args.pages_per_game, max_pages=args.max_pages)
     except (ValueError, OSError) as exc:

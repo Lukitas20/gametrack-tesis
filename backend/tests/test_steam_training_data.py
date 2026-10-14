@@ -98,6 +98,24 @@ def test_latest_review_replaces_state_without_adding_positive_negative_pair(tmp_
     assert resumed.key == store.key
 
 
+def test_filtered_real_reviews_keep_independent_cursors_and_original_votes(tmp_path):
+    requests = []
+    with http_client([{"reviews": [review()], "cursor": "all-next"}], requests) as http:
+        collect([730], tmp_path, SteamReviewClient(http, max_requests=1),
+                pages_per_game=1, progress=lambda _: None)
+    with http_client([{"reviews": [review(review_id=102, steamid="76561198000000002", voted_up=False)],
+                       "cursor": "negative-next"}], requests) as http:
+        manifest = collect([730], tmp_path, SteamReviewClient(http, max_requests=1, review_type=2),
+                           pages_per_game=1, progress=lambda _: None)
+    query = json.loads(requests[-1].url.params['input_json'])
+    assert query['review_type'] == 2 and query['cursor'] == '*'
+    checkpoint = json.loads((tmp_path / 'checkpoint.json').read_text())
+    assert checkpoint['games']['730']['cursor'] == 'all-next'
+    assert checkpoint['filtered_games']['2']['730']['cursor'] == 'negative-next'
+    assert manifest['summary']['votes_positive'] == manifest['summary']['votes_negative'] == 1
+    assert manifest['parameters']['review_type'] == 2
+
+
 def test_missing_original_hmac_key_refuses_to_relabel_existing_authors(tmp_path):
     store = ObservationStore(tmp_path)
     store.merge(normalize_review(review(), 730, store.key, "now"))

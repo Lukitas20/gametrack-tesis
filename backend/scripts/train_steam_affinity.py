@@ -241,6 +241,7 @@ def train(observations: Path, manifest: Path, catalog: Path, output: Path) -> di
         "positive_votes": sum(row["voted_up"] for row in rows), "negative_votes": sum(not row["voted_up"] for row in rows),
         "dataset_sha256": file_sha256(observations), "manifest_sha256": file_sha256(manifest),
         "catalog_sha256": file_sha256(catalog), "collection_finished_at": source_manifest["finished_at"],
+        "last_collection_review_type": source_manifest.get("parameters", {}).get("review_type", 0),
         "split": "fixed_author_hash_80_train_10_validation_10_test_with_strict_prior_review_history",
         "chronology": "max(history_created_at,history_updated_at)<target_created_at;history_minutes_at_review_only",
         "training_target": "observed_final_steam_recommendation_vote_not_hours_or_unreviewed_items",
@@ -248,6 +249,7 @@ def train(observations: Path, manifest: Path, catalog: Path, output: Path) -> di
         "skipped": skipped,
         "limitations": [
             "Selected recent Steam reviewers are not a representative sample of all players or games.",
+            "Supplemental negative-filtered Steam pages may enrich rare real rejections; the observed class balance is not population prevalence.",
             "Final observed votes may have been revised; historical rows revised after the target creation are excluded.",
             "Static game features describe the collected catalog, not reconstructed historical store metadata.",
             "Only targets with an earlier real history train personal affinity; singleton reviews add no training pairs.",
