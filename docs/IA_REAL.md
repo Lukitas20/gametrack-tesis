@@ -75,8 +75,9 @@ Huella del dataset registrada:
 Docker comprueba estos hashes y detiene la construcción si falta un archivo,
 cambia su contenido o no coincide la procedencia. `.gitattributes` conserva los
 bytes del JSON al moverlo entre Windows y Linux. Git, Docker y Cloud Build
-excluyen otros pesos NPZ, pickle y joblib; sólo se permiten estos dos archivos
-en `backend/models`. Se mantienen excluidos `.env`, bases y datos generados.
+excluyen otros pesos NPZ, pickle y joblib. Además del par de reseñas, se permite
+el JSON auditado de [la IA de afinidad](IA_RECOMMENDATION.md), con su propio
+verificador y huella. Se mantienen excluidos `.env`, bases y datos generados.
 
 Desde `backend` se puede verificar sin red ni acceso a una base:
 

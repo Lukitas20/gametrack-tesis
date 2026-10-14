@@ -44,9 +44,19 @@ El clasificador local de reseñas reales se versiona en `backend/models` y se
 incluye en cada imagen. Docker verifica sus pesos y metadatos antes de terminar
 la construcción; no ejecuta entrenamiento ni incorpora corpus, bases o pesos
 del recomendador demo. Ver [procedencia, hashes y límites](../../docs/IA_REAL.md).
-`REVIEW_MODEL_PATH` y `LOCAL_MODEL_PATH` corresponden a modelos distintos:
-el primero usa el artefacto de reseñas de la imagen; el segundo permanece sin
-modelo activo hasta disponer de un recomendador entrenado con datos reales.
+El segundo modelo, de afinidad personal, se incluye como JSON agregado y tiene
+su propia verificación: [IA_RECOMMENDATION.md](../../docs/IA_RECOMMENDATION.md).
+`REVIEW_MODEL_PATH` apunta al clasificador de reseñas; `STEAM_AFFINITY_MODEL_PATH`
+apunta al modelo de afinidad. `LOCAL_MODEL_PATH` conserva la ruta sin modelo
+del recomendador antiguo y no activa sus pesos demo.
+
+Antes del build, auditar el listado efectivo de subida para impedir que corpus,
+claves o estado de infraestructura lleguen al constructor:
+
+```bash
+gcloud meta list-files-for-upload > /tmp/gametrack-upload.txt
+python3 deploy/google-cloud/verify_source_upload.py --files-list /tmp/gametrack-upload.txt
+```
 
 ## Ejecución por etapas
 

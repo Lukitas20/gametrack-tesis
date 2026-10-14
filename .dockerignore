@@ -19,7 +19,13 @@
 **/*.sqlite-*
 **/*.log
 backend/data/generated
-# Sólo el clasificador auditado de reseñas reales forma parte de la imagen.
+# Los corpus y las claves de seudonimización nunca forman parte de la imagen.
+**/.author_hmac.key
+**/*_hmac.key
+**/observations.jsonl
+**/observations.jsonl.tmp
+**/steam_training
+# Sólo los dos modelos auditados de observaciones reales se empaquetan.
 **/*.npz
 **/*.pkl
 **/*.joblib
@@ -27,6 +33,7 @@ backend/data/generated
 backend/models/*
 !backend/models/review_model.npz
 !backend/models/review_model.json
+!backend/models/steam_affinity.json
 backend/tests
 backend/pytest.ini
 deploy/.env

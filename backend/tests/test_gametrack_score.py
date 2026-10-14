@@ -307,6 +307,10 @@ def test_ia_local_aporta_al_historial_y_su_desglose_es_consistente(sample, monke
     db.add(Rating(user_id=user.id, game_id=games[0].id, score=4))
     db.commit(); invalidate_engine()
     engine = service.get_engine(db)
+    # This test isolates the previous channel. The separately tested Steam
+    # model replaces it when supported, including with the bundled real model.
+    monkeypatch.setattr(service, 'affinity_scores', lambda *_: (
+        np.zeros(len(engine.game_ids)), np.zeros(len(engine.game_ids)), {}, {'status': 'missing'}))
     seen = []
     def learned(signals):
         seen.append(signals[games[0].id]["rating"])

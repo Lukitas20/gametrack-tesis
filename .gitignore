@@ -25,6 +25,12 @@ venv/
 
 # Datos generados por el seed
 backend/data/generated/
+# Corpus y claves privadas, incluso si el recolector usa un directorio distinto.
+.author_hmac.key
+*_hmac.key
+observations.jsonl
+observations.jsonl.tmp
+steam_training/
 deploy/backups/
 
 # Logs locales
@@ -42,6 +48,7 @@ dist/
 backend/models/*
 !backend/models/review_model.npz
 !backend/models/review_model.json
+!backend/models/steam_affinity.json
 
 # IDE
 .vscode/

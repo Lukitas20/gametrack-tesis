@@ -56,7 +56,9 @@ def test_steam_opiniones_distinguen_juegos_del_mismo_genero(history):
     liked, disliked = [scores.game_score(db, user, games[i].id) for i in (2, 3)]
     assert liked.affinity > disliked.affinity + 50
     assert liked.evidence == "steam" and liked.version == "2.5"
-    assert liked.weights == {"affinity": .85, "metacritic": .10, "community": .05}
+    assert liked.weights['affinity'] + liked.weights.get('steam_affinity', 0.) == pytest.approx(.85)
+    assert liked.weights['metacritic'] == .10 and liked.weights['community'] == .05
+    assert liked.learning.used == (liked.weights.get('steam_affinity', 0.) > 0)
     assert "reach" not in liked.components
     assert "recomendaste en Steam" in " ".join(liked.reasons)
     assert "no recomendaste en Steam" in " ".join(disliked.reasons)
