@@ -1,0 +1,1379 @@
+{
+  "source": "gametrack_cached_steam_catalog",
+  "snapshot_note": "Public Steam/SteamSpy catalog attributes cached in GameTrack; current attributes, not historical snapshots at review dates.",
+  "games": [
+    {
+      "steam_appid": 730,
+      "name": "Counter-Strike 2",
+      "genres": [
+        "accion",
+        "free-to-play"
+      ],
+      "tags": [
+        "action",
+        "co-op",
+        "competitive",
+        "difficult",
+        "e-sports",
+        "fast-paced",
+        "first-person",
+        "military",
+        "moddable",
+        "multiplayer",
+        "online-co-op",
+        "pvp",
+        "realistic",
+        "shooter",
+        "strategy",
+        "tactical",
+        "team-based",
+        "trading",
+        "war"
+      ]
+    },
+    {
+      "steam_appid": 105600,
+      "name": "Terraria",
+      "genres": [
+        "accion",
+        "aventura",
+        "indie",
+        "rol"
+      ],
+      "tags": [
+        "2d",
+        "action",
+        "adventure",
+        "atmospheric",
+        "building",
+        "co-op",
+        "crafting",
+        "exploration",
+        "indie",
+        "multiplayer",
+        "online-co-op",
+        "open-world",
+        "open-world-survival-craft",
+        "pixel-graphics",
+        "platformer",
+        "replay-value",
+        "rpg",
+        "singleplayer",
+        "survival"
+      ]
+    },
+    {
+      "steam_appid": 252490,
+      "name": "Rust",
+      "genres": [
+        "accion",
+        "aventura",
+        "indie",
+        "multijugador-masivo",
+        "rol"
+      ],
+      "tags": [
+        "action",
+        "adventure",
+        "building",
+        "co-op",
+        "crafting",
+        "early-access",
+        "first-person",
+        "indie",
+        "multiplayer",
+        "nudity",
+        "online-co-op",
+        "open-world",
+        "open-world-survival-craft",
+        "post-apocalyptic",
+        "pvp",
+        "shooter",
+        "simulation",
+        "survival"
+      ]
+    },
+    {
+      "steam_appid": 570,
+      "name": "Dota 2",
+      "genres": [
+        "accion",
+        "estrategia",
+        "free-to-play"
+      ],
+      "tags": []
+    },
+    {
+      "steam_appid": 4000,
+      "name": "Garry's Mod",
+      "genres": [
+        "casual",
+        "indie",
+        "simuladores"
+      ],
+      "tags": [
+        "action",
+        "building",
+        "co-op",
+        "comedy",
+        "exploration",
+        "first-person",
+        "funny",
+        "indie",
+        "moddable",
+        "multiplayer",
+        "online-co-op",
+        "physics",
+        "pvp",
+        "realistic",
+        "shooter",
+        "simulation",
+        "singleplayer"
+      ]
+    },
+    {
+      "steam_appid": 252950,
+      "name": "Rocket League",
+      "genres": [
+        "accion",
+        "carreras",
+        "deportes",
+        "indie"
+      ],
+      "tags": [
+        "4-player-local",
+        "action",
+        "co-op",
+        "competitive",
+        "fast-paced",
+        "football-american",
+        "football-soccer",
+        "funny",
+        "great-soundtrack",
+        "indie",
+        "local-co-op",
+        "local-multiplayer",
+        "multiplayer",
+        "online-co-op",
+        "racing",
+        "singleplayer",
+        "split-screen",
+        "sports",
+        "team-based"
+      ]
+    },
+    {
+      "steam_appid": 1551360,
+      "name": "Forza Horizon 5",
+      "genres": [
+        "accion",
+        "aventura",
+        "carreras",
+        "deportes",
+        "simuladores"
+      ],
+      "tags": [
+        "action",
+        "adventure",
+        "atmospheric",
+        "automobile-sim",
+        "beautiful",
+        "co-op",
+        "driving",
+        "exploration",
+        "first-person",
+        "multiplayer",
+        "online-co-op",
+        "open-world",
+        "pvp",
+        "racing",
+        "realistic",
+        "simulation",
+        "singleplayer",
+        "sports"
+      ]
+    },
+    {
+      "steam_appid": 413150,
+      "name": "Stardew Valley",
+      "genres": [
+        "indie",
+        "rol",
+        "simuladores"
+      ],
+      "tags": [
+        "2d",
+        "agriculture",
+        "building",
+        "crafting",
+        "cute",
+        "dating-sim",
+        "farming-sim",
+        "fishing",
+        "great-soundtrack",
+        "indie",
+        "life-sim",
+        "multiplayer",
+        "open-world",
+        "pixel-graphics",
+        "relaxing",
+        "rpg",
+        "simulation",
+        "singleplayer"
+      ]
+    },
+    {
+      "steam_appid": 322170,
+      "name": "Geometry Dash",
+      "genres": [
+        "accion",
+        "indie"
+      ],
+      "tags": [
+        "2d",
+        "action",
+        "character-customization",
+        "colorful",
+        "difficult",
+        "family-friendly",
+        "funny",
+        "great-soundtrack",
+        "indie",
+        "level-editor",
+        "music",
+        "platformer",
+        "precision-platformer",
+        "psychological-horror",
+        "rhythm",
+        "side-scroller",
+        "singleplayer",
+        "strategy"
+      ]
+    },
+    {
+      "steam_appid": 250900,
+      "name": "The Binding of Isaac: Rebirth",
+      "genres": [
+        "accion"
+      ],
+      "tags": [
+        "2d",
+        "action",
+        "action-roguelike",
+        "atmospheric",
+        "co-op",
+        "dark",
+        "difficult",
+        "dungeon-crawler",
+        "great-soundtrack",
+        "horror",
+        "indie",
+        "local-co-op",
+        "pixel-graphics",
+        "procedural-generation",
+        "replay-value",
+        "rogue-like",
+        "rogue-lite",
+        "singleplayer"
+      ]
+    },
+    {
+      "steam_appid": 440,
+      "name": "Team Fortress 2",
+      "genres": [
+        "accion",
+        "free-to-play"
+      ],
+      "tags": [
+        "action",
+        "cartoon",
+        "cartoony",
+        "class-based",
+        "co-op",
+        "comedy",
+        "competitive",
+        "crafting",
+        "first-person",
+        "free-to-play",
+        "funny",
+        "hero-shooter",
+        "multiplayer",
+        "online-co-op",
+        "robots",
+        "shooter",
+        "tactical",
+        "team-based",
+        "trading"
+      ]
+    },
+    {
+      "steam_appid": 550,
+      "name": "Left 4 Dead 2",
+      "genres": [
+        "accion"
+      ],
+      "tags": [
+        "action",
+        "adventure",
+        "co-op",
+        "first-person",
+        "horror",
+        "local-co-op",
+        "moddable",
+        "multiplayer",
+        "online-co-op",
+        "post-apocalyptic",
+        "replay-value",
+        "shooter",
+        "singleplayer",
+        "survival",
+        "survival-horror",
+        "tactical",
+        "team-based"
+      ]
+    },
+    {
+      "steam_appid": 1057090,
+      "name": "Ori and the Will of the Wisps",
+      "genres": [
+        "accion"
+      ],
+      "tags": []
+    },
+    {
+      "steam_appid": 359550,
+      "name": "Tom Clancy's Rainbow Six Siege",
+      "genres": [
+        "accion",
+        "free-to-play"
+      ],
+      "tags": [
+        "3d",
+        "action",
+        "co-op",
+        "competitive",
+        "destruction",
+        "difficult",
+        "e-sports",
+        "first-person",
+        "hero-shooter",
+        "military",
+        "multiplayer",
+        "online-co-op",
+        "pvp",
+        "realistic",
+        "shooter",
+        "strategy",
+        "tactical",
+        "team-based",
+        "war"
+      ]
+    },
+    {
+      "steam_appid": 2358720,
+      "name": "Black Myth: Wukong",
+      "genres": [
+        "accion",
+        "aventura",
+        "rol"
+      ],
+      "tags": [
+        "3d",
+        "action",
+        "action-adventure",
+        "action-rpg",
+        "adventure",
+        "atmospheric",
+        "combat",
+        "dark-fantasy",
+        "difficult",
+        "drama",
+        "fantasy",
+        "hack-and-slash",
+        "music",
+        "mythology",
+        "rpg",
+        "singleplayer",
+        "story-rich",
+        "third-person",
+        "violent"
+      ]
+    },
+    {
+      "steam_appid": 1091500,
+      "name": "Cyberpunk 2077",
+      "genres": [
+        "rol"
+      ],
+      "tags": [
+        "action",
+        "action-rpg",
+        "adventure",
+        "atmospheric",
+        "character-customization",
+        "exploration",
+        "first-person",
+        "futuristic",
+        "great-soundtrack",
+        "immersive-sim",
+        "mature",
+        "nudity",
+        "open-world",
+        "rpg",
+        "sci-fi",
+        "singleplayer",
+        "story-rich",
+        "violent"
+      ]
+    },
+    {
+      "steam_appid": 1086940,
+      "name": "Baldur's Gate 3",
+      "genres": [
+        "aventura",
+        "estrategia",
+        "rol"
+      ],
+      "tags": [
+        "adventure",
+        "character-customization",
+        "choices-matter",
+        "class-based",
+        "co-op-campaign",
+        "combat",
+        "crpg",
+        "dark-fantasy",
+        "dungeons-dragons",
+        "fantasy",
+        "multiplayer",
+        "nudity",
+        "online-co-op",
+        "romance",
+        "rpg",
+        "sexual-content",
+        "singleplayer",
+        "story-rich",
+        "strategy",
+        "turn-based-combat"
+      ]
+    },
+    {
+      "steam_appid": 227300,
+      "name": "Euro Truck Simulator 2",
+      "genres": [
+        "indie",
+        "simuladores"
+      ],
+      "tags": [
+        "adventure",
+        "atmospheric",
+        "automobile-sim",
+        "controller",
+        "driving",
+        "economy",
+        "exploration",
+        "family-friendly",
+        "immersive-sim",
+        "indie",
+        "management",
+        "moddable",
+        "multiplayer",
+        "open-world",
+        "realistic",
+        "relaxing",
+        "simulation",
+        "third-person",
+        "transportation"
+      ]
+    },
+    {
+      "steam_appid": 284160,
+      "name": "BeamNG.drive",
+      "genres": [
+        "acceso-anticipado",
+        "carreras",
+        "simuladores"
+      ],
+      "tags": [
+        "action",
+        "adventure",
+        "automobile-sim",
+        "destruction",
+        "driving",
+        "early-access",
+        "exploration",
+        "first-person",
+        "flight",
+        "funny",
+        "moddable",
+        "multiplayer",
+        "open-world",
+        "physics",
+        "racing",
+        "realistic",
+        "simulation",
+        "singleplayer",
+        "third-person"
+      ]
+    },
+    {
+      "steam_appid": 244210,
+      "name": "Assetto Corsa",
+      "genres": [
+        "carreras",
+        "deportes",
+        "indie",
+        "simuladores"
+      ],
+      "tags": [
+        "3d-vision",
+        "action",
+        "artificial-intelligence",
+        "automobile-sim",
+        "controller",
+        "driving",
+        "first-person",
+        "indie",
+        "moddable",
+        "multiplayer",
+        "open-world",
+        "physics",
+        "racing",
+        "realistic",
+        "replay-value",
+        "simulation",
+        "singleplayer",
+        "sports",
+        "trackir"
+      ]
+    },
+    {
+      "steam_appid": 945360,
+      "name": "Among Us",
+      "genres": [
+        "casual"
+      ],
+      "tags": [
+        "2d",
+        "action",
+        "aliens",
+        "cartoony",
+        "co-op",
+        "colorful",
+        "funny",
+        "local-multiplayer",
+        "minigames",
+        "multiplayer",
+        "online-co-op",
+        "party-game",
+        "psychological",
+        "pvp",
+        "sci-fi",
+        "social-deduction",
+        "space",
+        "survival",
+        "top-down"
+      ]
+    },
+    {
+      "steam_appid": 367520,
+      "name": "Hollow Knight",
+      "genres": [
+        "accion",
+        "aventura",
+        "indie"
+      ],
+      "tags": [
+        "2d",
+        "action",
+        "adventure",
+        "atmospheric",
+        "controller",
+        "cute",
+        "dark-fantasy",
+        "difficult",
+        "exploration",
+        "great-soundtrack",
+        "hand-drawn",
+        "indie",
+        "multiple-endings",
+        "open-world",
+        "platformer",
+        "side-scroller",
+        "singleplayer",
+        "story-rich"
+      ]
+    },
+    {
+      "steam_appid": 1145360,
+      "name": "Hades",
+      "genres": [
+        "accion",
+        "indie",
+        "rol"
+      ],
+      "tags": [
+        "action",
+        "action-roguelike",
+        "action-rpg",
+        "atmospheric",
+        "difficult",
+        "dungeon-crawler",
+        "great-soundtrack",
+        "hack-and-slash",
+        "hand-drawn",
+        "indie",
+        "isometric",
+        "lgbtq",
+        "mythology",
+        "perma-death",
+        "replay-value",
+        "rogue-like",
+        "rogue-lite",
+        "rpg",
+        "singleplayer",
+        "story-rich"
+      ]
+    },
+    {
+      "steam_appid": 242760,
+      "name": "The Forest",
+      "genres": [
+        "accion",
+        "aventura",
+        "indie",
+        "simuladores"
+      ],
+      "tags": [
+        "action",
+        "adventure",
+        "atmospheric",
+        "building",
+        "crafting",
+        "early-access",
+        "exploration",
+        "first-person",
+        "horror",
+        "indie",
+        "open-world",
+        "open-world-survival-craft",
+        "realistic",
+        "simulation",
+        "singleplayer",
+        "survival",
+        "survival-horror"
+      ]
+    },
+    {
+      "steam_appid": 239140,
+      "name": "Dying Light",
+      "genres": [
+        "accion",
+        "aventura",
+        "rol"
+      ],
+      "tags": [
+        "action",
+        "action-rpg",
+        "first-person",
+        "hack-and-slash",
+        "horror",
+        "multiplayer",
+        "online-co-op",
+        "open-world",
+        "open-world-survival-craft",
+        "parkour",
+        "post-apocalyptic",
+        "pve",
+        "pvp",
+        "stealth",
+        "story-rich",
+        "survival",
+        "survival-horror"
+      ]
+    },
+    {
+      "steam_appid": 1687950,
+      "name": "Persona 5 Royal",
+      "genres": [
+        "rol"
+      ],
+      "tags": []
+    },
+    {
+      "steam_appid": 1174180,
+      "name": "Red Dead Redemption 2",
+      "genres": [
+        "accion",
+        "aventura"
+      ],
+      "tags": [
+        "action",
+        "adventure",
+        "atmospheric",
+        "beautiful",
+        "first-person",
+        "great-soundtrack",
+        "horses",
+        "mature",
+        "multiplayer",
+        "open-world",
+        "realistic",
+        "shooter",
+        "singleplayer",
+        "story-rich",
+        "third-person",
+        "third-person-shooter"
+      ]
+    },
+    {
+      "steam_appid": 1245620,
+      "name": "ELDEN RING",
+      "genres": [
+        "accion",
+        "rol"
+      ],
+      "tags": [
+        "3d",
+        "action",
+        "action-rpg",
+        "atmospheric",
+        "character-customization",
+        "co-op",
+        "dark-fantasy",
+        "difficult",
+        "family-friendly",
+        "fantasy",
+        "great-soundtrack",
+        "multiplayer",
+        "online-co-op",
+        "open-world",
+        "pvp",
+        "rpg",
+        "singleplayer",
+        "third-person",
+        "violent"
+      ]
+    },
+    {
+      "steam_appid": 292030,
+      "name": "The Witcher 3: Wild Hunt — Remastered",
+      "genres": [
+        "rol"
+      ],
+      "tags": [
+        "action",
+        "action-rpg",
+        "adventure",
+        "atmospheric",
+        "choices-matter",
+        "dark",
+        "dark-fantasy",
+        "fantasy",
+        "great-soundtrack",
+        "magic",
+        "mature",
+        "multiple-endings",
+        "nudity",
+        "open-world",
+        "rpg",
+        "singleplayer",
+        "story-rich",
+        "third-person"
+      ]
+    },
+    {
+      "steam_appid": 218620,
+      "name": "PAYDAY 2",
+      "genres": [
+        "accion",
+        "rol"
+      ],
+      "tags": [
+        "action",
+        "co-op",
+        "crime",
+        "first-person",
+        "funny",
+        "great-soundtrack",
+        "gun-customization",
+        "heist",
+        "looter-shooter",
+        "multiplayer",
+        "online-co-op",
+        "pve",
+        "shooter",
+        "simulation",
+        "singleplayer",
+        "stealth",
+        "strategy",
+        "tactical",
+        "team-based"
+      ]
+    },
+    {
+      "steam_appid": 236390,
+      "name": "War Thunder",
+      "genres": [
+        "accion",
+        "free-to-play",
+        "multijugador-masivo",
+        "simuladores"
+      ],
+      "tags": [
+        "action",
+        "cold-war",
+        "combat",
+        "flight",
+        "free-to-play",
+        "massively-multiplayer",
+        "military",
+        "modern",
+        "multiplayer",
+        "naval-combat",
+        "realistic",
+        "shooter",
+        "simulation",
+        "tanks",
+        "third-person",
+        "third-person-shooter",
+        "vehicular-combat",
+        "war",
+        "world-war-ii"
+      ]
+    },
+    {
+      "steam_appid": 234140,
+      "name": "Mad Max",
+      "genres": [
+        "accion",
+        "aventura"
+      ],
+      "tags": [
+        "action",
+        "adventure",
+        "atmospheric",
+        "automobile-sim",
+        "driving",
+        "exploration",
+        "multiplayer",
+        "open-world",
+        "post-apocalyptic",
+        "racing",
+        "rpg",
+        "shooter",
+        "singleplayer",
+        "story-rich",
+        "survival",
+        "third-person",
+        "third-person-shooter",
+        "vehicular-combat",
+        "war"
+      ]
+    },
+    {
+      "steam_appid": 253710,
+      "name": "theHunter Classic",
+      "genres": [
+        "accion",
+        "aventura",
+        "deportes",
+        "free-to-play",
+        "simuladores"
+      ],
+      "tags": [
+        "action",
+        "adventure",
+        "co-op",
+        "first-person",
+        "free-to-play",
+        "hunting",
+        "massively-multiplayer",
+        "multiplayer",
+        "online-co-op",
+        "open-world",
+        "realistic",
+        "shooter",
+        "simulation",
+        "singleplayer",
+        "sports",
+        "stealth",
+        "strategy",
+        "survival"
+      ]
+    },
+    {
+      "steam_appid": 304930,
+      "name": "Unturned",
+      "genres": [
+        "accion",
+        "aventura",
+        "casual",
+        "free-to-play",
+        "indie"
+      ],
+      "tags": [
+        "action",
+        "adventure",
+        "atmospheric",
+        "co-op",
+        "crafting",
+        "first-person",
+        "free-to-play",
+        "indie",
+        "looter-shooter",
+        "massively-multiplayer",
+        "multiplayer",
+        "open-world",
+        "post-apocalyptic",
+        "shooter",
+        "singleplayer",
+        "survival"
+      ]
+    },
+    {
+      "steam_appid": 620,
+      "name": "Portal 2",
+      "genres": [
+        "accion",
+        "aventura"
+      ],
+      "tags": [
+        "3d-platformer",
+        "action",
+        "action-adventure",
+        "adventure",
+        "atmospheric",
+        "co-op",
+        "comedy",
+        "dark-humor",
+        "female-protagonist",
+        "first-person",
+        "funny",
+        "level-editor",
+        "physics",
+        "platformer",
+        "puzzle",
+        "puzzle-platformer",
+        "sci-fi",
+        "science",
+        "story-rich"
+      ]
+    },
+    {
+      "steam_appid": 1794680,
+      "name": "Vampire Survivors",
+      "genres": [
+        "accion",
+        "casual",
+        "indie",
+        "rol"
+      ],
+      "tags": [
+        "1980s",
+        "2d",
+        "action",
+        "action-roguelike",
+        "action-rpg",
+        "bullet-hell",
+        "controller",
+        "dark-fantasy",
+        "indie",
+        "local-co-op",
+        "pixel-graphics",
+        "rogue-like",
+        "rogue-lite",
+        "rpg",
+        "score-attack",
+        "singleplayer",
+        "vampire"
+      ]
+    },
+    {
+      "steam_appid": 108600,
+      "name": "Project Zomboid",
+      "genres": [
+        "acceso-anticipado",
+        "indie",
+        "rol",
+        "simuladores"
+      ],
+      "tags": [
+        "2d",
+        "adventure",
+        "building",
+        "co-op",
+        "crafting",
+        "early-access",
+        "indie",
+        "isometric",
+        "multiplayer",
+        "open-world",
+        "open-world-survival-craft",
+        "post-apocalyptic",
+        "realistic",
+        "rpg",
+        "simulation",
+        "singleplayer",
+        "survival",
+        "survival-horror"
+      ]
+    },
+    {
+      "steam_appid": 221100,
+      "name": "DayZ",
+      "genres": [
+        "accion",
+        "aventura",
+        "multijugador-masivo"
+      ],
+      "tags": [
+        "action",
+        "adventure",
+        "atmospheric",
+        "choose-your-own-adventure",
+        "co-op",
+        "first-person",
+        "horror",
+        "massively-multiplayer",
+        "multiplayer",
+        "online-co-op",
+        "open-world",
+        "post-apocalyptic",
+        "pvp",
+        "shooter",
+        "simulation",
+        "survival",
+        "survival-horror"
+      ]
+    },
+    {
+      "steam_appid": 230410,
+      "name": "Warframe",
+      "genres": [
+        "accion",
+        "free-to-play",
+        "rol"
+      ],
+      "tags": [
+        "action",
+        "action-rpg",
+        "character-customization",
+        "co-op",
+        "free-to-play",
+        "hack-and-slash",
+        "looter-shooter",
+        "lore-rich",
+        "massively-multiplayer",
+        "ninja",
+        "online-co-op",
+        "parkour",
+        "pve",
+        "rpg",
+        "sci-fi",
+        "shooter",
+        "singleplayer",
+        "space",
+        "third-person",
+        "third-person-shooter"
+      ]
+    },
+    {
+      "steam_appid": 582010,
+      "name": "Monster Hunter: World",
+      "genres": [
+        "accion"
+      ],
+      "tags": [
+        "action",
+        "action-rpg",
+        "adventure",
+        "atmospheric",
+        "character-customization",
+        "co-op",
+        "difficult",
+        "exploration",
+        "fantasy",
+        "great-soundtrack",
+        "hack-and-slash",
+        "jrpg",
+        "mmorpg",
+        "multiplayer",
+        "open-world",
+        "replay-value",
+        "rpg",
+        "singleplayer",
+        "third-person"
+      ]
+    },
+    {
+      "steam_appid": 374320,
+      "name": "DARK SOULS™ III",
+      "genres": [
+        "accion"
+      ],
+      "tags": [
+        "action",
+        "action-rpg",
+        "adventure",
+        "atmospheric",
+        "character-customization",
+        "co-op",
+        "dark-fantasy",
+        "difficult",
+        "exploration",
+        "great-soundtrack",
+        "lore-rich",
+        "multiplayer",
+        "open-world",
+        "pvp",
+        "replay-value",
+        "rpg",
+        "singleplayer",
+        "story-rich",
+        "third-person"
+      ]
+    },
+    {
+      "steam_appid": 251570,
+      "name": "7 Days to Die",
+      "genres": [
+        "accion",
+        "aventura",
+        "estrategia",
+        "indie",
+        "rol",
+        "simuladores"
+      ],
+      "tags": [
+        "action",
+        "base-building",
+        "building",
+        "character-customization",
+        "exploration",
+        "horror",
+        "multiplayer",
+        "online-co-op",
+        "open-world",
+        "open-world-survival-craft",
+        "post-apocalyptic",
+        "procedural-generation",
+        "simulation",
+        "strategy",
+        "survival",
+        "tower-defense",
+        "voxel"
+      ]
+    },
+    {
+      "steam_appid": 275850,
+      "name": "No Man's Sky",
+      "genres": [
+        "accion",
+        "aventura"
+      ],
+      "tags": [
+        "action",
+        "adventure",
+        "atmospheric",
+        "crafting",
+        "exploration",
+        "first-person",
+        "indie",
+        "multiplayer",
+        "open-world",
+        "open-world-survival-craft",
+        "procedural-generation",
+        "sci-fi",
+        "simulation",
+        "singleplayer",
+        "space",
+        "space-sim",
+        "survival"
+      ]
+    },
+    {
+      "steam_appid": 307690,
+      "name": "Sleeping Dogs: Definitive Edition",
+      "genres": [
+        "accion",
+        "aventura",
+        "carreras"
+      ],
+      "tags": [
+        "action",
+        "adventure",
+        "atmospheric",
+        "crime",
+        "fighting",
+        "great-soundtrack",
+        "martial-arts",
+        "mature",
+        "multiplayer",
+        "open-world",
+        "parkour",
+        "racing",
+        "shooter",
+        "singleplayer",
+        "story-rich",
+        "third-person",
+        "third-person-shooter"
+      ]
+    },
+    {
+      "steam_appid": 228380,
+      "name": "Wreckfest",
+      "genres": [
+        "accion",
+        "carreras",
+        "deportes",
+        "indie",
+        "simuladores"
+      ],
+      "tags": []
+    },
+    {
+      "steam_appid": 1118200,
+      "name": "People Playground",
+      "genres": [
+        "accion",
+        "casual",
+        "indie",
+        "simuladores"
+      ],
+      "tags": [
+        "2d",
+        "action",
+        "blood",
+        "building",
+        "choose-your-own-adventure",
+        "comedy",
+        "destruction",
+        "funny",
+        "horror",
+        "indie",
+        "moddable",
+        "physics",
+        "pixel-graphics",
+        "psychological-horror",
+        "simulation",
+        "singleplayer",
+        "violent"
+      ]
+    },
+    {
+      "steam_appid": 291550,
+      "name": "Brawlhalla",
+      "genres": [
+        "accion",
+        "free-to-play",
+        "indie"
+      ],
+      "tags": [
+        "2d-fighter",
+        "2d-platformer",
+        "4-player-local",
+        "action",
+        "cartoony",
+        "co-op",
+        "controller",
+        "e-sports",
+        "family-friendly",
+        "fantasy",
+        "fighting",
+        "free-to-play",
+        "indie",
+        "local-co-op",
+        "local-multiplayer",
+        "multiplayer",
+        "online-co-op",
+        "platformer",
+        "singleplayer"
+      ]
+    },
+    {
+      "steam_appid": 646570,
+      "name": "Slay the Spire",
+      "genres": [
+        "estrategia",
+        "indie"
+      ],
+      "tags": [
+        "2d",
+        "card-battler",
+        "card-game",
+        "deckbuilding",
+        "difficult",
+        "dungeon-crawler",
+        "fantasy",
+        "great-soundtrack",
+        "indie",
+        "mouse-only",
+        "procedural-generation",
+        "replay-value",
+        "rogue-like",
+        "rogue-lite",
+        "roguelike-deckbuilder",
+        "rpg",
+        "singleplayer",
+        "strategy",
+        "turn-based"
+      ]
+    },
+    {
+      "steam_appid": 264710,
+      "name": "Subnautica",
+      "genres": [
+        "aventura",
+        "indie"
+      ],
+      "tags": [
+        "action",
+        "adventure",
+        "aliens",
+        "atmospheric",
+        "base-building",
+        "crafting",
+        "exploration",
+        "first-person",
+        "horror",
+        "indie",
+        "multiplayer",
+        "open-world",
+        "open-world-survival-craft",
+        "sci-fi",
+        "singleplayer",
+        "survival",
+        "survival-horror",
+        "underwater"
+      ]
+    },
+    {
+      "steam_appid": 220,
+      "name": "Half-Life 2",
+      "genres": [
+        "accion"
+      ],
+      "tags": [
+        "action",
+        "adventure",
+        "aliens",
+        "atmospheric",
+        "classic",
+        "dystopian",
+        "first-person",
+        "great-soundtrack",
+        "horror",
+        "moddable",
+        "multiplayer",
+        "physics",
+        "puzzle",
+        "sci-fi",
+        "shooter",
+        "silent-protagonist",
+        "singleplayer",
+        "story-rich"
+      ]
+    }
+  ]
+}
