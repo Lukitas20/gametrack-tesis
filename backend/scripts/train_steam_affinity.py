@@ -175,12 +175,13 @@ def train_head(partitions: dict) -> tuple[AffinityHead, dict]:
     item_scores = {name: np.array([(item_positive[row["appid"]] + 20 * prior) /
                                    (item_weight[row["appid"]] + 20) for row in rows])
                    for name, rows in partitions.items()}
-    fitted = [_fit(x, labels, c, weights) for c in (.03, .1, .3, 1., 3.)]
+    regularization_grid = (.001, .003, .01, .03, .1, .3, 1., 3.)
+    fitted = [_fit(x, labels, c, weights) for c in regularization_grid]
     vx, vy = arrays["validation"]
     # No test labels participate in model choice, threshold or activation.
     chosen = min(range(len(fitted)), key=lambda index: log_loss(vy, fitted[index].predict_features(vx), labels=[0, 1])) if len(vy) else 0
     head = fitted[chosen]
-    chosen_c = (.03, .1, .3, 1., 3.)[chosen]
+    chosen_c = regularization_grid[chosen]
     report = {}
     for name, (values, y) in arrays.items():
         report[name] = {"model": metrics(y, head.predict_features(values)),
@@ -206,7 +207,7 @@ def train_head(partitions: dict) -> tuple[AffinityHead, dict]:
         reasons.append("validation_brier_must_not_worsen_any_baseline")
     if current["roc_auc"] is None or current["roc_auc"] < .55:
         reasons.append("validation_auc_requires_0_55")
-    candidate_columns = [0, 1, 2, 3, 4, 5, 6, 12, 13, 14, 15]
+    candidate_columns = [0, 1, 2, 3, 4, 5, 6, *range(12, len(FEATURE_SCHEMA))]
     candidate_sensitivity = float(np.abs(head.coefficients[candidate_columns]).sum())
     if candidate_sensitivity < .1:
         reasons.append("learned_candidate_similarity_sensitivity_requires_0_1")

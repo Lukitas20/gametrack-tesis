@@ -31,6 +31,10 @@ FEATURE_SCHEMA = [
     "positive_available", "negative_available", "engagement_available",
     "positive_genre_cosine", "negative_genre_cosine",
     "positive_tag_cosine", "negative_tag_cosine",
+    "positive_max_squared", "negative_max_squared",
+    "positive_genre_tag_agreement", "negative_genre_tag_agreement",
+    "signed_by_positive_fraction", "signed_by_history_support",
+    "positive_peak_above_mean", "negative_peak_above_mean",
 ]
 HEADS = ("explicit", "hours")
 
@@ -147,6 +151,13 @@ def feature_matrix(
             for index, mask, weights in ((offset, positive, positive_weights), (offset + 1, negative, negative_weights)):
                 if mask.any():
                     x[:, index] = similarities[:, mask] @ weights[mask] / weights[mask].sum()
+    # Nonlinear comparisons still derive solely from real history. They let
+    # learning distinguish an isolated match from a consistent preference and
+    # agreement between genre and specific tags; they never create observations.
+    x[:, 16] = x[:, 1] ** 2; x[:, 17] = x[:, 3] ** 2
+    x[:, 18] = x[:, 12] * x[:, 14]; x[:, 19] = x[:, 13] * x[:, 15]
+    x[:, 20] = x[:, 6] * x[:, 7]; x[:, 21] = x[:, 6] * x[:, 8]
+    x[:, 22] = x[:, 1] - x[:, 0]; x[:, 23] = x[:, 3] - x[:, 2]
     coverage = np.array([sum(term in term_idf for term in game_features(game)) / max(1, len(game_features(game)))
                          for game in candidates])
     return x, {"history_games": len(useful), "maximum_overlap": similarity.max(axis=1),
