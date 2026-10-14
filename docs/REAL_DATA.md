@@ -18,6 +18,8 @@ Si no hay suficientes observaciones reales, no se fabrica ni publica un reemplaz
 
 El script `seed_data.py` fue retirado. Para importar catálogo y reseñas reales se usa
 `scripts/seed_from_steam.py`; los usuarios se registran por el acceso normal o Steam.
+También se retiraron el corpus generador y la evaluación contra etiquetas sintéticas
+del seed; `analyze_reviews.py --evaluate` rechaza ese flujo antes de abrir la base.
 
 Esto no reintegra el modelo de reseñas reales entrenado el 5 de octubre: su artefacto
 se conserva separado. No es un LLM, ni debe confundirse con el recomendador demo.

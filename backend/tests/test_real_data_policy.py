@@ -92,3 +92,17 @@ def test_demo_profiles_are_retired_even_with_valid_credentials(client, db, data)
     user = User(username='jugador.demo', hashed_password=hash_password('test-password'))
     db.add(user); db.commit()
     assert client.post('/api/v1/auth/login', json={'username':'jugador.demo','password':'test-password'}).status_code == 403
+
+
+def test_synthetic_evaluation_is_rejected_before_opening_database(monkeypatch):
+    import importlib.util
+    import sys
+    from pathlib import Path
+    path = Path(__file__).resolve().parents[1]/'scripts/analyze_reviews.py'
+    spec = importlib.util.spec_from_file_location('real_review_cli', path)
+    module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+    monkeypatch.setattr(sys, 'argv', ['analyze_reviews.py','--evaluate'])
+    monkeypatch.setattr(module, 'SessionLocal', lambda: pytest.fail('No abrir base para una evaluación retirada'))
+    with pytest.raises(SystemExit) as result:
+        module.main()
+    assert result.value.code == 2
