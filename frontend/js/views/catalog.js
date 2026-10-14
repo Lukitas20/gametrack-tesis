@@ -2,8 +2,9 @@
 
 import { api } from "../api.js";
 import { gameGrid } from "../components.js";
-import { loadCatalog, state } from "../store.js";
+import { isDeveloper, loadCatalog, state } from "../store.js";
 import { emptyState, h, magicLoader } from "../ui.js";
+import { createDeveloperCatalog } from "./developer-catalog.js";
 
 const PAGE_SIZE = 24;
 
@@ -12,6 +13,8 @@ function wait(ms) {
 }
 
 export async function catalogView({ query }) {
+  const developer = isDeveloper();
+  const renderGrid = developer ? createDeveloperCatalog() : gameGrid;
   const filters = {
     search: query.get("q") || "",
     genre: query.get("genero") || "",
@@ -173,7 +176,7 @@ export async function catalogView({ query }) {
         ? `${total} juego${total === 1 ? "" : "s"}`
         : "Sin resultados";
 
-      const grid = gameGrid(page.items);
+      const grid = renderGrid(page.items);
       if (append && results.firstChild) {
         const existing = results.querySelector(".game-grid");
         for (const child of [...grid.children]) existing.appendChild(child);
@@ -228,9 +231,9 @@ export async function catalogView({ query }) {
       h(
         "div",
         null,
-        h("p", { class: "eyebrow" }, "Catálogo"),
-        h("h1", null, "Explorar juegos"),
-        h("p", null, "Buscá arriba, en el header, o filtrá por género y etiquetas."),
+        h("p", { class: "eyebrow" }, developer ? "Catálogo del desarrollador" : "Catálogo"),
+        h("h1", null, developer ? "Investigar y comparar juegos" : "Explorar juegos"),
+        h("p", null, developer ? "Tocá un juego para ver su recepción y compararlo con un título de tu estudio. Podés elegir qué métricas mostrar." : "Buscá arriba, en el header, o filtrá por género y etiquetas."),
       ),
       count,
     ),
