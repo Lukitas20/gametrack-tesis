@@ -165,12 +165,13 @@ usuarios, reseñas ni valoraciones existentes. Este despliegue propone conservar
 
 ### 4. Entrenar y activar el modelo
 
-Entrenar contra la base nueva usando la etiqueta correcta de procedencia.
-`demo` corresponde a valoraciones sintéticas; `observed` sólo a datos reales.
+Entrenar exclusivamente con observaciones reales. `demo` está prohibido y el
+entrenador rechaza perfiles sintéticos y artefactos anteriores sin procedencia
+verificada. No cambiar la etiqueta de un artefacto antiguo para activarlo.
 
 ```bash
-export MODEL_VERSION="demo-$(date -u +%Y%m%d%H%M%S)"
-python3 deploy/google-cloud/settings.py --training-version="$MODEL_VERSION" --data-label=demo
+export MODEL_VERSION="observed-$(date -u +%Y%m%d%H%M%S)"
+python3 deploy/google-cloud/settings.py --training-version="$MODEL_VERSION" --data-label=observed
 terraform -chdir=deploy/google-cloud apply
 gcloud run jobs execute gametrack-train --project="$PROJECT_ID" --region="$REGION" --wait
 python3 deploy/google-cloud/settings.py --model-version="$MODEL_VERSION"

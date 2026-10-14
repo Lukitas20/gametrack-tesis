@@ -27,13 +27,12 @@ import { discoverySection } from "./gametrack-score.js?v=score-explainer-1";
 
 import { loadHomeCollections } from "./home-sections.js";
 
-const STRATEGIES = ["auto", "ia_local", "hibrido", "contenido", "colaborativo", "popularidad"];
-const COMPARABLE = ["ia_local", "hibrido", "contenido", "colaborativo", "popularidad"];
+const STRATEGIES = ["auto", "hibrido", "contenido", "colaborativo", "popularidad"];
+const COMPARABLE = ["hibrido", "contenido", "colaborativo", "popularidad"];
 
 /** Explicación de cada estrategia, para que la demo se sostenga sola. */
 const STRATEGY_NOTE = {
   auto: "Elige la estrategia según cuánto historial tenga el usuario.",
-  ia_local: "Patrones aprendidos de valoraciones. Usa tus notas actuales y se apoya en contenido cuando faltan datos.",
   hibrido:
     "Combina afinidad de contenido y patrones de valoraciones. El aporte colaborativo depende de la evidencia disponible.",
   contenido:
@@ -119,17 +118,6 @@ export async function recommendationsView({ query } = { query: new URLSearchPara
   const meta = h("div", { class: "row", style: { gap: "var(--s-2)" } });
   const note = h("p", { class: "muted", style: { fontSize: "var(--fs-sm)", marginTop: "var(--s-3)" } });
   const profileHint = h("p", { class: "discovery-profile-hint" });
-  const modelNote = h("p", { class: "local-model-note" });
-  function describeModel(model = {}) {
-    if (["ready", "stale"].includes(model.status)) {
-      modelNote.textContent = `IA local · Entrenada con ${model.ratings} valoraciones de ${model.users} jugadores y ${model.games} juegos. `
-        + (model.data_label === "demo" ? "Datos sintéticos de demostración; todavía no miden gustos de jugadores reales. " : "Datos declarados como observados. ")
-        + (!model.automatic_eligible ? "Disponible para comparar en IA local; aún no habilitado en automático porque no superó la validación frente a la referencia. " : "")
-        + (model.status === "stale" ? "Tus notas actuales ya se usan; hay cambios pendientes de incorporar al entrenamiento general." : "");
-    } else {
-      modelNote.textContent = "El modelo local todavía no está disponible para estos datos. Podés seguir descubriendo juegos por tus gustos, contenido y popularidad.";
-    }
-  }
   const varietyNote = h("p", { class: "discovery-control-note" });
   const variety = h("div", { class: "segmented", role: "group", "aria-label": "Variedad de recomendaciones" },
     DISCOVERY.map(([key, label]) => h("button", { onClick: () => {
@@ -198,7 +186,6 @@ export async function recommendationsView({ query } = { query: new URLSearchPara
     try {
       const response = await api.recommendations(strategy, 12, discovery);
       if (version !== requestVersion) return;
-      describeModel(response.local_model);
       profileHint.textContent = response.profile_hint || "Una selección a partir de tus gustos y valoraciones.";
       const parts = [
         h(
@@ -246,7 +233,6 @@ export async function recommendationsView({ query } = { query: new URLSearchPara
         COMPARABLE.map((key) => api.recommendations(key, 6, discovery)),
       );
       if (version !== requestVersion) return;
-      describeModel(responses[0]?.local_model);
       profileHint.textContent = "Explorá cómo cambia la selección con cada estrategia. Todas usan el mismo perfil y ajuste de variedad.";
 
       const columns = COMPARABLE.map((key, index) => {
@@ -407,7 +393,7 @@ export async function recommendationsView({ query } = { query: new URLSearchPara
     ),
     h("details", { class: "recommendation-lab", open: comparing || strategy !== "auto" },
       h("summary", null, icon("chart", 15), "Ajustes de recomendaciones"),
-      meta, profileHint, modelNote, varietyNote, h("div", { class: "filter-bar" }, segmented, compareButton), note),
+      meta, profileHint, varietyNote, h("div", { class: "filter-bar" }, segmented, compareButton), note),
     body),
     sections,
   );

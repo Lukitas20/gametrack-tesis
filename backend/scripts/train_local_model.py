@@ -1,4 +1,4 @@
-"""Entrenar IA local: python scripts/train_local_model.py --data-label demo.
+"""Entrenar IA local: python scripts/train_local_model.py --data-label observed.
 
 Usar --data-label observed sólo con notas de participantes reales. La etiqueta
 documenta procedencia declarada; no convierte datos sintéticos en datos reales.
@@ -17,7 +17,7 @@ from app.ml.local_model import train_and_save
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--data-label", required=True, choices=("demo", "observed"))
+    parser.add_argument("--data-label", required=True, choices=("observed",))
     parser.add_argument("--factors", type=int, default=12)
     parser.add_argument("--epochs", type=int, default=100)
     parser.add_argument("--output", type=Path, default=Path(settings.LOCAL_MODEL_PATH))

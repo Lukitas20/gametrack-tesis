@@ -71,14 +71,12 @@ from sqlalchemy import func, select  # noqa: E402
 from sqlalchemy.orm import Session  # noqa: E402
 
 from app.core.config import DATA_DIR  # noqa: E402
-from app.core.security import hash_password  # noqa: E402
 from app.db.base import SessionLocal, drop_db, init_db  # noqa: E402
 from app.ml.analytics import analyze_review, apply_analysis  # noqa: E402
-from app.models import Game, Genre, Review, Tag, User, UserRole  # noqa: E402
+from app.models import Game, Genre, Review, Tag  # noqa: E402
 from app.services import steam_service  # noqa: E402
 from app.services.interaction_service import recompute_game_aggregates  # noqa: E402
 
-DEMO_PASSWORD = "demo1234"
 DEFAULT_COUNT = 150
 DEFAULT_DELAY = 1.5
 SNAPSHOT_PATH = DATA_DIR / "steam_catalog.json"
@@ -261,37 +259,6 @@ def seed_catalog(db: Session, games_data: list[dict[str, Any]]) -> tuple[int, in
     return games_imported, reviews_imported
 
 
-def seed_demo_accounts(db: Session, studio: str | None) -> None:
-    """Dos cuentas para poder entrar a la demo, sin historial fabricado.
-
-    ``jugador.demo`` arranca igual que cualquier cuenta recién creada: es el
-    arranque en frío real, no una simulación de uno. El estudio de
-    ``dev.demo`` se elige entre los juegos efectivamente importados para que
-    el panel de analítica no quede vacío.
-    """
-    password_hash = hash_password(DEMO_PASSWORD)
-    db.add_all(
-        [
-            User(
-                username="jugador.demo",
-                email="jugador.demo@gametrack.app",
-                hashed_password=password_hash,
-                full_name="Cuenta Demo Jugador",
-                role=UserRole.PLAYER,
-            ),
-            User(
-                username="dev.demo",
-                email="dev.demo@gametrack.app",
-                hashed_password=password_hash,
-                full_name="Cuenta Demo Desarrollador",
-                role=UserRole.DEVELOPER,
-                studio=studio,
-            ),
-        ]
-    )
-    db.commit()
-
-
 def most_reviewed_developer(db: Session) -> str | None:
     """El estudio con más reseñas reales acumuladas, no con más juegos.
 
@@ -362,17 +329,13 @@ def main() -> int:
         reviews_count = db.scalar(select(func.count(Review.id))) or 0
         studio = most_reviewed_developer(db)
 
-        if (db.scalar(select(func.count(User.id))) or 0) == 0:
-            print("Creando cuentas de demostración (sin historial: arranque en frío real)...")
-            seed_demo_accounts(db, studio)
-
         print()
         print(f"Catálogo poblado con datos reales de Steam (fuente: {args.source}):")
         print(f"  juegos nuevos en esta corrida: {games_imported}")
         print(f"  reseñas nuevas en esta corrida: {reviews_imported}")
         print(f"  juegos totales en el catálogo: {games_count}")
         print(f"  reseñas reales totales: {reviews_count}")
-        print(f"  estudio de dev.demo: {studio or '(ninguno)'}")
+        print(f"  estudio con más reseñas: {studio or '(ninguno)'}")
         return 0
     finally:
         db.close()

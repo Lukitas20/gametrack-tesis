@@ -1,5 +1,8 @@
 # Registro de la instalación en Google Cloud
 
+> Registro histórico. El 14/10/2026 se retiró de uso el modelo demo descrito
+> abajo. La política vigente admite sólo datos reales; ver `docs/REAL_DATA.md`.
+
 Fecha: 7 de octubre de 2026. Proyecto: `gametrack-510920`.
 Región: `us-central1`.
 

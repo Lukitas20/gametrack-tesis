@@ -35,6 +35,9 @@ def get_current_user(
     user = get_user(db, user_id)
     if user is None or not user.is_active:
         raise unauthorized
+    from app.db.real_data import is_synthetic_profile
+    if is_synthetic_profile(user):
+        raise HTTPException(403, "Este perfil sintético fue retirado. Iniciá sesión con tu cuenta personal o Steam.")
     return user
 
 

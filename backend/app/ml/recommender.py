@@ -844,8 +844,6 @@ class RecommenderEngine:
             if local_weight[index] > 0:
                 item_source = RecommendationSource.LOCAL if strategy == "ia_local" else RecommendationSource.HYBRID
                 signals.insert(0, "Modelo entrenado localmente con valoraciones; ajustado a tus notas actuales")
-                if self.local_model_status.get("data_label") == "demo":
-                    signals.append("El modelo actual se entrenó con datos de demostración")
             results.append(
                 Recommendation(
                     game_id=game_id,

@@ -20,7 +20,7 @@ def evidence(db, data):
                       published_at=datetime(2024, 2, 1, 23, 59, tzinfo=timezone.utc), helpful_count=9)
     positive.aspects = [ReviewAspect(game_id=data['breve'].id, aspect=Aspect.PERFORMANCE,
                                     sentiment=Sentiment.NEGATIVE, score=-.8, evidence='el rendimiento es pésimo')]
-    negative = Review(game_id=data['largo'].id, source='user', content='No me gusta pero el rendimiento es excelente.',
+    negative = Review(game_id=data['largo'].id, user_id=data['player'].id, source='user', content='No me gusta pero el rendimiento es excelente.',
                       sentiment=Sentiment.NEGATIVE, is_analyzed=True,
                       created_at=datetime(2024, 2, 2, tzinfo=timezone.utc), helpful_count=1)
     negative.aspects = [ReviewAspect(game_id=data['largo'].id, aspect=Aspect.PERFORMANCE,

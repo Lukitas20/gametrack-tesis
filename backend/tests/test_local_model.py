@@ -66,8 +66,8 @@ def test_datos_insuficientes_no_inventan_entrenamiento(db, catalog, tmp_path):
 def test_artefacto_integrado_aportes_y_notas_actuales(db, populated, tmp_path, monkeypatch):
     path = tmp_path / "local.npz"
     monkeypatch.setattr(settings, "LOCAL_MODEL_PATH", str(path))
-    report = train_and_save(db, path, data_label="demo", epochs=30)
-    assert report["data_label"] == "demo" and report["ratings"] == 60
+    report = train_and_save(db, path, data_label="observed", epochs=30)
+    assert report["data_label"] == "observed" and report["ratings"] == 60
     model, state = load_for_database(db)
     assert model is not None and state["status"] == "ready"
     user = populated["users"]["rpg0"]
@@ -92,7 +92,7 @@ def test_artefacto_integrado_aportes_y_notas_actuales(db, populated, tmp_path, m
     assert recs and recs[0].source == RecommendationSource.LOCAL
     assert recs[0].score == pytest.approx(sum(recs[0].components.values()))
     assert "ia_local" in recs[0].components
-    assert any("demostración" in text for text in recs[0].signals)
+    assert not any("demostración" in text for text in recs[0].signals)
 
 
 def test_falta_de_artefacto_tiene_respaldo_sin_atribuir_ia(db, populated, tmp_path, monkeypatch):
@@ -107,7 +107,7 @@ def test_falta_de_artefacto_tiene_respaldo_sin_atribuir_ia(db, populated, tmp_pa
 def test_catalogo_incompatible_no_reutiliza_ids(db, populated, tmp_path, monkeypatch):
     path = tmp_path / "model.npz"
     monkeypatch.setattr(settings, "LOCAL_MODEL_PATH", str(path))
-    train_and_save(db, path, data_label="demo", epochs=5)
+    train_and_save(db, path, data_label="observed", epochs=5)
     populated["games"]["rpg-uno"].slug = "otro-juego"
     db.commit()
     model, status = load_for_database(db)
@@ -153,7 +153,7 @@ def test_activacion_automatica_respeta_validacion_del_artefacto(
     game = populated["games"]["rpg-tres"]
     db.delete(db.query(Rating).filter_by(user_id=user.id, game_id=game.id).one())
     db.commit()
-    train_and_save(db, path, data_label="demo", epochs=5)
+    train_and_save(db, path, data_label="observed", epochs=5)
     # La prueba aísla el contrato del gate; no ajusta el entrenamiento para
     # fabricar un resultado favorable en los datos de demostración.
     model = LocalModel.load(path)

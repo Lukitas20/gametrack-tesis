@@ -20,6 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.db.real_data import DATA_POLICY
 from app.models import Game, Rating, User, UserRole
 
 VERSION = 1
@@ -184,8 +185,8 @@ def evaluate(train: list, test: list, *, factors: int = 12, epochs: int = 100) -
 
 def train_and_save(db: Session, path: Path, *, data_label: str,
                    factors: int = 12, epochs: int = 100) -> dict:
-    if data_label not in {"demo", "observed"}:
-        raise ValueError("Identificá los datos como demo u observed")
+    if data_label != "observed":
+        raise ValueError("Sólo se permite entrenar con datos reales (observed); los datos sintéticos están prohibidos")
     rows, slugs = read_training_data(db)
     if len(rows) < 20 or len({u for u, _, _ in rows}) < 3 or len({g for _, g, _ in rows}) < 3:
         raise ValueError("Se necesitan al menos 20 notas, 3 jugadores y 3 juegos; no se fabrican valoraciones")
@@ -202,7 +203,7 @@ def train_and_save(db: Session, path: Path, *, data_label: str,
     model = fit(rows, factors=factors, epochs=epochs)
     model.metadata.update(database_key=database_key(db), fingerprint=fingerprint(rows),
                           slugs={str(int(gid)): slugs[int(gid)] for gid in model.game_ids},
-                          data_label=data_label, trained_at=datetime.now(timezone.utc).isoformat(),
+                          data_label=data_label, data_policy=DATA_POLICY, trained_at=datetime.now(timezone.utc).isoformat(),
                           evaluation=report, automatic_eligible=automatic_eligible)
     model.save(path)
     summary = {k: v for k, v in model.metadata.items() if k not in {"slugs", "database_key", "fingerprint"}}
@@ -223,6 +224,8 @@ def load_for_database(db: Session) -> tuple[LocalModel | None, dict]:
     try:
         stat = path.stat()
         model = _read_artifact(str(path), stat.st_mtime_ns, stat.st_size)
+        if model.metadata.get("data_label") != "observed" or model.metadata.get("data_policy") != DATA_POLICY:
+            return None, {"status": "blocked_provenance", "data_label": None, "automatic_eligible": False}
         if model.metadata.get("database_key") != database_key(db):
             return None, {"status": "different_database", "data_label": None}
         rows, slugs = read_training_data(db)

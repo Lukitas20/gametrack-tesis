@@ -15,7 +15,7 @@ export function developerReviewsPanel(scope, games = []) {
   const game=select("Juego de las reseñas",[["","Todos los juegos"],...games.map(g=>[String(g.id),g.nombre])]);
   const aspect=select("Aspecto de las reseñas",[["","Todos los aspectos"],...Object.entries(ASPECT_LABEL)]);
   const sentiment=select("Sentimiento de las reseñas",[["","Todos los sentimientos"],...Object.entries(SENTIMENT_LABEL)]);
-  const source=select("Fuente de las reseñas",[["","Todas las fuentes"],["steam","Steam"],["user","GameTrack"],["seed","Demostración"]]);
+  const source=select("Fuente de las reseñas",[["","Todas las fuentes reales"],["steam","Steam"],["user","GameTrack"]]);
   const sort=select("Orden de las reseñas",[["newest","Más recientes"],["oldest","Más antiguas"],["helpful","Más útiles"]]);
   const from=h("input",{type:"date","aria-label":"Reseñas desde",max:"9999-12-30"});
   const to=h("input",{type:"date","aria-label":"Reseñas hasta",max:"9999-12-30"});

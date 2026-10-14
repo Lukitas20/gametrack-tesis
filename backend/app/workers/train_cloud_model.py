@@ -38,7 +38,7 @@ def upload_artifact(client: httpx.Client, *, bucket: str, version: str,
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--data-label", required=True, choices=("demo", "observed"))
+    parser.add_argument("--data-label", required=True, choices=("observed",))
     parser.add_argument("--version", required=True, type=validate_version)
     args = parser.parse_args(argv)
     bucket = os.environ.get("MODEL_BUCKET", "")

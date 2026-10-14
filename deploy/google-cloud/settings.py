@@ -13,7 +13,7 @@ def main(argv=None):
     parser.add_argument("--image")
     parser.add_argument("--model-version")
     parser.add_argument("--training-version")
-    parser.add_argument("--data-label", choices=("demo", "observed"))
+    parser.add_argument("--data-label", choices=("observed",))
     for field in ("jobs", "web", "scheduler"):
         parser.add_argument(f"--enable-{field}", action="store_const", const=True, default=None)
     args = parser.parse_args(argv)

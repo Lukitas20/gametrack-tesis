@@ -1,5 +1,11 @@
 # GameTrack
 
+**Política vigente: sólo datos reales.** Desde el 14/10/2026 se retiraron el
+modelo sintético, los perfiles generados y su uso en métricas o recomendaciones.
+El generador demo histórico ya no se puede ejecutar. Consultá
+[la política de procedencia](docs/REAL_DATA.md); las secciones históricas de
+evaluación demo no describen la versión operativa actual.
+
 **Plataforma inteligente de recomendación y análisis de videojuegos basada en
 comportamiento de usuarios y reseñas.**
 
@@ -75,7 +81,7 @@ py -3 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
 
 # 2. Poblar una base nueva con el dataset de demostración
-.\.venv\Scripts\python.exe scripts\seed_data.py
+.\.venv\Scripts\python.exe scripts\seed_from_steam.py
 
 # 3. Analizar las reseñas con el módulo NLP
 .\.venv\Scripts\python.exe scripts\analyze_reviews.py

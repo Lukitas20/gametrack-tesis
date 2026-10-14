@@ -42,6 +42,14 @@ class Base(DeclarativeBase):
     """Clase base declarativa para todos los modelos."""
 
 
+@event.listens_for(Session, "do_orm_execute")
+def real_data_only(execute_state):
+    if (execute_state.is_select and execute_state.is_orm_statement
+            and not execute_state.is_column_load and not execute_state.is_relationship_load):
+        from app.db.real_data import install_real_data_policy
+        execute_state.statement = install_real_data_policy(execute_state.statement)
+
+
 def get_db() -> Generator[Session, None, None]:
     """Dependencia de FastAPI que provee una sesión por request."""
     db = SessionLocal()

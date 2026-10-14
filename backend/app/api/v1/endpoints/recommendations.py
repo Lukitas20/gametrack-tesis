@@ -105,7 +105,7 @@ def get_recommendations(
     company: Literal["solo", "amigos", "en-linea"] | None = None,
     strategy: str = Query(
         default="auto",
-        pattern="^(auto|contenido|colaborativo|hibrido|popularidad|ia_local)$",
+        pattern="^(auto|contenido|colaborativo|hibrido|popularidad)$",
         description=(
             "'auto' elige según el historial del usuario. Forzar una estrategia "
             "permite comparar los enfoques entre sí."

@@ -12,6 +12,8 @@ def main():
     parser.add_argument("--url", required=True)
     parser.add_argument("--demo", action="store_true", help="Probar las cuentas demo existentes")
     args = parser.parse_args()
+    if args.demo:
+        parser.error("Los perfiles sintéticos fueron retirados; ejecutar sin --demo.")
     origin = args.url.rstrip("/")
     parsed = urlparse(origin)
     if parsed.scheme != "https" or not parsed.hostname or parsed.path:

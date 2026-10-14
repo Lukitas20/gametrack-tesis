@@ -10,14 +10,11 @@ import {
   start,
 } from "./router.js";
 import {
-  DEMO_ACCOUNTS,
-  DEMO_PASSWORD,
   completeSteamLogin,
   displayName,
   loginDestination,
   isDeveloper,
   isLoggedIn,
-  login,
   logout,
   restore,
   state,
@@ -184,40 +181,6 @@ function accountMenu() {
   const menu = h("div", { class: "menu", role: "menu" });
 
   menu.append(
-    h("div", { class: "menu-label" }, "Perfiles de demostración"),
-    ...DEMO_ACCOUNTS.map((account) =>
-      h(
-        "button",
-        {
-          class: "menu-item",
-          role: "menuitem",
-          "aria-current": String(state.user?.username === account.username),
-          onClick: async () => {
-            closeMenu();
-            try {
-              const user = await login(account.username, DEMO_PASSWORD);
-              toast(`Ahora sos ${user.username}`);
-              navigate(homePath());
-            } catch (error) {
-              toast(error.message, "error");
-            }
-          },
-        },
-        h("span", { class: "avatar" }, initials(account.username)),
-        h(
-          "span",
-          { style: { flex: "1", minWidth: "0" } },
-          h("span", { style: { display: "block", fontWeight: "600" } }, account.label),
-          h(
-            "span",
-            { class: "account-note", style: { display: "block" } },
-            account.username,
-          ),
-        ),
-        state.user?.username === account.username ? icon("check", 14) : null,
-      ),
-    ),
-    h("div", { class: "menu-sep" }),
     h(
       "a",
       { class: "menu-item", href: "#/cuentas", onClick: closeMenu },

@@ -1,5 +1,5 @@
 import { navigate } from "../router.js";
-import { DEMO_ACCOUNTS, DEMO_PASSWORD, login, register, loginDestination, displayName } from "../store.js";
+import { login, register, loginDestination, displayName } from "../store.js";
 import { h, icon, toast } from "../ui.js";
 
 function steamIcon() {
@@ -84,12 +84,6 @@ export function accountsView({ query = new URLSearchParams() } = {}) {
       field("Contraseña", password, h("div", { class: "auth-password-wrap" }, password, reveal)),
       creating && h("div", null, strength, h("p", { class: "auth-field-help", id: "auth-password-help" }, "Usá al menos 8 caracteres; una frase larga es mejor.")),
       creating && field("Confirmá tu contraseña", confirm), submit);
-    const demos = h("details", { class: "auth-demo" }, h("summary", null, "Probar una cuenta demo", icon("chevronDown", 13)), h("p", null, "Explorá con un perfil de demostración:"));
-    for (const account of DEMO_ACCOUNTS) demos.append(h("button", { type: "button", onClick: async (event) => {
-      if (busy) return; busy = true; const button = event.currentTarget; button.disabled = true;
-      try { const user = await login(account.username, DEMO_PASSWORD); navigate(loginDestination(user)); }
-      catch (failure) { report(failure.message); } finally { busy = false; button.disabled = false; }
-    } }, account.role === "desarrollador" ? "Desarrollador" : account.username === "nuevo.demo" ? "Jugador nuevo" : "Jugador", icon("chevron", 13)));
     panel.replaceChildren(tabs,
       h("div", { class: "auth-form-heading" },
         h("h2", { id: "auth-title", tabindex: "-1" }, creating ? "Creá tu cuenta" : "Bienvenido de nuevo")),
@@ -98,7 +92,7 @@ export function accountsView({ query = new URLSearchParams() } = {}) {
         error.hidden = true;
       } }, steamIcon(), h("span", null, "Continuar con Steam"), icon("chevron", 17)),
       h("div", { class: "auth-divider" }, h("span", null, "o con tu usuario")),
-      error, form, demos);
+      error, form);
 
   }
   renderForm();

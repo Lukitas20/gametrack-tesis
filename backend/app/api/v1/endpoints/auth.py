@@ -30,6 +30,9 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 def _token_for(user: User) -> Token:
+    from app.db.real_data import is_synthetic_profile
+    if is_synthetic_profile(user):
+        raise HTTPException(403, "Este perfil sintético fue retirado. Iniciá sesión con tu cuenta personal o Steam.")
     access_token = create_access_token({"sub": str(user.id), "role": user.role.value})
     return Token(access_token=access_token, user=UserResponse.model_validate(user))
 

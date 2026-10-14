@@ -47,6 +47,8 @@ async def lifespan(app: FastAPI):
 
     db = SessionLocal()
     try:
+        from app.db.real_data import refresh_legacy_aggregates
+        refresh_legacy_aggregates(db)
         get_engine(db)
     finally:
         db.close()

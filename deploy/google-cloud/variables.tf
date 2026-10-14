@@ -39,10 +39,10 @@ variable "model_version" {
 }
 variable "model_data_label" {
   type    = string
-  default = "demo"
+  default = "observed"
   validation {
-    condition     = contains(["demo", "observed"], var.model_data_label)
-    error_message = "Indicar demo u observed según la procedencia real."
+    condition     = var.model_data_label == "observed"
+    error_message = "Sólo se permiten datos reales (observed)."
   }
 }
 variable "billing_account_id" {

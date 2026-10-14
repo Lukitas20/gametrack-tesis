@@ -4,30 +4,6 @@ import { api, setToken } from "./api.js";
 
 const STORAGE_KEY = "gametrack.session";
 
-/** Cuentas creadas por el seed, para poder cambiar de rol en la demo. */
-export const DEMO_ACCOUNTS = [
-  {
-    username: "jugador.demo",
-    label: "Cuenta Demo Jugador",
-    role: "jugador",
-    note: "Recomendaciones según tus géneros y valoraciones. Probá IA local y compará estrategias.",
-  },
-  {
-    username: "nuevo.demo",
-    label: "Jugador nuevo",
-    role: "jugador",
-    note: "Perfil del dataset demo sin valoraciones iniciales: permite probar el arranque en frío.",
-  },
-  {
-    username: "dev.demo",
-    label: "Cuenta Demo Desarrollador",
-    role: "desarrollador",
-    note: "Panel de analítica del estudio con más juegos importados de Steam.",
-  },
-];
-
-export const DEMO_PASSWORD = "demo1234";
-
 const listeners = new Set();
 
 export const state = {
