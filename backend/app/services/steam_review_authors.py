@@ -103,8 +103,16 @@ def repair_game_authors(db, game, *, max_pages: int = 5, delay: float = 1.0) -> 
         return report
     dated = [r.published_at.replace(tzinfo=timezone.utc).timestamp() for r in pending.values()
              if r.published_at is not None]
-    start = int(min(dated)) if len(dated) == len(pending) else None
-    end = int(max(dated)) if start is not None else None
+    if len(dated) == len(pending):
+        start, end = int(min(dated)), int(max(dated))
+    else:
+        # Una reseña ya existía al importarla. Esa fecha sólo acota la
+        # búsqueda: NO se presenta ni guarda como fecha de publicación.
+        # Evita recorrer semanas de reseñas nuevas para reparar una muestra
+        # histórica que originalmente se tomó de las más recientes.
+        bounds = [(r.published_at or r.created_at).replace(tzinfo=timezone.utc).timestamp()
+                  for r in pending.values() if r.published_at or r.created_at]
+        start, end = (946684800, int(max(bounds))) if bounds else (None, None)
     cursor, seen = "*", set()
     for _ in range(max(0, min(max_pages, 100))):
         if cursor in seen:

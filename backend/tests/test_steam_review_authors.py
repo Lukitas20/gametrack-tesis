@@ -183,6 +183,19 @@ def test_internal_author_identity_is_not_exposed_in_review_response(db):
     assert "steam_author_id" not in response and "steam_review_id" not in response
 
 
+def test_legacy_lookup_bounds_by_import_time_without_inventing_publication_date(db, monkeypatch):
+    item = game(db)
+    row = review(db, item, published_at=None)
+    calls = []
+    def page(appid, cursor, **kwargs):
+        calls.append(kwargs)
+        return ([], None)
+    monkeypatch.setattr(authors, "_review_page", page)
+    authors.repair_game_authors(db, item, delay=0)
+    assert calls == [{"start": 946684800, "end": int(row.created_at.replace(tzinfo=timezone.utc).timestamp())}]
+    assert row.published_at is None
+
+
 @pytest.mark.parametrize("value", [None, {}, {"personaname": None}, {"personaname": 123}, {"personaname": " \u0000\n "}])
 def test_public_names_do_not_invent_identity(value):
     assert authors.public_name(value or {}) is None
