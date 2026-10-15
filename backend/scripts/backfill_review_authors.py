@@ -26,6 +26,8 @@ def main() -> int:
     parser.add_argument("--limit", type=int, default=200)
     parser.add_argument("--max-pages", type=int, default=10)
     parser.add_argument("--game-id", type=int)
+    parser.add_argument("--after-game-id", type=int, default=0,
+                        help="Continúa el lote posterior al último game_id informado")
     args = parser.parse_args()
     if not (1 <= args.limit <= 10000 and 1 <= args.max_pages <= 100):
         parser.error("limit debe ser 1..10000 y max-pages 1..100")
@@ -33,7 +35,7 @@ def main() -> int:
                Review.author_name.in_(UNKNOWN_NAMES), Review.author_name == ""))
     report = {"operation": "steam_review_authors", "audit": args.audit,
               "games_processed": 0, "examined": 0, "names_recovered": 0,
-              "identities_recovered": 0, "pages": 0}
+              "identities_recovered": 0, "pages": 0, "last_game_id": args.after_game_id}
     try:
         with SessionLocal() as db:
             report["missing_before"] = db.scalar(select(func.count(Review.id)).where(*pending)) or 0
@@ -42,8 +44,8 @@ def main() -> int:
                 if not settings.STEAM_API_KEY:
                     print(json.dumps({**report, "result": "steam_key_unavailable"}), flush=True)
                     return 1
-                query = select(Game).where(Game.steam_app_id.is_not(None),
-                    Game.id.in_(select(Review.game_id).where(*pending))).order_by(Game.ratings_count.desc(), Game.id)
+                query = select(Game).where(Game.steam_app_id.is_not(None), Game.id > args.after_game_id,
+                    Game.id.in_(select(Review.game_id).where(*pending))).order_by(Game.id)
                 if args.game_id:
                     query = query.where(Game.id == args.game_id)
                 games = list(db.scalars(query.limit(args.limit)))
@@ -53,6 +55,7 @@ def main() -> int:
                     for key in ("examined", "names_recovered", "identities_recovered", "pages"):
                         report[key] += result[key]
                     report["games_processed"] += 1
+                    report["last_game_id"] = game.id
                     if report["games_processed"] % 10 == 0:
                         print(json.dumps({**report, "result": "progress"}), flush=True)
                     time.sleep(1)
