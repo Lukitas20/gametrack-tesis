@@ -134,7 +134,8 @@ def fetch_catalog_from_steam(count: int, delay: float) -> list[dict[str, Any]]:
             reviews.append(
                 {
                     "steam_review_id": str(entry["recommendationid"]),
-                    "author_name": profile.get("personaname") or "Jugador de Steam",
+                    "author_name": steam_service.public_name(profile),
+                    "steam_author_id": steam_service.author_id(entry),
                     "content": text[:8000],
                     "is_recommended": entry.get("voted_up"),
                     "hours_at_review": round(playtime_minutes / 60, 1),
@@ -245,7 +246,8 @@ def seed_catalog(db: Session, games_data: list[dict[str, Any]]) -> tuple[int, in
                 hours_at_review=review_data.get("hours_at_review"),
                 helpful_count=review_data.get("helpful_count", 0),
                 source="steam",
-                author_name=review_data.get("author_name") or "Jugador de Steam",
+                author_name=review_data.get("author_name"),
+                steam_author_id=review_data.get("steam_author_id"),
                 steam_review_id=review_data["steam_review_id"],
             )
             db.add(review)

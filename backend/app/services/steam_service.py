@@ -31,6 +31,7 @@ from app.services.interaction_service import (
     recompute_median_review_hours,
 )
 from app.services.steam_media import extract_screenshots
+from app.services.steam_review_authors import author_id, hydrate_authors, missing_author, public_name
 
 TIMEOUT = 15.0
 
@@ -482,21 +483,33 @@ def get_review_totals(steam_app_id: int) -> tuple[int, int] | None:
 
 
 def get_player_summaries_batch(steam_ids: list[str]) -> dict[str, dict]:
-    """Perfiles públicos de varias cuentas en un único pedido (máx. 100)."""
+    """Perfiles públicos, deduplicados y pedidos en lotes de hasta 100."""
     if not settings.STEAM_API_KEY or not steam_ids:
         return {}
-    try:
-        response = _http_client().get(
-            f"{settings.STEAM_API_BASE}/ISteamUser/GetPlayerSummaries/v2/",
-            params={"key": settings.STEAM_API_KEY, "steamids": ",".join(steam_ids[:100])},
-        )
-    except httpx.HTTPError:
-        return {}
-
-    if response.status_code != 200:
-        return {}
-    players = response.json().get("response", {}).get("players", [])
-    return {player["steamid"]: player for player in players if player.get("steamid")}
+    ids = list(dict.fromkeys(str(value) for value in steam_ids
+                            if str(value).isascii() and str(value).isdigit()
+                            and 1 <= len(str(value)) <= 32))
+    result = {}
+    for start in range(0, len(ids), 100):
+        batch = ids[start:start + 100]
+        try:
+            response = _http_client().get(
+                f"{settings.STEAM_API_BASE}/ISteamUser/GetPlayerSummaries/v2/",
+                params={"key": settings.STEAM_API_KEY, "steamids": ",".join(batch)},
+            )
+            if response.status_code != 200:
+                break  # No insistir ante un límite o caída del servicio.
+            payload = response.json()
+        except (httpx.HTTPError, ValueError):
+            break
+        body = payload.get("response") if isinstance(payload, dict) else None
+        players = body.get("players") if isinstance(body, dict) else None
+        if not isinstance(players, list):
+            break
+        for player in players:
+            if isinstance(player, dict) and str(player.get("steamid")) in batch:
+                result[str(player["steamid"])] = player
+    return result
 
 
 def get_player_summary(steam_id: str) -> dict | None:
@@ -667,11 +680,18 @@ def import_reviews(db: Session, game: Game, steam_app_id: int, *, commit: bool =
                              Review.steam_review_id.is_not(None))
     )}
     missing_dates = any(review.published_at is None for review in existing.values())
-    if budget <= 0 or (remaining == 0 and not missing_dates):
+    names_updated = hydrate_authors(list(existing.values()))
+    missing_identities = settings.STEAM_API_KEY and any(
+        missing_author(review.author_name) and not review.steam_author_id
+        for review in existing.values()
+    )
+    if budget <= 0 or (remaining == 0 and not missing_dates and not missing_identities):
+        if names_updated and commit:
+            db.commit()
         return 0
     # Una muestra acotada también puede reparar fechas de reseñas ya guardadas.
     # Nunca agrega nuevas reseñas por encima del presupuesto persistente.
-    raw_reviews = get_app_reviews(steam_app_id, num=budget if missing_dates else remaining)
+    raw_reviews = get_app_reviews(steam_app_id, num=budget if missing_dates or missing_identities else remaining)
 
     existing_ids = {
         row[0]
@@ -683,10 +703,14 @@ def import_reviews(db: Session, game: Game, steam_app_id: int, *, commit: bool =
     }
     new_entries = []
     dates_updated = 0
+    identities_updated = 0
     for entry in raw_reviews:
         review_id = entry.get("recommendationid")
         content = entry.get("review")
         known = existing.get(str(review_id))
+        if known is not None and not known.steam_author_id and (identity := author_id(entry)):
+            known.steam_author_id = identity
+            identities_updated += 1
         if known is not None and known.published_at is None:
             published = _review_publication_date(entry.get("timestamp_created"))
             if published is not None:
@@ -701,18 +725,17 @@ def import_reviews(db: Session, game: Game, steam_app_id: int, *, commit: bool =
             continue
         existing_ids.add(str(review_id))
         new_entries.append(entry)
+    steam_ids = [
+        identity
+        for entry in new_entries
+        if (identity := author_id(entry))
+    ]
+    profiles = get_player_summaries_batch(steam_ids) if steam_ids else {}
+    names_updated += hydrate_authors(list(existing.values())) if identities_updated else 0
     if not new_entries:
-        if dates_updated and commit:
+        if (dates_updated or identities_updated or names_updated) and commit:
             db.commit()
         return 0
-
-    steam_ids = [
-        author_id
-        for entry in new_entries
-        if isinstance(entry.get("author"), dict)
-        and (author_id := entry["author"].get("steamid"))
-    ]
-    profiles = get_player_summaries_batch(steam_ids)
 
     created = 0
     for entry in new_entries:
@@ -721,7 +744,8 @@ def import_reviews(db: Session, game: Game, steam_app_id: int, *, commit: bool =
             continue
 
         author = entry.get("author") if isinstance(entry.get("author"), dict) else {}
-        profile = profiles.get(author.get("steamid"), {})
+        identity = author_id(entry)
+        profile = profiles.get(identity, {})
         playtime_minutes = author.get("playtime_at_review") or 0
         if not isinstance(playtime_minutes, (int, float)) or playtime_minutes < 0:
             playtime_minutes = 0
@@ -735,7 +759,8 @@ def import_reviews(db: Session, game: Game, steam_app_id: int, *, commit: bool =
             hours_at_review=round(playtime_minutes / 60, 1),
             helpful_count=entry.get("votes_up") or 0,
             source="steam",
-            author_name=(profile.get("personaname") or "Jugador de Steam")[:120],
+            author_name=public_name(profile),
+            steam_author_id=identity,
             steam_review_id=str(entry["recommendationid"]),
             published_at=_review_publication_date(entry.get("timestamp_created")),
         )

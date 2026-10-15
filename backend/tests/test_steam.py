@@ -335,7 +335,7 @@ def test_importar_resenas_usa_el_nombre_de_perfil_de_steam(
 
     names = {r["author_name"] for r in reviews}
     assert "gaben" in names
-    assert "Jugador de Steam" in names
+    assert None in names
 
 
 def test_sin_resenas_reales_no_rompe_la_importacion(

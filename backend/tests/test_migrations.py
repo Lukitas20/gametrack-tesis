@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 from alembic import command
 from alembic.config import Config
-from sqlalchemy import create_engine, inspect
+from sqlalchemy import create_engine, inspect, text
 
 from app.db.base import Base
 
@@ -76,3 +76,23 @@ def test_las_migraciones_crean_los_mismos_indices(schemas) -> None:
             for index in migrated.get_indexes(table)
         }
         assert actual == expected, f"difieren los índices de {table}"
+
+
+def test_identidad_autor_steam_amplia_sin_modificar_resenas(tmp_path) -> None:
+    """Agregar una identidad opcional no inventa autores ni altera el texto."""
+    path = tmp_path / "steam-authors.db"
+    config = _alembic_config(f"sqlite:///{path}")
+    command.upgrade(config, "c6d910a74e32")
+    engine = create_engine(f"sqlite:///{path}")
+    with engine.begin() as connection:
+        connection.execute(text("INSERT INTO games (id, name, slug, platforms, avg_rating, ratings_count, reviews_count) "
+                                "VALUES (1, 'Fixture', 'fixture', '[]', 0, 0, 1)"))
+        connection.execute(text("INSERT INTO reviews (id, game_id, content, source, author_name, steam_review_id, language, helpful_count, is_analyzed) "
+                                "VALUES (1, 1, 'Texto original conservado', 'steam', 'Nombre observado', 'fixture-review', 'es', 0, 0)"))
+    command.upgrade(config, "head")
+    column = next(item for item in inspect(engine).get_columns("reviews") if item["name"] == "steam_author_id")
+    assert column["nullable"] is True and str(column["type"]) == "VARCHAR(32)"
+    with engine.connect() as connection:
+        row = connection.execute(text("SELECT content, author_name, steam_review_id, steam_author_id FROM reviews WHERE id=1")).one()
+    assert tuple(row) == ("Texto original conservado", "Nombre observado", "fixture-review", None)
+    engine.dispose()

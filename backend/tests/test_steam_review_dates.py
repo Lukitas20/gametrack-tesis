@@ -13,6 +13,8 @@ def test_invalid_date_is_unknown(value):
 
 
 def test_original_date_survives_import_and_repairs_existing_at_cap(db, monkeypatch):
+    # Este fixture no incluye identidad del autor: sólo evalúa las fechas.
+    monkeypatch.setattr(steam_service.settings,'STEAM_API_KEY','')
     monkeypatch.setattr(steam_service.settings,'STEAM_REVIEWS_IMPORT_LIMIT',1)
     monkeypatch.setattr(steam_service,'get_player_summaries_batch',lambda _: {})
     raw={'recommendationid':'one','review':'La historia es excelente, muy entretenida.',

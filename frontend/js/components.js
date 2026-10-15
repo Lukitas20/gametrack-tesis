@@ -264,7 +264,8 @@ export function aspectChip(aspect) {
 
 let reviewBodySequence=0;
 export function reviewItem(review) {
-  const author=review.author_name||"Jugador",steam=review.source==="steam";
+  const steam=review.source==="steam";
+  const author=review.author_name&&review.author_name!=="Jugador de Steam"?review.author_name:(steam?"Autor no disponible":"Jugador");
   const rawDate=steam ? review.published_at : review.created_at;
   const normalizedDate=typeof rawDate==="string"&&!/(Z|[+-]\d{2}:\d{2})$/.test(rawDate)?`${rawDate}Z`:rawDate;
   const date=rawDate ? new Date(normalizedDate) : null,validDate=date && Number.isFinite(date.getTime());
