@@ -1,4 +1,4 @@
-/* Esqueleto de la aplicación: cabecera, navegación, cambio de rol y rutas. */
+/* Esqueleto de la aplicación: cabecera, navegación y rutas de cada tipo de cuenta. */
 
 import {
   currentPath,
@@ -15,8 +15,7 @@ import {
   loginDestination,
   isDeveloper,
   isLoggedIn,
-  hasStudio,
-  changeExperience,
+  canAccessRoute,
   studioDestination,
   logout,
   restore,
@@ -115,7 +114,7 @@ const DEVELOPER_NAV = [
 
 function renderNav(activePath = null) {
   const path = activePath || window.location.hash.slice(1).split("?")[0] || "/";
-  const items = isDeveloper() ? DEVELOPER_NAV : PLAYER_NAV;
+  const items = state.user?.onboarding_step ? [] : isDeveloper() ? DEVELOPER_NAV : PLAYER_NAV;
 
   // El logo apunta al inicio del rol actual en vez de a "/", así la URL que
   // queda es la canónica (`#/recomendaciones`) y no una que redirige.
@@ -185,20 +184,8 @@ document.addEventListener("click", (event) => {
 function accountMenu() {
   const menu = h("div", { class: "menu", role: "menu" });
 
-  if (isLoggedIn()) {
-    menu.append(h("div", { class: "menu-label" }, "Tu experiencia"),
-      h("button", { class: "menu-item", role: "menuitem", onClick: async () => {
-        closeMenu();
-        if (!isDeveloper() && (!hasStudio() || !state.user.studio)) {
-          navigate("/bienvenida?tipo=desarrollador"); return;
-        }
-        try {
-          await changeExperience({ role: isDeveloper() ? "jugador" : "desarrollador" });
-          navigate(loginDestination(state.user));
-        } catch (error) { toast(error.message, "error"); }
-      } }, icon(isDeveloper() ? "gamepad" : "chart", 17), isDeveloper() ? "Usar como jugador" : hasStudio() ? "Abrir mi estudio" : "Configurar espacio de estudio"),
-      h("div", { class: "menu-sep" }));
-  }
+  if (isLoggedIn()) menu.append(h("div", { class: "menu-label" },
+    state.user.onboarding_step === "choose" ? "Completá tu registro" : isDeveloper() ? "Cuenta de desarrollador / estudio" : "Cuenta de jugador"), h("div", { class: "menu-sep" }));
 
   menu.append(
     h(
@@ -315,6 +302,9 @@ function view(loader) {
   return async (context) => {
     if (state.user?.onboarding_step && !["/bienvenida", "/cuentas"].includes(currentPath())) {
       navigate("/bienvenida", { replace: true }); return;
+    }
+    if (!canAccessRoute(currentPath())) {
+      navigate(homePath(), { replace: true }); return;
     }
     const revision = navigationRevision;
     const ownerId = state.user?.id ?? null;

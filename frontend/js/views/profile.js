@@ -2,8 +2,7 @@
 
 import { api } from "../api.js";
 import { openOnboarding } from "./onboarding.js";
-import { isLoggedIn, refreshUser, state, displayName, updateSteamPreferences, changeExperience, hasStudio, loginDestination } from "../store.js";
-import { navigate } from "../router.js";
+import { isLoggedIn, refreshUser, state, displayName, updateSteamPreferences } from "../store.js";
 import { steamDashboard } from "./steam-profile.js";
 import { h, icon, initials, mount, toast } from "../ui.js";
 import { requiresLogin } from "../components.js";
@@ -20,18 +19,10 @@ function field(label, input) {
 function experienceSection(user) {
   const developer = user.role === "desarrollador";
   return h("section", { class: "card profile-experience" },
-    h("h2", null, "Tu experiencia en GameTrack"),
-    h("p", { class: "muted" }, developer ? `${user.studio || "Tu estudio"} · Espacio profesional de demostración.` : "Estás usando tu perfil de jugador. Tu biblioteca, gustos y valoraciones se conservan al cambiar de experiencia."),
-    h("div", { class: "row", style: { gap: "var(--s-3)", flexWrap: "wrap" } },
-      h("button", { class: "btn btn-primary", onClick: async event => {
-        if (!developer && (!hasStudio(user) || !user.studio)) { navigate("/bienvenida?tipo=desarrollador"); return; }
-        const button = event.currentTarget; button.disabled = true;
-        try {
-          const next = await changeExperience({ role: developer ? "jugador" : "desarrollador" });
-          navigate(loginDestination(next));
-        } catch (error) { toast(error.message, "error"); button.disabled = false; }
-      } }, icon(developer ? "gamepad" : "chart", 17), developer ? "Usar como jugador" : hasStudio(user) ? "Abrir mi estudio" : "Configurar espacio de estudio"),
-      hasStudio(user) && h("a", { class: "btn", href: "#/bienvenida?tipo=desarrollador" }, "Configurar estudio y juego inicial")));
+    h("h2", null, developer ? "Cuenta de desarrollador / estudio" : "Cuenta de jugador"),
+    h("p", { class: "muted" }, "Tipo de cuenta definido al registrarte."),
+    developer && h("p", { class: "muted" }, `${user.studio || "Tu estudio"} · Espacio profesional de demostración.`),
+    developer && h("a", { class: "btn", href: "#/bienvenida" }, "Configurar estudio y juego inicial"));
 }
 
 function dataSection(user) {
@@ -182,7 +173,7 @@ async function buildBody() {
   const wrap = h("div",{class:"player-profile"});
   const heroMedia=h("div",{class:"profile-hero-media","aria-hidden":"true"});
   const dashboard=user.steam_verified && user.role === "jugador" ? steamDashboard(user) : null;
-  const tastes = genresSection(user);
+  const tastes = user.role === "jugador" ? genresSection(user) : null;
   if (dashboard) dashboard.onData = data => {
     const recent=[...data.library.items].sort((a,b) => (b.last_played || 0)-(a.last_played || 0) || (b.minutes || 0)-(a.minutes || 0))[0];
     if (recent?.cover) mount(heroMedia,h("img",{src:recent.cover,alt:"",onError:() => heroMedia.replaceChildren()}));

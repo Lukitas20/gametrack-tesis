@@ -83,14 +83,19 @@ def test_steam_preference_action_requires_verified_identity(client, db):
     assert client.post("/api/v1/auth/me/preferences/steam", headers=headers).status_code == 403
 
 
-def test_new_steam_login_includes_inferred_genres(client, db, source, catalog):
+def test_new_steam_player_infers_genres_after_choosing_account_type(client, db, source, catalog):
     from tests.test_steam_auth import assertion, callback
     result, _ = callback(client, assertion(client))
     assert "steam-complete" in result.headers["location"]
     session = client.post("/api/v1/auth/steam/session")
     assert session.status_code == 200, session.text
-    assert session.json()["user"]["preferences_source"] == "steam"
-    assert [genre["id"] for genre in session.json()["user"]["genres"]] == [catalog[0].id]
+    assert session.json()["user"]["onboarding_step"] == "choose"
+    assert session.json()["user"]["preferences_source"] is None
+    headers = {"Authorization": f"Bearer {session.json()['access_token']}"}
+    configured = client.put('/api/v1/auth/me/experience', headers=headers, json={'role':'jugador','complete_onboarding':True})
+    assert configured.status_code == 200, configured.text
+    assert configured.json()["user"]["preferences_source"] == "steam"
+    assert [genre["id"] for genre in configured.json()["user"]["genres"]] == [catalog[0].id]
 
 
 def test_unknown_games_fetch_genres_with_bounded_requests_and_retry(client, db, player, source, monkeypatch):

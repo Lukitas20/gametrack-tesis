@@ -1,9 +1,10 @@
 """Registro, login y perfil del usuario autenticado."""
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import or_, update
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, require_player
 from app.core.security import create_access_token
 from app.db.database import get_db
 from app.models import Game, User, UserRole
@@ -78,7 +79,7 @@ def update_me(
 @router.put("/me/preferences", response_model=UserResponse)
 def update_preferences(
     data: PreferencesUpdate,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_player),
     db: Session = Depends(get_db),
 ) -> User:
     return set_preferences(db, user, data.genre_ids)
@@ -90,8 +91,9 @@ def update_experience(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> Token:
-    # La habilitación solo concede acceso al panel de demostración. Los futuros
-    # permisos de un plan pago deberán verificarse por separado en el servidor.
+    db.refresh(user, attribute_names=["role", "onboarding_step", "studio"])
+    if user.onboarding_step != "choose" and data.role is not user.role:
+        raise HTTPException(403, "El tipo de cuenta se define al registrarse y no se puede cambiar")
     studio = data.studio if data.studio is not None else user.studio
     if data.role is UserRole.DEVELOPER and not (studio and studio.strip()):
         raise HTTPException(422, "Indicá el nombre del estudio o del desarrollador independiente")
@@ -99,26 +101,31 @@ def update_experience(
         raise HTTPException(422, "Configurá los juegos desde el espacio de estudio")
     if data.analysis_game_id is not None and not db.get(Game, data.analysis_game_id):
         raise HTTPException(404, "El juego seleccionado no está en el catálogo")
-    # También preserva el acceso de cuentas antiguas creadas como desarrollador.
-    if user.is_developer:
-        user.developer_enabled = True
-    user.role = data.role
+    values = {"role": data.role, "developer_enabled": data.role is UserRole.DEVELOPER}
     if data.role is UserRole.DEVELOPER:
-        user.developer_enabled = True
-        user.studio = studio.strip()
+        values["studio"] = studio.strip()
         if "analysis_game_id" in data.model_fields_set:
-            user.analysis_game_id = data.analysis_game_id
+            values["analysis_game_id"] = data.analysis_game_id
     if data.complete_onboarding:
-        user.onboarding_step = None
+        values["onboarding_step"] = None
     elif user.onboarding_step:
-        user.onboarding_step = "studio" if data.role is UserRole.DEVELOPER else "player"
+        values["onboarding_step"] = "studio" if data.role is UserRole.DEVELOPER else "player"
+    # La condición se evalúa en la escritura: dos solicitudes concurrentes no
+    # pueden consumir la elección inicial de Steam para tipos distintos.
+    result = db.execute(update(User).where(User.id == user.id,
+        or_(User.role == data.role, User.onboarding_step == "choose"))
+        .values(**values).execution_options(synchronize_session=False))
+    if result.rowcount != 1:
+        db.rollback()
+        raise HTTPException(403, "El tipo de cuenta ya fue definido y no se puede cambiar")
     db.commit()
     db.refresh(user)
+    ensure_steam_preferences(db, user)
     return _token_for(user)
 
 
 @router.post("/me/preferences/steam", response_model=UserResponse)
-def suggest_steam_preferences(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> User:
+def suggest_steam_preferences(user: User = Depends(require_player), db: Session = Depends(get_db)) -> User:
     from copy import deepcopy
     from app.services import steam_profile_service as profiles, steam_preferences_service as tastes
     cache = profiles.sync_profile(db, user)

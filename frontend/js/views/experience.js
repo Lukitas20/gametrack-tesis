@@ -2,7 +2,7 @@ import { api } from "../api.js";
 import { experienceChoices } from "../experience-choices.js";
 import { requiresLogin } from "../components.js";
 import { navigate } from "../router.js";
-import { changeExperience, isLoggedIn, loginDestination, state } from "../store.js";
+import { accountSetupRole, saveAccountSetup, isLoggedIn, loginDestination, refreshUser, state } from "../store.js";
 import { h, icon, mount, toast } from "../ui.js";
 
 export const STUDIO_DEMO_COPY = "Espacio de estudio · Demostración. Podés explorar las herramientas profesionales del prototipo; no estás contratando una suscripción.";
@@ -11,9 +11,8 @@ export function experienceView({ query = new URLSearchParams() } = {}) {
   if (!isLoggedIn()) return requiresLogin("Iniciá sesión para configurar tu experiencia.");
   const user = state.user;
   const requested = query.get("tipo");
-  const requestedRole = ["jugador", "desarrollador"].includes(requested) ? requested : null;
-  const needsChoice = user.onboarding_step === "choose" && !requestedRole;
-  let selectedRole = requestedRole || (needsChoice ? null : user.role);
+  let selectedRole = accountSetupRole(user, requested);
+  const needsChoice = !selectedRole;
   let selectedGameId = user.analysis_game_id || null;
   let busy = false;
   let searchRevision = 0;
@@ -38,9 +37,12 @@ export function experienceView({ query = new URLSearchParams() } = {}) {
     const controls = [...form.querySelectorAll("button, input")];
     controls.forEach(control => { control.disabled = true; });
     try {
-      if (selectedRole === "jugador" && genresChanged && selectedGenres.size) await api.setPreferences([...selectedGenres]);
-      const next = await changeExperience({ role: selectedRole, complete_onboarding: true,
+      const next = await saveAccountSetup({ role: selectedRole, complete_onboarding: true,
         ...(selectedRole === "desarrollador" ? { studio: studio.value.trim(), analysis_game_id: selectedGameId } : {}) });
+      if (selectedRole === "jugador" && genresChanged && selectedGenres.size) {
+        await api.setPreferences([...selectedGenres]);
+        await refreshUser();
+      }
       toast(selectedRole === "desarrollador" ? "Tu espacio de estudio está listo" : "Tu perfil de jugador está listo");
       navigate(loginDestination(next));
     } catch (failure) {
@@ -127,7 +129,8 @@ export function experienceView({ query = new URLSearchParams() } = {}) {
   form.append(roleBody, error, submit);
   renderRole();
   return h("div", { class: "experience-page" },
-    h("div", { class: "view-head" }, h("div", null, h("p", { class: "eyebrow" }, "TU CUENTA, DOS EXPERIENCIAS"),
-      h("h1", null, "Tu espacio en GameTrack"), h("p", { class: "muted" }, "Podés usar ambas experiencias con la misma cuenta y cambiar desde tu perfil."))),
+    h("div", { class: "view-head" }, h("div", null, h("p", { class: "eyebrow" }, "TU CUENTA DE GAMETRACK"),
+      h("h1", null, user.onboarding_step === "choose" ? "Elegí tu tipo de cuenta" : selectedRole === "desarrollador" ? "Configurá tu estudio" : "Personalizá tu perfil de jugador"),
+      h("p", { class: "muted" }, user.onboarding_step === "choose" ? "Elegí jugador o desarrollador / estudio para completar el registro. El tipo de cuenta queda definido al continuar." : "El tipo de cuenta que elegiste al registrarte es permanente."))),
     form);
 }

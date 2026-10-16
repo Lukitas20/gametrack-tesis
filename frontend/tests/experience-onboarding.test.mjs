@@ -47,7 +47,8 @@ test("la bienvenida solicita el tipo de usuario sólo cuando todavía no fue ele
     ["registro estudio", "desarrollador", "studio", "", "¿Qué juego querés analizar primero?"],
     ["Steam con jugador elegido", "jugador", "choose", "tipo=jugador", "Empecemos por tus gustos"],
     ["Steam con estudio elegido", "jugador", "choose", "tipo=desarrollador", "¿Qué juego querés analizar primero?"],
-    ["configuración de estudio desde el perfil", "jugador", null, "tipo=desarrollador", "¿Qué juego querés analizar primero?"],
+    ["un jugador no cambia de tipo desde un enlace", "jugador", null, "tipo=desarrollador", "Empecemos por tus gustos"],
+    ["un estudio no cambia de tipo desde un enlace", "desarrollador", null, "tipo=jugador", "¿Qué juego querés analizar primero?"],
   ]) {
     await t.test(label, () => {
       state.user = { role, onboarding_step: step, genres: [] };

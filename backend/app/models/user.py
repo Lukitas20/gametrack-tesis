@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
 
 class User(Base):
-    """Una cuenta con experiencias de jugador y desarrollador."""
+    """Una cuenta de un único tipo, elegido durante el registro."""
 
     __tablename__ = "users"
 
@@ -51,8 +51,8 @@ class User(Base):
     role: Mapped[UserRole] = mapped_column(
         enum_column(UserRole), default=UserRole.PLAYER, index=True
     )
-    # role identifica la experiencia activa; habilitar el estudio es permanente
-    # y no elimina el perfil personal ni representa una suscripción comercial.
+    # Columna heredada, conservada por compatibilidad del esquema. No concede
+    # permisos: el único tipo de cuenta y fuente de autorización es role.
     developer_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
     onboarding_step: Mapped[str | None] = mapped_column(String(20))
     analysis_game_id: Mapped[int | None] = mapped_column(
@@ -88,7 +88,7 @@ class User(Base):
 
     @property
     def is_developer(self) -> bool:
-        return self.developer_enabled or self.role is UserRole.DEVELOPER
+        return self.role is UserRole.DEVELOPER and self.onboarding_step != "choose"
 
     @property
     def genres(self) -> list[Genre]:

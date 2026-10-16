@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, require_player
 from app.db.database import get_db
 from app.ml.recommender import invalidate_engine
 from app.models import Game, User
@@ -19,39 +19,39 @@ router = APIRouter(prefix="/steam", tags=["steam"])
 
 @router.get("/me/reviews")
 def my_steam_reviews(response: Response, page: int = Query(default=1, ge=1, le=1000),
-                     user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+                     user: User = Depends(require_player), db: Session = Depends(get_db)):
     response.headers["Cache-Control"] = "no-store"
     return steam_review_service.reviews(db, user, page)
 
 
 @router.post("/me/reviews/sync")
-def sync_my_steam_reviews(response: Response, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def sync_my_steam_reviews(response: Response, user: User = Depends(require_player), db: Session = Depends(get_db)):
     response.headers["Cache-Control"] = "no-store"
     return steam_review_service.reviews(db, user, force=True)
 
 
 @router.get("/me/achievements/{appid}")
 def my_steam_achievements(response: Response, appid: int = Path(ge=1, le=4294967295),
-                        user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+                        user: User = Depends(require_player), db: Session = Depends(get_db)):
     response.headers["Cache-Control"] = "no-store"
     return steam_achievement_service.achievements(db, user, appid)
 
 
 @router.post("/me/achievements/{appid}/sync")
 def sync_my_steam_achievements(response: Response, appid: int = Path(ge=1, le=4294967295),
-                             user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+                             user: User = Depends(require_player), db: Session = Depends(get_db)):
     response.headers["Cache-Control"] = "no-store"
     return steam_achievement_service.achievements(db, user, appid, force=True)
 
 
 @router.get("/me/profile")
-def my_steam_profile(response: Response, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def my_steam_profile(response: Response, user: User = Depends(require_player), db: Session = Depends(get_db)):
     response.headers["Cache-Control"] = "no-store"
     return steam_profile_service.profile_payload(db, user, steam_profile_service.sync_profile(db, user))
 
 
 @router.post("/me/sync")
-def sync_my_steam_profile(response: Response, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def sync_my_steam_profile(response: Response, user: User = Depends(require_player), db: Session = Depends(get_db)):
     response.headers["Cache-Control"] = "no-store"
     return steam_profile_service.profile_payload(db, user, steam_profile_service.sync_profile(db, user, force=True))
 
@@ -93,7 +93,7 @@ def link_steam_account(
 
 @router.get("/owned/{steam_id}", response_model=list[dict])
 def get_owned_games(
-    steam_id: str, _: User = Depends(get_current_user)
+    steam_id: str, _: User = Depends(require_player)
 ) -> list[dict]:
     """Biblioteca pública de una cuenta de Steam.
 

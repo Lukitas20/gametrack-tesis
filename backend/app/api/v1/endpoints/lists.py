@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user
+from app.api.deps import require_player
 from app.db.database import get_db
 from app.models import Game, GameList, User
 from app.schemas.game_list import (
@@ -26,7 +26,7 @@ def _require_list(db: Session, user: User, list_id: int) -> GameList:
 
 @router.get("/me/lists", response_model=list[GameListOut])
 def get_my_lists(
-    user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    user: User = Depends(require_player), db: Session = Depends(get_db)
 ) -> list[GameList]:
     """Listas del usuario, creando las del sistema si faltaran."""
     return list_service.list_user_lists(db, user)
@@ -34,7 +34,7 @@ def get_my_lists(
 
 @router.get("/me/lists/summary", response_model=list[GameListSummary])
 def get_my_lists_summary(
-    user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    user: User = Depends(require_player), db: Session = Depends(get_db)
 ) -> list[GameListSummary]:
     """Versión liviana para el selector de "guardar en lista"."""
     return [
@@ -51,7 +51,7 @@ def get_my_lists_summary(
 @router.get("/me/lists/containing/{game_id}", response_model=list[int])
 def get_lists_containing(
     game_id: int,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_player),
     db: Session = Depends(get_db),
 ) -> list[int]:
     """Ids de las listas que ya contienen el juego, para marcar los botones."""
@@ -61,7 +61,7 @@ def get_lists_containing(
 @router.post("/me/lists", response_model=GameListOut, status_code=status.HTTP_201_CREATED)
 def create_list(
     data: GameListCreate,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_player),
     db: Session = Depends(get_db),
 ) -> GameList:
     duplicated = any(
@@ -77,7 +77,7 @@ def create_list(
 def add_game_to_list(
     list_id: int,
     data: GameListItemCreate,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_player),
     db: Session = Depends(get_db),
 ) -> GameList:
     game_list = _require_list(db, user, list_id)
@@ -90,7 +90,7 @@ def add_game_to_list(
 def remove_game_from_list(
     list_id: int,
     game_id: int,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_player),
     db: Session = Depends(get_db),
 ) -> GameList:
     return list_service.remove_game(db, _require_list(db, user, list_id), game_id)

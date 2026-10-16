@@ -71,7 +71,7 @@ def replace_preferences(user: User, weighted_genres: list[tuple[Genre, float]]) 
 
 
 def ensure_steam_preferences(db: Session, user: User) -> None:
-    if user.steam_verified and user.preferences_source != "manual":
+    if user.role is UserRole.PLAYER and user.onboarding_step != "choose" and user.steam_verified and user.preferences_source != "manual":
         from app.services.steam_profile_service import sync_profile
         sync_profile(db, user)
 

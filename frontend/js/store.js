@@ -34,16 +34,25 @@ export function displayName(user = state.user) {
   return user.full_name?.trim() || (user.steam_verified && /^steam_\d+$/.test(user.username) ? "Mi cuenta de Steam" : user.username);
 }
 
-export function isDeveloper() {
-  return state.user?.role === "desarrollador";
+export function isDeveloper(user = state.user) {
+  return user?.role === "desarrollador" && user.onboarding_step !== "choose";
 }
 
-export function hasStudio(user = state.user) {
-  return Boolean(user?.developer_enabled || user?.role === "desarrollador");
+export function accountSetupRole(user, requested = null) {
+  if (user.onboarding_step !== "choose") return user.role;
+  return ["jugador", "desarrollador"].includes(requested) ? requested : null;
 }
 
-export async function changeExperience(data) {
-  return acceptSession(await api.updateExperience(data));
+export function canAccessRoute(path, user = state.user) {
+  if (!user) return true;
+  if (path === "/dev" || path.startsWith("/dev/")) return isDeveloper(user);
+  const player = ["/recomendaciones", "/listas", "/amigos", "/valoraciones", "/que-jugamos"];
+  if (player.includes(path) || path.startsWith("/invitacion/")) return user.role === "jugador" && user.onboarding_step !== "choose";
+  return true;
+}
+
+export async function saveAccountSetup(data) {
+  return acceptSession(await api.updateAccountSetup(data));
 }
 
 function persist() {
@@ -56,7 +65,7 @@ function persist() {
 
 async function loadRatings() {
   state.ratings = new Map();
-  if (!state.user || state.user.role === "desarrollador") return;
+  if (!state.user || state.user.role !== "jugador" || state.user.onboarding_step === "choose") return;
   try {
     const rows = await api.myRatings();
     state.ratings = new Map(rows.map((row) => [row.game_id, row.score]));

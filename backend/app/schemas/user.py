@@ -10,6 +10,8 @@ from app.schemas.game import GenreOut
 
 
 class UserCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     username: str = Field(min_length=3, max_length=50)
     email: EmailStr | None = None
     password: str = Field(min_length=8, max_length=128)
@@ -43,7 +45,6 @@ class UserResponse(BaseModel):
     avatar_url: str | None
     role: UserRole
     studio: str | None
-    developer_enabled: bool = False
     onboarding_step: Literal["choose", "player", "studio"] | None = None
     analysis_game_id: int | None = None
     created_at: datetime
@@ -89,13 +90,15 @@ class ProfileUpdate(BaseModel):
     problema aparte) ni contraseña (no hay flujo de verificación todavía).
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     full_name: str | None = Field(default=None, max_length=150)
     email: EmailStr | None = None
     avatar_url: str | None = Field(default=None, max_length=500)
 
 
 class ExperienceUpdate(BaseModel):
-    """Experiencia activa y configuración del espacio profesional de demostración."""
+    """Configuración del tipo elegido; sólo el registro Steam pendiente puede elegirlo."""
 
     model_config = ConfigDict(extra="forbid")
 

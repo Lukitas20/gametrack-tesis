@@ -16,8 +16,8 @@ MAX_GROUP_FRIENDS = 4
 
 
 def require_player(user: User) -> User:
-    if not user.is_active or user.role != UserRole.PLAYER:
-        raise HTTPException(status_code=403, detail="Las amistades son para cuentas de jugadores activas")
+    if not user.is_active or user.role != UserRole.PLAYER or user.onboarding_step == "choose":
+        raise HTTPException(status_code=403, detail="Esta función es exclusiva de las cuentas de jugador con tipo definido")
     return user
 
 

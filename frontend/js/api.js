@@ -78,7 +78,7 @@ export const api = {
   joinInvite: (token) => request(`/friends/invite/${encodeURIComponent(token)}/join`, { method: "POST" }),
   me: () => request("/auth/me"),
   updateProfile: (data) => request("/auth/me", { method: "PUT", body: data }),
-  updateExperience: (data) => request("/auth/me/experience", { method: "PUT", body: data }),
+  updateAccountSetup: (data) => request("/auth/me/experience", { method: "PUT", body: data }),
   setPreferences: (genreIds) =>
     request("/auth/me/preferences", { method: "PUT", body: { genre_ids: genreIds } }),
 

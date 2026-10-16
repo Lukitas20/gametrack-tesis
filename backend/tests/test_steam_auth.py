@@ -105,7 +105,8 @@ def test_steam_remembers_configured_experience_on_next_login(client):
     callback(client, assertion(client))
     user = client.post("/api/v1/auth/steam/session").json()["user"]
     assert user["role"] == "desarrollador" and user["studio"] == "Mi estudio"
-    assert user["onboarding_step"] is None and user["developer_enabled"] is True
+    assert user["onboarding_step"] is None
+    assert client.put('/api/v1/auth/me/experience',headers=headers,json={'role':'jugador'}).status_code == 403
 
 
 @pytest.mark.parametrize("key,value", [

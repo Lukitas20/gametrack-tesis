@@ -13,7 +13,7 @@ export async function gameView({params,query}) {
   let game;
   try {game=await api.game(Number(params.id));} catch(error){return emptyState("No encontramos el juego",error.message);}
   if(!game.is_enriched)return pendingGameView(game);
-  const root=h("div",{class:"game-page game-page-simple game-page-compact"}),scorePanel=personalScorePanel(game.id,game.name,{showFeedback:false});
+  const root=h("div",{class:"game-page game-page-simple game-page-compact"}),scorePanel=isDeveloper()?null:personalScorePanel(game.id,game.name,{showFeedback:false});
   const [similar,firstReviews]=await Promise.all([api.similar(game.id,4).catch(()=>[]),api.reviews(game.id,6).catch(error=>error)]);
   const reviewBody=h("div",{class:"game-review-list"});
   let reviews=Array.isArray(firstReviews)?firstReviews:[],offset=reviews.length,hasMore=reviews.length===6;
@@ -71,7 +71,7 @@ export async function gameView({params,query}) {
     h("header",{class:"game-showcase"},h("div",{class:"game-showcase-media","aria-hidden":"true"},cover(game).firstChild.cloneNode(true)),
       h("div",{class:"game-showcase-content"},h("h1",null,game.name),
         h("div",{class:"game-showcase-meta"},game.developer&&h("span",null,game.developer),game.released&&h("span",null,new Date(game.released+"T00:00:00").getFullYear()),game.metacritic!=null&&h("span",null,`Metacritic ${game.metacritic}/100`)),
-        h("div",{class:"game-showcase-actions"},isLoggedIn()&&!isDeveloper()?saveToListButton(game):h("a",{href:"#/cuentas",class:"btn btn-primary"},"Guardar en mis listas"),
+        h("div",{class:"game-showcase-actions"},isDeveloper()?h("a",{href:`#/dev/juego/${game.id}`,class:"btn btn-primary"},icon("chart",16),"Analizar juego"):isLoggedIn()?saveToListButton(game):h("a",{href:"#/cuentas",class:"btn btn-primary"},"Guardar en mis listas"),
           game.steam_app_id&&h("a",{href:`https://store.steampowered.com/app/${game.steam_app_id}/`,target:"_blank",rel:"noopener noreferrer",class:"game-steam-link"},"Ver en Steam ↗")))),nav,h("div",{class:"game-tab-content"},overview));
   buttons.get("resumen").setAttribute("aria-current","location");
   requestAnimationFrame(()=>{if(root.isConnected)gallery.loadMedia();});

@@ -319,9 +319,8 @@ export function developerOnly() {
     h(
       "div",
       null,
-      h("strong", null, "Abrí tu espacio de estudio. "),
-      "Podés analizar juegos propios o de referencia con tu misma cuenta. ",
-      h("a", { class: "btn btn-sm", href: "#/bienvenida?tipo=desarrollador" }, "Configurar espacio de estudio"),
+      h("strong", null, "Sección exclusiva para desarrolladores. "),
+      "Tu cuenta de jugador no tiene acceso a las herramientas de estudio.",
     ),
   );
 }

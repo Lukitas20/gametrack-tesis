@@ -59,3 +59,13 @@ def require_developer(user: User = Depends(get_current_user)) -> User:
             detail="Esta sección es exclusiva del rol desarrollador",
         )
     return user
+
+
+def require_player(user: User = Depends(get_current_user)) -> User:
+    from app.services.friendship_service import require_player as check_player
+    return check_player(user)
+
+
+def optional_player(user: User | None = Depends(get_optional_current_user)) -> User | None:
+    """Las consultas públicas siguen disponibles; una cuenta de estudio no es jugador."""
+    return require_player(user) if user is not None else None

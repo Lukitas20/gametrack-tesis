@@ -34,7 +34,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from app.api.deps import get_optional_current_user
+from app.api.deps import optional_player
 from app.db.database import get_db
 from app.ml import quiz_vocab
 from app.ml.analytics import aspect_scores_by_game
@@ -399,7 +399,7 @@ def run_quiz(
 @router.post("/suggest", response_model=QuizResponse)
 def suggest(
     payload: QuizRequest, db: Session = Depends(get_db),
-    user: User | None = Depends(get_optional_current_user),
+    user: User | None = Depends(optional_player),
 ) -> QuizResponse:
     members = None
     if payload.friend_ids:

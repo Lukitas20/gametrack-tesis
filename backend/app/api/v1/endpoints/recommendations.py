@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Path, Query, Response
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, require_player
 from app.core.config import settings
 from app.db.database import get_db
 from app.ml.recommender import recommend_for_user, get_engine
@@ -140,7 +140,7 @@ def get_recommendations(
         pattern="^(balanced|familiar|explore)$",
         description="Equilibrio entre afinidad y variedad de la selección; no cambia la escala del índice.",
     ),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_player),
     db: Session = Depends(get_db),
 ) -> RecommendationResponse:
     """Juegos recomendados para el usuario autenticado.

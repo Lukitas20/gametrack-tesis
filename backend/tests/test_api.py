@@ -157,7 +157,8 @@ def test_no_se_puede_tocar_la_lista_de_otro(client: TestClient, data: dict) -> N
     owner = auth(client, "jugadora")
     list_id = client.get("/api/v1/me/lists", headers=owner).json()[0]["id"]
 
-    intruder = auth(client, "dev")
+    session = client.post('/api/v1/auth/register',json={'username':'otra_jugadora','password':'una-frase-larga-123','role':'jugador'}).json()
+    intruder = {'Authorization':f"Bearer {session['access_token']}"}
     response = client.post(
         f"/api/v1/me/lists/{list_id}/items", headers=intruder, json={"game_id": data["breve"].id}
     )
@@ -266,9 +267,11 @@ def test_estudios_y_asistente_respetan_rol_y_busqueda(client, db, data):
 # --- Análisis de texto suelto ----------------------------------------------
 
 
-def test_analizar_texto_no_requiere_sesion(client: TestClient, data: dict) -> None:
+def test_analizar_texto_es_para_desarrolladores(client: TestClient, data: dict) -> None:
+    assert client.post('/api/v1/reviews/analyze',json={'content':'La historia me gustó.'}).status_code == 401
     response = client.post(
         "/api/v1/reviews/analyze",
+        headers=auth(client, 'dev'),
         json={"content": "La historia es magnífica pero el rendimiento es un desastre."},
     )
     assert response.status_code == 200
@@ -279,7 +282,7 @@ def test_analizar_texto_no_requiere_sesion(client: TestClient, data: dict) -> No
 
 
 def test_analizar_texto_vacio_es_rechazado(client: TestClient, data: dict) -> None:
-    assert client.post("/api/v1/reviews/analyze", json={"content": ""}).status_code == 422
+    assert client.post("/api/v1/reviews/analyze", headers=auth(client, 'dev'), json={"content": ""}).status_code == 422
 
 
 # --- Recomendaciones --------------------------------------------------------
