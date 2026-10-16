@@ -278,3 +278,24 @@ API y redirección inicial HTTPS de Steam también aprobaron.
 Se actualizaron sólo las imágenes de la web y los cuatro jobs existentes. Se
 conservaron secretos, modelos, horarios y límites. No hubo cambios de esquema,
 entrenamientos, importaciones de usuarios ni datos de prueba en la base publicada.
+
+## Elección de experiencia sin repetición — 16 de octubre de 2026
+
+El registro ya guardaba el tipo de usuario, pero la bienvenida mostraba de nuevo
+el selector. Ahora continúa con los gustos del jugador o la configuración del
+estudio. El selector sólo aparece para una cuenta nueva de Steam que todavía
+no eligió experiencia; también se respeta la elección hecha antes de entrar por
+Steam y la configuración de estudio abierta desde el perfil.
+
+Código `35b3b2e`, build `adce06f2-d395-488f-95d1-aab16882786c`, digest
+`sha256:777a4f5203643e42dbe616457be880f6f25fada8f2b46854bb593698fb7d1649`.
+Revisión `gametrack-00018-n8w` activa con el 100 % del tráfico. Se actualizaron
+únicamente las imágenes de la web y los cuatro jobs existentes, conservando sus
+configuraciones. No hubo cambios en la base ni ejecuciones de esos jobs.
+
+Validación: 16 pruebas de frontend y 13 del control de fuentes aprobadas. La
+auditoría verificó 256 archivos, los modelos aprobados y ninguna fuente privada.
+Las pruebas de frontend se excluyen del paquete y la imagen; sus rutas públicas
+devuelven 404. Los archivos públicos de bienvenida e inicio coinciden con los
+probados y envían `no-cache`. Aprobaron salud, catálogo, callback HTTPS de Steam
+y protección de acceso privado. No se crearon cuentas de prueba en producción.
