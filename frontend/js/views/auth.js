@@ -1,6 +1,7 @@
 import { navigate } from "../router.js";
 import { login, register, loginDestination, displayName } from "../store.js";
 import { h, icon, toast } from "../ui.js";
+import { experienceChoices } from "../experience-choices.js";
 
 function steamIcon() {
   return h("span", { "aria-hidden": "true", html: '<svg viewBox="0 0 24 24" width="25" height="25" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="16.5" cy="7.5" r="5"/><circle cx="16.5" cy="7.5" r="2.7"/><circle cx="6.5" cy="17.5" r="3.7"/><path d="m9.8 19 8-6.7M6.8 13.8l4.8-6M0 13l7.6 3.2a1.9 1.9 0 0 1-1.5 3.5L0 17"/></svg>' });
@@ -18,6 +19,7 @@ export function accountsView({ query = new URLSearchParams() } = {}) {
     history.replaceState(history.state, "", `#/cuentas${remaining ? `?${remaining}` : ""}`);
   }
   let busy = false;
+  let selectedRole = null;
   const panel = h("section", { class: "auth-panel", "aria-label": "Acceso a GameTrack" });
   function renderForm() {
     const creating = mode === "register";
@@ -64,14 +66,14 @@ export function accountsView({ query = new URLSearchParams() } = {}) {
     confirm.addEventListener("input", () => confirm.setCustomValidity(""));
     const field = (label, input, extra) => h("div", { class: "auth-field" }, h("label", { for: input.id }, label), extra || input);
     const submit = h("button", { class: "auth-submit", type: "submit" }, creating ? "Crear mi cuenta" : "Iniciar sesión", icon("chevron", 18));
-    const form = h("form", { class: "auth-form", "aria-labelledby": "auth-title", onSubmit: async (event) => {
+    const form = h("form", { id: "auth-form", class: "auth-form", "aria-labelledby": "auth-title", onSubmit: async (event) => {
       event.preventDefault(); if (busy) return;
       if (creating && password.value !== confirm.value) { confirm.setCustomValidity("Las contraseñas no coinciden."); confirm.reportValidity(); return; }
       error.hidden = true; busy = true; form.setAttribute("aria-busy", "true");
       panel.querySelectorAll("button, input").forEach(el => { el.disabled = true; });
       submit.textContent = creating ? "Creando tu cuenta…" : "Entrando…";
       try {
-        const user = creating ? await register({ username: username.value.trim(), email: email.value.trim(), password: password.value }) : await login(username.value.trim(), password.value);
+        const user = creating ? await register({ username: username.value.trim(), email: email.value.trim(), password: password.value, role: selectedRole }) : await login(username.value.trim(), password.value);
         toast(creating ? `¡Bienvenido a GameTrack, ${displayName(user)}!` : `¡Hola, ${displayName(user)}!`);
         navigate(loginDestination(user));
       } catch (failure) { report(failure instanceof TypeError ? "No pudimos conectar con GameTrack. Revisá tu conexión e intentá de nuevo." : failure.message); }
@@ -87,8 +89,11 @@ export function accountsView({ query = new URLSearchParams() } = {}) {
     panel.replaceChildren(tabs,
       h("div", { class: "auth-form-heading" },
         h("h2", { id: "auth-title", tabindex: "-1" }, creating ? "Creá tu cuenta" : "Bienvenido de nuevo")),
+      ...(creating ? [experienceChoices({ value: selectedRole, form: "auth-form", onChange: role => { selectedRole = role; } })] : []),
       h("a", { class: "auth-steam", href: "/api/v1/auth/steam/start", onClick: e => {
         if (busy) { e.preventDefault(); return; }
+        sessionStorage.removeItem("gametrack.registration-role");
+        if (creating && selectedRole) sessionStorage.setItem("gametrack.registration-role", selectedRole);
         error.hidden = true;
       } }, steamIcon(), h("span", null, "Continuar con Steam"), icon("chevron", 17)),
       h("div", { class: "auth-divider" }, h("span", null, "o con tu usuario")),

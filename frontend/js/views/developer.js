@@ -7,12 +7,13 @@ import { isDeveloper, isLoggedIn, state } from "../store.js";
 import { ASPECT_LABEL, SENTIMENT_LABEL, emptyState, h, icon, mount, pct, signed, spinnerBlock, toast } from "../ui.js";
 import { developerReviewsPanel } from "./developer-reviews.js";
 import { trainedReviewInsights } from "./developer-trained-insights.js";
+import { STUDIO_DEMO_COPY } from "./experience.js";
 
 const count = value => Number(value || 0).toLocaleString("es-AR");
 const aspectName = key => ASPECT_LABEL[key] || key;
 const aspectOrder = ["jugabilidad", "graficos", "historia", "optimizacion"];
 function guard() {
-  if (!isLoggedIn()) return requiresLogin("Iniciá sesión con una cuenta de desarrollador para abrir el estudio.");
+  if (!isLoggedIn()) return requiresLogin("Iniciá sesión para abrir tu espacio de estudio.");
   if (!isDeveloper()) return developerOnly();
   return null;
 }
@@ -179,6 +180,10 @@ function workspaceFor(report, scope, initial, comparison) {
 }
 export async function developerView({query=new URLSearchParams()} = {}) {
   const blocked=guard();if(blocked) return blocked;
+  if (!query.get("estudio") && state.user?.analysis_game_id) return developerGameView({params:{id:state.user.analysis_game_id}});
+  if (!query.get("estudio") && !state.user?.studio) return h("div", {class:"dev-page"},
+    h("p", {class:"experience-demo"}, STUDIO_DEMO_COPY),
+    emptyState("Prepará tu espacio de estudio", "Indicá tu nombre y elegí un juego propio o de referencia para empezar.", h("a", {class:"btn btn-primary",href:"#/bienvenida?tipo=desarrollador"}, "Configurar mi estudio")));
   const target=query.get("estudio") || state.user?.studio,container=h("div",{class:"dev-page"});let workspace;
   async function load() {
     const selected=workspace?.activeKey() || "overview";
@@ -199,7 +204,7 @@ export async function developerView({query=new URLSearchParams()} = {}) {
         h("div",{class:"dev-toolbar"},h("div",null,h("span",{class:"dev-eyebrow"},"La voz de tus jugadores"),h("h2",null,"Tu estudio, de un vistazo")),h("div",{class:"dev-toolbar-actions"},studioPicker(studio.estudio),h("button",{class:"btn",type:"button",onClick:() => exportReport(studio)},icon("list",15),"Exportar informe"),h("button",{class:"btn",type:"button",onClick:async event => {event.currentTarget.disabled=true;await load();}},icon("refresh",15),"Actualizar"),processButton(scope,studio.resenas.pendientes,load))),metricRow(studio),workspace);
     } catch(error) {mount(container,heading("Panel del estudio","Elegí un estudio para explorar su recepción."),studioPicker(target || ""),emptyState("No pudimos abrir este informe",error.message),h("button",{class:"btn",onClick:load},"Volver a intentar"));}
   }
-  await load();return container;
+  await load();return h("div",null,h("p",{class:"experience-demo"},icon("info",17),STUDIO_DEMO_COPY),h("a",{class:"btn btn-sm",href:"#/bienvenida?tipo=desarrollador"},"Elegir juego para analizar"),container);
 }
 export async function developerGameView({params}) {
   const blocked=guard();if(blocked) return blocked;
@@ -211,5 +216,5 @@ export async function developerGameView({params}) {
       mount(container,h("a",{class:"dev-back",href:`#/dev${game.desarrollador ? `?estudio=${encodeURIComponent(game.desarrollador)}` : ""}`},icon("arrowLeft",16),"Volver al estudio"),h("header",{class:"dev-hero dev-game-hero"},cover(game,"dev-hero-cover"),h("div",{class:"dev-hero-content"},h("span",{class:"dev-eyebrow"},"Informe del juego"),h("h1",null,game.nombre),h("p",null,game.desarrollador || "Desarrollador no informado"),h("div",{class:"dev-hero-meta"},h("span",{class:"dev-badge"},game.cantidad_ratings_local ? `${game.rating_local_promedio.toFixed(2)}/5 · ${count(game.cantidad_ratings_local)} valoraciones GameTrack` : "Sin valoraciones GameTrack")))),h("div",{class:"dev-toolbar"},h("a",{class:"btn",href:`#/juego/${game.id}`},"Ver ficha pública",icon("chevron",15)),h("div",{class:"dev-toolbar-actions"},h("button",{class:"btn",onClick:() => exportReport(data)},icon("list",15),"Exportar informe"),h("button",{class:"btn",type:"button",onClick:async event => {event.currentTarget.disabled=true;await load();}},icon("refresh",15),"Actualizar"),processButton({game_id:game.id},s.pendientes,load))),metricRow(data),workspace);
     } catch(error) {mount(container,h("a",{class:"dev-back",href:"#/dev"},"Volver al estudio"),emptyState("No pudimos abrir la analítica",error.message),h("button",{class:"btn",onClick:load},"Volver a intentar"));}
   }
-  await load();return container;
+  await load();return h("div",null,h("p",{class:"experience-demo"},icon("info",17),STUDIO_DEMO_COPY),h("a",{class:"btn btn-sm",href:"#/bienvenida?tipo=desarrollador"},"Elegir otro juego"),container);
 }

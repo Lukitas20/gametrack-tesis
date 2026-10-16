@@ -102,6 +102,19 @@ instalación existente, aplicar las [migraciones](#migraciones).
 
 ### Cuentas de demostración
 
+El registro permite elegir **jugador** o **desarrollador / estudio**. En el
+primer acceso se configuran gustos o el nombre del estudio y un juego inicial
+del catálogo (propio o de referencia, opcional). Las cuentas nuevas de Steam
+también eligen su experiencia; las existentes mantienen su configuración.
+Desde **Mi perfil** o el menú de cuenta se puede habilitar el espacio de estudio
+y alternar experiencias conservando biblioteca, gustos y valoraciones.
+El panel profesional está disponible como **demostración del prototipo**;
+habilitarlo no contrata un plan ni acredita pertenencia a un estudio.
+
+Para una base existente, ejecutar `alembic upgrade head` desde `backend` antes
+de iniciar esta versión: `create_all` no agrega columnas a tablas existentes.
+La migración conserva las cuentas actuales sin repetir la configuración inicial.
+
 Contraseña para todas: `demo1234`
 
 | Usuario | Rol | Para qué sirve |

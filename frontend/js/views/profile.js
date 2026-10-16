@@ -2,7 +2,8 @@
 
 import { api } from "../api.js";
 import { openOnboarding } from "./onboarding.js";
-import { isLoggedIn, refreshUser, state, displayName, updateSteamPreferences } from "../store.js";
+import { isLoggedIn, refreshUser, state, displayName, updateSteamPreferences, changeExperience, hasStudio, loginDestination } from "../store.js";
+import { navigate } from "../router.js";
 import { steamDashboard } from "./steam-profile.js";
 import { h, icon, initials, mount, toast } from "../ui.js";
 import { requiresLogin } from "../components.js";
@@ -14,6 +15,23 @@ function field(label, input) {
     h("span", { class: "muted", style: { display: "block", marginBottom: "var(--s-2)", fontSize: "var(--fs-sm)" } }, label),
     input,
   );
+}
+
+function experienceSection(user) {
+  const developer = user.role === "desarrollador";
+  return h("section", { class: "card profile-experience" },
+    h("h2", null, "Tu experiencia en GameTrack"),
+    h("p", { class: "muted" }, developer ? `${user.studio || "Tu estudio"} · Espacio profesional de demostración.` : "Estás usando tu perfil de jugador. Tu biblioteca, gustos y valoraciones se conservan al cambiar de experiencia."),
+    h("div", { class: "row", style: { gap: "var(--s-3)", flexWrap: "wrap" } },
+      h("button", { class: "btn btn-primary", onClick: async event => {
+        if (!developer && (!hasStudio(user) || !user.studio)) { navigate("/bienvenida?tipo=desarrollador"); return; }
+        const button = event.currentTarget; button.disabled = true;
+        try {
+          const next = await changeExperience({ role: developer ? "jugador" : "desarrollador" });
+          navigate(loginDestination(next));
+        } catch (error) { toast(error.message, "error"); button.disabled = false; }
+      } }, icon(developer ? "gamepad" : "chart", 17), developer ? "Usar como jugador" : hasStudio(user) ? "Abrir mi estudio" : "Configurar espacio de estudio"),
+      hasStudio(user) && h("a", { class: "btn", href: "#/bienvenida?tipo=desarrollador" }, "Configurar estudio y juego inicial")));
 }
 
 function dataSection(user) {
@@ -194,11 +212,12 @@ async function buildBody() {
         ),
       ),
       h("div",{class:"profile-hero-actions"},
-        h("a",{href:"#/que-jugamos",class:"btn btn-primary"},icon("gamepad",18),"¿Qué jugamos?",icon("chevron",14)),
+        h("a",{href:user.role === "jugador" ? "#/que-jugamos" : "#/dev",class:"btn btn-primary"},icon(user.role === "jugador" ? "gamepad" : "chart",18),user.role === "jugador" ? "¿Qué jugamos?" : "Panel del estudio",icon("chevron",14)),
         dashboard ? h("button",{class:"btn profile-secondary-action",onClick:() => {dashboard.showSection("achievements");dashboard.scrollIntoView({block:"start",behavior:"instant"});}},icon("trophy",16),"Mis logros")
-          : h("a",{href:"#/listas",class:"btn profile-secondary-action"},icon("list",16),"Mis listas")),
+          : user.role === "jugador" && h("a",{href:"#/listas",class:"btn profile-secondary-action"},icon("list",16),"Mis listas")),
     ),
-    tastes,
+    experienceSection(user),
+    user.role === "jugador" ? tastes : null,
     dashboard || (user.role === "jugador" ? profileActivity(user,heroMedia) : null),
     user.role === "jugador" ? myReviewsSection(user) : null,
     user.role === "jugador" && !user.steam_verified ? steamSection(user) : null,

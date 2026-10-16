@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.security import hash_password, verify_password
-from app.models import Genre, User, UserPreference
+from app.models import Genre, User, UserPreference, UserRole
 from app.schemas.user import UserCreate
 
 
@@ -28,6 +28,8 @@ def create_user(db: Session, data: UserCreate) -> User:
         full_name=data.full_name,
         role=data.role,
         studio=data.studio,
+        developer_enabled=data.role is UserRole.DEVELOPER,
+        onboarding_step="studio" if data.role is UserRole.DEVELOPER else "player",
     )
     db.add(user)
     db.commit()

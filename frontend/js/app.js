@@ -15,6 +15,9 @@ import {
   loginDestination,
   isDeveloper,
   isLoggedIn,
+  hasStudio,
+  changeExperience,
+  studioDestination,
   logout,
   restore,
   state,
@@ -22,6 +25,7 @@ import {
 } from "./store.js";
 import { clear, emptyState, h, icon, initials, magicLoader, toast } from "./ui.js";
 import { accountsView } from "./views/auth.js";
+import { experienceView } from "./views/experience.js";
 import { catalogView } from "./views/catalog.js";
 import { developerGameView, developerView } from "./views/developer.js";
 import { gameView } from "./views/game.js";
@@ -88,7 +92,8 @@ function isDark() {
  * repetida en tres lugares (la raíz, el cambio de perfil y el ítem de nav);
  * ahora sale de acá, que es también lo que apunta el logo del header. */
 function homePath() {
-  return isDeveloper() ? "/dev" : "/recomendaciones";
+  if (state.user?.onboarding_step) return "/bienvenida";
+  return isDeveloper() ? studioDestination() : "/recomendaciones";
 }
 
 // Accesos persistentes a las secciones del jugador.
@@ -179,6 +184,21 @@ document.addEventListener("click", (event) => {
 
 function accountMenu() {
   const menu = h("div", { class: "menu", role: "menu" });
+
+  if (isLoggedIn()) {
+    menu.append(h("div", { class: "menu-label" }, "Tu experiencia"),
+      h("button", { class: "menu-item", role: "menuitem", onClick: async () => {
+        closeMenu();
+        if (!isDeveloper() && (!hasStudio() || !state.user.studio)) {
+          navigate("/bienvenida?tipo=desarrollador"); return;
+        }
+        try {
+          await changeExperience({ role: isDeveloper() ? "jugador" : "desarrollador" });
+          navigate(loginDestination(state.user));
+        } catch (error) { toast(error.message, "error"); }
+      } }, icon(isDeveloper() ? "gamepad" : "chart", 17), isDeveloper() ? "Usar como jugador" : hasStudio() ? "Abrir mi estudio" : "Configurar espacio de estudio"),
+      h("div", { class: "menu-sep" }));
+  }
 
   menu.append(
     h(
@@ -293,6 +313,9 @@ let navigationRevision = 0;
 
 function view(loader) {
   return async (context) => {
+    if (state.user?.onboarding_step && !["/bienvenida", "/cuentas"].includes(currentPath())) {
+      navigate("/bienvenida", { replace: true }); return;
+    }
     const revision = navigationRevision;
     const ownerId = state.user?.id ?? null;
     const isCurrent = () => revision === navigationRevision && (state.user?.id ?? null) === ownerId;
@@ -334,6 +357,7 @@ route("/", async (context) => {
 });
 
 route("/cuentas", view(async (context) => accountsView(context)));
+route("/bienvenida", view(experienceView));
 route("/catalogo", view(catalogView));
 route("/recomendaciones", view(recommendationsView));
 route("/listas", view(listsView));
@@ -388,7 +412,11 @@ async function boot() {
   if (window.location.hash === "#/steam-complete") {
     try {
       await completeSteamLogin();
-      history.replaceState(null, "", `#${loginDestination(state.user, "/perfil")}`);
+      const requested = sessionStorage.getItem("gametrack.registration-role");
+      sessionStorage.removeItem("gametrack.registration-role");
+      const destination = state.user.onboarding_step === "choose" && ["jugador", "desarrollador"].includes(requested)
+        ? `/bienvenida?tipo=${requested}` : loginDestination(state.user, "/perfil");
+      history.replaceState(null, "", `#${destination}`);
       toast("¡Listo! Verificamos tu cuenta con Steam.");
     } catch (error) {
       history.replaceState(null, "", "#/cuentas?steam_error=expired");

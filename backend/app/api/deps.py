@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.core.security import decode_access_token
 from app.db.database import get_db
-from app.models import User, UserRole
+from app.models import User
 from app.services.user_service import get_user
 
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -53,7 +53,7 @@ def get_optional_current_user(
 
 def require_developer(user: User = Depends(get_current_user)) -> User:
     """Restringe un endpoint al rol desarrollador."""
-    if user.role is not UserRole.DEVELOPER:
+    if not user.is_developer:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Esta sección es exclusiva del rol desarrollador",

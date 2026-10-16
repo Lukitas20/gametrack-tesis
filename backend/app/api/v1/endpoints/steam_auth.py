@@ -181,7 +181,7 @@ def resolve_user(db, steam_id, link_user_id):
             if other and other.steam_id != steam_id:
                 raise ValueError("linked")
         else:
-            user = User(role=UserRole.PLAYER, steam_id=steam_id)
+            user = User(role=UserRole.PLAYER, steam_id=steam_id, onboarding_step="choose")
             assign_steam_username(db, user)
         if not user or not user.is_active:
             # New users receive the column default at flush above.

@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, String, Text, UniqueConstraint, func
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, String, Text, UniqueConstraint, false, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.database import Base
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
 
 class User(Base):
-    """Usuario de la plataforma: jugador o desarrollador."""
+    """Una cuenta con experiencias de jugador y desarrollador."""
 
     __tablename__ = "users"
 
@@ -51,8 +51,15 @@ class User(Base):
     role: Mapped[UserRole] = mapped_column(
         enum_column(UserRole), default=UserRole.PLAYER, index=True
     )
-    # Solo para el rol desarrollador: estudio al que pertenece. Permite filtrar
-    # el dashboard de analítica a los juegos de ese estudio.
+    # role identifica la experiencia activa; habilitar el estudio es permanente
+    # y no elimina el perfil personal ni representa una suscripción comercial.
+    developer_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    onboarding_step: Mapped[str | None] = mapped_column(String(20))
+    analysis_game_id: Mapped[int | None] = mapped_column(
+        ForeignKey("games.id", ondelete="SET NULL")
+    )
+    # Nombre declarado del estudio o desarrollador independiente, sin verificar
+    # pertenencia ni restringir los juegos que puede consultar como referencia.
     studio: Mapped[str | None] = mapped_column(String(120), index=True)
     # Las elecciones manuales tienen prioridad sobre los gustos inferidos.
     preferences_source: Mapped[str | None] = mapped_column(String(20))
@@ -81,7 +88,7 @@ class User(Base):
 
     @property
     def is_developer(self) -> bool:
-        return self.role is UserRole.DEVELOPER
+        return self.developer_enabled or self.role is UserRole.DEVELOPER
 
     @property
     def genres(self) -> list[Genre]:

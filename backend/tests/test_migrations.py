@@ -96,3 +96,25 @@ def test_identidad_autor_steam_amplia_sin_modificar_resenas(tmp_path) -> None:
         row = connection.execute(text("SELECT content, author_name, steam_review_id, steam_author_id FROM reviews WHERE id=1")).one()
     assert tuple(row) == ("Texto original conservado", "Nombre observado", "fixture-review", None)
     engine.dispose()
+
+
+def test_experience_migration_preserves_existing_accounts_and_preferences(tmp_path) -> None:
+    database_url = f"sqlite:///{tmp_path / 'legacy.db'}"
+    config = _alembic_config(database_url)
+    command.upgrade(config, "a2e7c91d6b40")
+    engine = create_engine(database_url)
+    with engine.begin() as connection:
+        connection.execute(text("INSERT INTO users (id, username, role, studio, is_active) VALUES (1, 'player', 'jugador', NULL, 1), (2, 'indie', 'desarrollador', 'Indie', 1)"))
+        connection.execute(text("INSERT INTO genres (id, slug, name) VALUES (1, 'indie', 'Indie')"))
+        connection.execute(text("INSERT INTO user_preferences (user_id, genre_id, weight) VALUES (1, 1, 1)"))
+    command.upgrade(config, "head")
+    with engine.connect() as connection:
+        rows = connection.execute(text("SELECT username, developer_enabled, onboarding_step, studio FROM users ORDER BY id")).all()
+        assert rows == [("player", 0, None, None), ("indie", 1, None, "Indie")]
+        assert connection.scalar(text("SELECT count(*) FROM user_preferences")) == 1
+        assert not connection.execute(text("PRAGMA foreign_key_check")).all()
+    command.downgrade(config, "a2e7c91d6b40")
+    with engine.connect() as connection:
+        assert connection.scalar(text("SELECT count(*) FROM users")) == 2
+        assert connection.scalar(text("SELECT count(*) FROM user_preferences")) == 1
+    engine.dispose()

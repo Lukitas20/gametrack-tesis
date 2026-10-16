@@ -86,11 +86,26 @@ def test_new_steam_user_real_verification_and_one_time_session(client, db):
     assert session.status_code == 200, session.text
     user = session.json()["user"]
     assert user["steam_id"] == SID and user["steam_verified"] is True
+    assert user["onboarding_step"] == "choose"
     assert db.get(User, user["id"]).hashed_password is None
     assert client.post("/api/v1/auth/steam/session").status_code == 401
     # Repeat login resolves to the same account, never duplicates it.
     callback(client, assertion(client))
     assert client.post("/api/v1/auth/steam/session").json()["user"]["id"] == user["id"]
+
+
+def test_steam_remembers_configured_experience_on_next_login(client):
+    callback(client, assertion(client))
+    session = client.post("/api/v1/auth/steam/session").json()
+    headers = {"Authorization": f"Bearer {session['access_token']}"}
+    configured = client.put("/api/v1/auth/me/experience", headers=headers, json={
+        "role": "desarrollador", "studio": "Mi estudio", "complete_onboarding": True,
+    })
+    assert configured.status_code == 200, configured.text
+    callback(client, assertion(client))
+    user = client.post("/api/v1/auth/steam/session").json()["user"]
+    assert user["role"] == "desarrollador" and user["studio"] == "Mi estudio"
+    assert user["onboarding_step"] is None and user["developer_enabled"] is True
 
 
 @pytest.mark.parametrize("key,value", [

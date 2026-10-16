@@ -98,9 +98,9 @@ export async function recommendationsView({ query } = { query: new URLSearchPara
       null,
       h("div", { class: "view-head" }, h("h1", null, "Recomendaciones")),
       emptyState(
-        "Esta vista es para el rol jugador",
-        "La cuenta actual es de desarrollador. Su lugar es el panel de analítica.",
-        h("a", { class: "btn btn-primary", href: "#/dev" }, "Ir al panel"),
+        "Volvé a tu experiencia de jugador",
+        "Cambiá desde el menú de cuenta o desde tu perfil para usar tus gustos y valoraciones.",
+        h("a", { class: "btn btn-primary", href: "#/perfil" }, "Ir a mi perfil"),
       ),
     );
   }

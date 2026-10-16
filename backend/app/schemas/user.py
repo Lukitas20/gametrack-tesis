@@ -15,7 +15,7 @@ class UserCreate(BaseModel):
     password: str = Field(min_length=8, max_length=128)
     full_name: str | None = None
     role: UserRole = UserRole.PLAYER
-    studio: str | None = None
+    studio: str | None = Field(default=None, max_length=120)
 
     @field_validator("password")
     @classmethod
@@ -43,6 +43,9 @@ class UserResponse(BaseModel):
     avatar_url: str | None
     role: UserRole
     studio: str | None
+    developer_enabled: bool = False
+    onboarding_step: Literal["choose", "player", "studio"] | None = None
+    analysis_game_id: int | None = None
     created_at: datetime
 
     # Cuenta de Steam vinculada, si la hay.
@@ -89,3 +92,23 @@ class ProfileUpdate(BaseModel):
     full_name: str | None = Field(default=None, max_length=150)
     email: EmailStr | None = None
     avatar_url: str | None = Field(default=None, max_length=500)
+
+
+class ExperienceUpdate(BaseModel):
+    """Experiencia activa y configuración del espacio profesional de demostración."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    role: UserRole
+    studio: str | None = Field(default=None, max_length=120)
+    analysis_game_id: int | None = Field(default=None, gt=0)
+    complete_onboarding: bool = False
+
+    @field_validator("studio")
+    @classmethod
+    def trimmed_studio(cls, value: str | None) -> str | None:
+        if value is not None:
+            value = value.strip()
+            if not value:
+                raise ValueError("Indicá el nombre del estudio o del desarrollador independiente")
+        return value

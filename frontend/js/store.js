@@ -38,6 +38,14 @@ export function isDeveloper() {
   return state.user?.role === "desarrollador";
 }
 
+export function hasStudio(user = state.user) {
+  return Boolean(user?.developer_enabled || user?.role === "desarrollador");
+}
+
+export async function changeExperience(data) {
+  return acceptSession(await api.updateExperience(data));
+}
+
 function persist() {
   if (state.token) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ token: state.token }));
@@ -79,10 +87,17 @@ export async function completeSteamLogin() {
 }
 
 export function loginDestination(user, fallback = "/recomendaciones") {
+  if (user.onboarding_step) return "/bienvenida";
   const invite = sessionStorage.getItem("gametrack.invite");
-  sessionStorage.removeItem("gametrack.invite");
-  if (invite && /^[A-Za-z0-9_-]{32,64}$/.test(invite)) return `/invitacion/${invite}`;
-  return user.role === "desarrollador" ? "/dev" : fallback;
+  if (user.role !== "desarrollador") {
+    sessionStorage.removeItem("gametrack.invite");
+    if (invite && /^[A-Za-z0-9_-]{32,64}$/.test(invite)) return `/invitacion/${invite}`;
+  }
+  return user.role === "desarrollador" ? studioDestination(user) : fallback;
+}
+
+export function studioDestination(user = state.user) {
+  return user?.analysis_game_id ? `/dev/juego/${user.analysis_game_id}` : "/dev";
 }
 
 async function acceptSession(data) {

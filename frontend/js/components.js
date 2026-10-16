@@ -319,10 +319,9 @@ export function developerOnly() {
     h(
       "div",
       null,
-      h("strong", null, "Sección exclusiva del rol desarrollador. "),
-      "Cambiá a la cuenta ",
-      h("code", null, "dev.demo"),
-      " desde el menú de cuenta para ver el panel de analítica.",
+      h("strong", null, "Abrí tu espacio de estudio. "),
+      "Podés analizar juegos propios o de referencia con tu misma cuenta. ",
+      h("a", { class: "btn btn-sm", href: "#/bienvenida?tipo=desarrollador" }, "Configurar espacio de estudio"),
     ),
   );
 }

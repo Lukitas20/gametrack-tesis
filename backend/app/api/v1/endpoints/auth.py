@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user
 from app.core.security import create_access_token
 from app.db.database import get_db
-from app.models import User
+from app.models import Game, User, UserRole
 from app.services.steam_account_service import ensure_steam_account_name
 from app.schemas.user import (
     LoginRequest,
@@ -15,6 +15,7 @@ from app.schemas.user import (
     Token,
     UserCreate,
     UserResponse,
+    ExperienceUpdate,
 )
 from app.services.user_service import (
     authenticate_user,
@@ -81,6 +82,39 @@ def update_preferences(
     db: Session = Depends(get_db),
 ) -> User:
     return set_preferences(db, user, data.genre_ids)
+
+
+@router.put("/me/experience", response_model=Token)
+def update_experience(
+    data: ExperienceUpdate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Token:
+    # La habilitación solo concede acceso al panel de demostración. Los futuros
+    # permisos de un plan pago deberán verificarse por separado en el servidor.
+    studio = data.studio if data.studio is not None else user.studio
+    if data.role is UserRole.DEVELOPER and not (studio and studio.strip()):
+        raise HTTPException(422, "Indicá el nombre del estudio o del desarrollador independiente")
+    if data.role is UserRole.PLAYER and {"studio", "analysis_game_id"} & data.model_fields_set:
+        raise HTTPException(422, "Configurá los juegos desde el espacio de estudio")
+    if data.analysis_game_id is not None and not db.get(Game, data.analysis_game_id):
+        raise HTTPException(404, "El juego seleccionado no está en el catálogo")
+    # También preserva el acceso de cuentas antiguas creadas como desarrollador.
+    if user.is_developer:
+        user.developer_enabled = True
+    user.role = data.role
+    if data.role is UserRole.DEVELOPER:
+        user.developer_enabled = True
+        user.studio = studio.strip()
+        if "analysis_game_id" in data.model_fields_set:
+            user.analysis_game_id = data.analysis_game_id
+    if data.complete_onboarding:
+        user.onboarding_step = None
+    elif user.onboarding_step:
+        user.onboarding_step = "studio" if data.role is UserRole.DEVELOPER else "player"
+    db.commit()
+    db.refresh(user)
+    return _token_for(user)
 
 
 @router.post("/me/preferences/steam", response_model=UserResponse)
