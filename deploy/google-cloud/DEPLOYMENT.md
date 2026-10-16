@@ -201,3 +201,40 @@ Valoraciones, reseñas Steam y CSS, incluyendo respuestas 304. La raíz con
 la sección Steam y no el mensaje anterior. `/api/v1/health` confirmó base `ok`.
 Una pestaña nueva del navegador cargó la aplicación y el acceso protegido a
 Valoraciones correctamente, sin sesión personal disponible en ese navegador.
+
+## Registro y experiencias de cuenta — 16 de octubre de 2026
+
+Publicada la revisión `gametrack-00016-dbj`, con el 100 % del tráfico, a partir
+del código `81d1e05`, integrado sobre `c35799d` de `feature/IA`. Se conservan
+las mejoras existentes de afinidad, análisis de reseñas reales, autores y
+catálogo profesional. El espacio profesional se identifica como demostración
+del prototipo; esa indicación no convierte los datos analizados en sintéticos
+ni representa una suscripción contratada.
+
+El registro permite elegir jugador o desarrollador/estudio. Las cuentas nuevas
+de Steam eligen en su primer acceso. La configuración inicial guarda gustos o
+el nombre del estudio y un juego opcional, propio o de referencia. El perfil y
+el menú permiten alternar experiencias conservando la cuenta y sus datos.
+
+Build `014ef434-57f6-4b00-a639-77b1235c0ddc`, imagen fijada por digest
+`sha256:c3cf4da23d4ae2195077c58509fe7a3c9898fb26bcf846202734106ecc41a254`.
+Se actualizó únicamente la imagen de la web y de los cuatro jobs existentes,
+mediante Google Cloud CLI, conservando sus configuraciones activas, secretos,
+límites, horarios y modelos. Los parámetros locales conservan `untrained` para
+el recomendador histórico retirado y la etiqueta de entrenamiento `observed`.
+No se ejecutaron importaciones ni entrenamientos.
+
+Respaldo Cloud SQL `1792190065962`: `SUCCESSFUL`, completado antes de la
+migración. Ejecución `gametrack-migrate-hz8p8`: completada correctamente;
+aplicó `a2e7c91d6b40 -> d8a104f3b927`, ampliando el esquema de usuarios sin
+eliminar registros ni solicitar de nuevo la configuración a las cuentas actuales.
+
+Validación: 197 pruebas de backend y 8 de frontend aprobadas, incluidas
+migraciones, autenticación Steam, conservación de datos, política de datos
+reales y empaquetado de modelos. La auditoría de Cloud Build verificó 257
+archivos y los tres artefactos de modelos aprobados, sin fuentes privadas.
+En la web pública se verificaron salud y base `ok`, catálogo, callback inicial
+HTTPS de Steam, el nuevo contrato de cuenta y rechazo de cambios anónimos (401).
+Nueve archivos publicados coinciden con el código probado y envían `no-cache`.
+El navegador mostró las dos opciones del nuevo registro sin errores de consola.
+No se crearon perfiles ni interacciones ficticias en la base publicada.
