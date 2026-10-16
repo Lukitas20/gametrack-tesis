@@ -335,3 +335,43 @@ votos reales actuales de esa ficha de SteamSpy, sin ejecutar migraciones ni
 modificar usuarios u opiniones. La lectura pública de `/api/v1/games/83` confirmó
 la recuperación de Cyberpunk y FPS. Aprobaron salud, catálogo, callback HTTPS de
 Steam y protección de datos personales. No hubo entrenamientos ni datos ficticios.
+
+## Tipos de cuenta exclusivos y permanentes — 16 de octubre de 2026
+
+Cada cuenta es jugador o desarrollador/estudio. El registro fija `role`; sólo
+el registro Steam nuevo pendiente de elegir tipo puede establecerlo una vez.
+La escritura condicionada impide consumir esa elección para tipos distintos
+en solicitudes concurrentes. Editar el perfil o completar la configuración no
+permite cambiar de tipo. Se conserva el tipo actual de las cuentas existentes.
+
+Se retiraron los botones de alternancia del menú y del perfil. Los parámetros
+de bienvenida no modifican un tipo ya definido y las rutas del otro tipo
+redirigen al inicio propio. La ficha profesional no ofrece listas ni puntaje
+personal. El servidor restringe listas, notas, reseñas propias, gustos,
+biblioteca/logros Steam, amistades y recomendaciones personales a jugadores;
+la analítica y el análisis libre de reseñas son de desarrolladores. La columna
+histórica `developer_enabled` permanece por compatibilidad de esquema, pero no
+concede permisos ni se publica en la respuesta de usuario. Los permisos usan
+el tipo de la base, sin confiar en una indicación de rol del token.
+
+La elección inicial de Steam precede a la importación de gustos: éstos se
+infieren al confirmar una cuenta de jugador. Las sesiones posteriores conservan
+el tipo, el estudio y el juego de análisis elegidos.
+
+Código `8865b93`, build `d228a7f4-79ee-4be3-a2f2-27ed0f61044e`, digest
+`sha256:94ed2aff3f36a2b3c8e5868ed6893cae68a7ba00d49796729c963c8b76e3ca0a`.
+Revisión `gametrack-00020-f9w`, activa con el 100 % del tráfico. Sólo se
+actualizaron las imágenes de la web y los cuatro jobs existentes, conservando
+sus configuraciones. No se ejecutaron jobs, migraciones ni cambios en datos
+de usuarios durante esta publicación.
+
+Validación: 972 casos distintos de backend aprobados entre la corrida general
+y la repetición final de los 117 de API, registro, permisos y Steam; 16 pruebas
+condicionales omitidas. Las 18 pruebas de frontend aprobaron. La auditoría de
+fuentes verificó 257 archivos y los modelos permitidos, sin datos privados ni
+fixtures. Diez archivos públicos coinciden con el código probado y envían
+`no-cache`. El esquema público rechaza campos extra en el registro y la edición
+de perfil, no admite editar el tipo por perfil y no expone la habilitación
+histórica. Aprobaron salud, catálogo, callback HTTPS de Steam y acceso privado
+401; los archivos de pruebas permanecen fuera de la web. No se crearon cuentas
+ni opiniones ficticias en producción.
