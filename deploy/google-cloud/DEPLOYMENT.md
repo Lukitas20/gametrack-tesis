@@ -299,3 +299,39 @@ Las pruebas de frontend se excluyen del paquete y la imagen; sus rutas públicas
 devuelven 404. Los archivos públicos de bienvenida e inicio coinciden con los
 probados y envían `no-cache`. Aprobaron salud, catálogo, callback HTTPS de Steam
 y protección de acceso privado. No se crearon cuentas de prueba en producción.
+
+## Rasgos conservados y coincidencias parciales — 16 de octubre de 2026
+
+Se reprodujo el 30/100 de Probably Stolen, AppID 4348910, con la copia local del
+historial real. Cyberpunk 2077 intervenía, pero faltaban rasgos que la fuente sí
+publicaba: el refresco de Steam conservaba sólo etiquetas clasificadas como
+community, mientras el motor también reconocía etiquetas antiguas clasificadas
+como platform con votos comunitarios reales. El refresco podía eliminar esas
+asociaciones y sus votos, entre ellas Cyberpunk y FPS.
+
+El refresco conserva ahora la misma evidencia que admite el motor. El worker
+también revalida cada siete días las fichas de SteamSpy previamente enriquecidas,
+con una hora entre reintentos fallidos. Las respuestas incompletas o de otro
+AppID conservan los rasgos anteriores. No se amplía el catálogo por ese camino.
+
+La explicación `prelaunch-2.1` distingue coincidencias parciales y fuertes,
+expone rasgos sin respaldo comparable y no presenta esa ausencia como rechazo.
+Las coincidencias explícitas débiles no bastan para anunciar confianza media.
+No se cambió la fórmula del índice ni su límite provisional de 75. En la prueba
+local, recuperar los rasgos reales de Cyberpunk llevó el caso de 30 a 31 y volvió
+a incluir ese juego entre las referencias principales; el interés por la
+ambientación no confirma afinidad con la gestión y el comercio del anuncio.
+
+Código `da626e5`, build `81522cd4-5b41-4d93-a1a4-576ab7f393a7`, digest
+`sha256:7129f8514d3855ce9e0dca9eca67dd94d4ceadf10066773c5ec2bdc488023ff4`.
+Revisión `gametrack-00019-gtk`, con el 100 % del tráfico. Se sincronizaron las
+imágenes de los cuatro jobs existentes conservando sus configuraciones.
+
+Validación: 189 casos distintos de afinidad, Steam, ingesta, worker y privacidad
+de fuentes aprobados. Auditoría de 257 archivos y modelos permitidos, sin fuentes
+privadas ni fixtures. La ejecución puntual `gametrack-migrate-l2pvv` completó
+`scripts/refresh_known_traits.py --appid 1091500`: obtuvo únicamente etiquetas y
+votos reales actuales de esa ficha de SteamSpy, sin ejecutar migraciones ni
+modificar usuarios u opiniones. La lectura pública de `/api/v1/games/83` confirmó
+la recuperación de Cyberpunk y FPS. Aprobaron salud, catálogo, callback HTTPS de
+Steam y protección de datos personales. No hubo entrenamientos ni datos ficticios.
