@@ -11,8 +11,9 @@ export function experienceView({ query = new URLSearchParams() } = {}) {
   if (!isLoggedIn()) return requiresLogin("Iniciá sesión para configurar tu experiencia.");
   const user = state.user;
   const requested = query.get("tipo");
-  let selectedRole = ["jugador", "desarrollador"].includes(requested) ? requested
-    : user.onboarding_step === "choose" ? null : user.role;
+  const requestedRole = ["jugador", "desarrollador"].includes(requested) ? requested : null;
+  const needsChoice = user.onboarding_step === "choose" && !requestedRole;
+  let selectedRole = requestedRole || (needsChoice ? null : user.role);
   let selectedGameId = user.analysis_game_id || null;
   let busy = false;
   let searchRevision = 0;
@@ -120,7 +121,10 @@ export function experienceView({ query = new URLSearchParams() } = {}) {
     else roleBody.replaceChildren();
     submit.textContent = !selectedRole ? "Continuar" : selectedRole === "desarrollador" ? "Abrir mi espacio de estudio" : "Ir a mis recomendaciones";
   }
-  form.append(experienceChoices({ value: selectedRole, onChange: role => { selectedRole = role; error.hidden = true; renderRole(); } }), roleBody, error, submit);
+  if (needsChoice) {
+    form.append(experienceChoices({ value: selectedRole, onChange: role => { selectedRole = role; error.hidden = true; renderRole(); } }));
+  }
+  form.append(roleBody, error, submit);
   renderRole();
   return h("div", { class: "experience-page" },
     h("div", { class: "view-head" }, h("div", null, h("p", { class: "eyebrow" }, "TU CUENTA, DOS EXPERIENCIAS"),

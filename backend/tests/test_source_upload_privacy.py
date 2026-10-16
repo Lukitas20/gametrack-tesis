@@ -26,6 +26,7 @@ def test_two_real_models_are_complete_and_publishable():
     "backend/models/other.json", "deploy/google-cloud/current.tfstate.backup",
     "deploy/google-cloud/settings.auto.tfvars.json", "source/gametrack.db-wal",
     "deploy/google-cloud/.tools/gcloud-config/application_default_credentials.json",
+    "frontend/tests/experience-onboarding.test.mjs",
 ])
 def test_private_or_unapproved_files_stop_publication(private):
     module = script()
