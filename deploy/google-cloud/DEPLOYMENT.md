@@ -238,3 +238,43 @@ HTTPS de Steam, el nuevo contrato de cuenta y rechazo de cambios anónimos (401)
 Nueve archivos publicados coinciden con el código probado y envían `no-cache`.
 El navegador mostró las dos opciones del nuevo registro sin errores de consola.
 No se crearon perfiles ni interacciones ficticias en la base publicada.
+
+## Afinidad de próximos lanzamientos — 16 de octubre de 2026
+
+Corregido el cálculo `prelaunch-2.0`, código `a39912c`, publicado en la revisión
+`gametrack-00017-pqd` con el 100 % del tráfico. Build
+`b52c2681-95ef-4de4-b715-09b3fc81babf`, digest
+`sha256:ec15900c9012d7f208c05706a2d562fe278afde5358fc78f94c376745971f236`.
+
+La ficha normal de algunos anuncios, incluido el AppID 4435490 de Call of Duty,
+redirige a una pantalla de edad y no entrega sus etiquetas al importador. Se
+obtienen ahora de la ficha breve pública `apphoverpublic` cuando la página
+normal no las aporta, sin enviar una fecha de nacimiento ficticia. Las etiquetas
+mantienen su fuente visible y las consultas incompletas se reintentan tras dos
+minutos en lugar de conservarlas una hora.
+
+El cálculo revisa todo el historial personal con rasgos disponibles en el
+catálogo mediante un vector anuncio x historial. No hereda los 40 juegos con
+más horas del feed ni calcula predicciones sobre todo el catálogo. Sólo las
+comparaciones con rasgos específicos compartidos intervienen en el puntaje y
+sus ejemplos; los juegos de otro tipo no diluyen el interés ni aportan una
+penalización por compartir únicamente un género. Los rechazos comparables se
+conservan y las horas siguen representando interés, no satisfacción.
+Cuando faltan rasgos comparables no se inventa un número ni se anuncia afinidad
+baja; se informa la cobertura del historial y la falta de evidencia. Se conserva
+el límite provisional de 75 y no se modifica la escala de los juegos publicados.
+
+Validación: 192 casos distintos de cálculo, historial Steam, próximos
+lanzamientos, experiencias, recomendaciones y modelos reales aprobados. Las
+regresiones incluyen un shooter por debajo de los 40 títulos con más horas,
+rechazos de otros tipos de juegos, fallos de etiquetas, referencias y caché.
+Las fichas reales de Call of Duty, Phantom Blade Zero y Final Fantasy Resonance
+entregaron sus etiquetas en la comprobación local. La ejecución de nube
+`gametrack-migrate-ctq22` ejecutó únicamente `verify_prelaunch_runtime.py` para
+el AppID 4435490 y terminó correctamente, sin consultar perfiles ni escribir
+datos; no ejecutó migraciones. La salud pública, base, catálogo, protección de
+API y redirección inicial HTTPS de Steam también aprobaron.
+
+Se actualizaron sólo las imágenes de la web y los cuatro jobs existentes. Se
+conservaron secretos, modelos, horarios y límites. No hubo cambios de esquema,
+entrenamientos, importaciones de usuarios ni datos de prueba en la base publicada.

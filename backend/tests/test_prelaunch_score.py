@@ -225,6 +225,20 @@ def test_unrelated_action_game_is_not_cited_or_treated_as_dislike(profile):
     assert all(game.name not in p.text for p in result.positives)
 
 
+def test_dislike_for_a_different_kind_of_action_game_does_not_penalize_shooter(profile):
+    db,user,_,_,announced=profile
+    db.query(Rating).one().score=1
+    fps=Tag(slug='fps',name='FPS',kind='community')
+    shooter=Game(slug='liked-shooter',name='Shooter valorado',genres=db.query(Genre).all(),tags=[fps])
+    db.add(shooter); db.flush()
+    db.add(Rating(user_id=user.id,game_id=shooter.id,score=5)); db.commit(); invalidate_engine()
+    announced['tags']=['FPS']
+    report=preview.build_preview(announced,preview.preview_context(db,user))
+    assert report.score.value==75
+    assert any(shooter.name in p.text for p in report.positives)
+    assert all('1/5' not in p.text for p in report.cautions)
+
+
 def test_comparable_game_beyond_top_40_hours_is_used_and_other_genres_do_not_dilute(profile,monkeypatch):
     db,user,_,_,announced=profile
     action=db.query(Genre).filter_by(slug='accion').one()
