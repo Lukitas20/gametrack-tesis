@@ -218,6 +218,14 @@ class RecommenderEngine:
             term: column
             for column, term in enumerate(sorted(genre_terms | community_terms))
         }
+        # También lo necesita la comparación de un anuncio contra el historial:
+        # no depende de haber calculado antes una matriz de recomendaciones.
+        broad = set(self._genre_names) | {
+            "action", "adventure", "rpg", "indie", "casual", "simulation",
+            "strategy", "sports", "racing", "massively-multiplayer", "free-to-play",
+            "singleplayer", "multiplayer", "co-op", "online-co-op", "pvp",
+        }
+        self.personal_specific_terms = set(self._term_index) - broad
 
         matrix = lil_matrix((len(games), max(len(self._term_index), 1)))
         votes_by_game: dict[int, list[tuple[str, int]]] = {}
@@ -272,15 +280,9 @@ class RecommenderEngine:
         """
         if not self._term_index:
             return {}
-        broad = set(self._genre_names) | {
-            "action", "adventure", "rpg", "indie", "casual", "simulation",
-            "strategy", "sports", "racing", "massively-multiplayer", "free-to-play",
-            "singleplayer", "multiplayer", "co-op", "online-co-op", "pvp",
-        }
         weights = np.ones(len(self._term_index))
-        self.personal_specific_terms = set(self._term_index) - broad
         for term, column in self._term_index.items():
-            if term in broad:
+            if term not in self.personal_specific_terms:
                 weights[column] = .15
         matrix = normalize(self._tfidf.multiply(weights).tocsr())
         specific = matrix.multiply(weights == 1).tocsr()

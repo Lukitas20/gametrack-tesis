@@ -2,7 +2,8 @@
 
 Se proyectan rasgos públicos en el TF-IDF local, conservando las penalizaciones
 de historial. Las etiquetas de un juego anunciado no tienen votos comparables:
-se usan por presencia y el índice se limita a 75 (55 con géneros solos).
+se usan por presencia y el índice se limita a 75. Los géneros solos no alcanzan
+para asignar afinidad baja ni para seleccionar ejemplos del historial.
 Estos límites son heurísticos, no intervalos de confianza ni probabilidades.
 """
 from datetime import datetime, timezone
@@ -15,38 +16,66 @@ import httpx
 import numpy as np
 from scipy.sparse import lil_matrix
 from sklearn.preprocessing import normalize
+from sqlalchemy import select
 
+from app.ml.recommender import get_engine
+from app.models import Game, Rating
 from app.schemas.gametrack_score import GameExplanation, GameTrackScore
 from app.services import home_release_service as releases
-from app.services.gametrack_score_service import score_context
-from app.services.personal_history_service import combine_history_affinities
+from app.services.personal_history_service import combine_history_affinities, own_history_affinity, personal_history
 from app.services.steam_service import GENRE_TRANSLATIONS, slugify
 
 _cache = {}
 _lock = threading.Lock()
 TTL = 3600
+INCOMPLETE_TTL = 120
+# Rasgos de presentación, clasificación por edad o distribución no bastan
+# para llamar parecidos a juegos de jugabilidad distinta.
+PRESENTATION_TERMS = {"3d", "2d", "controller", "violent", "violence", "gore", "nudity",
+                      "sexual-content", "early-access", "full-controller-support"}
 
 
 class StoreTags(HTMLParser):
-    """Sólo etiquetas públicas app_tag; ignora la descripción comercial."""
+    """Etiquetas app_tag públicas: enlaces de la tienda y divs de su ficha breve."""
     def __init__(self):
         super().__init__()
-        self.tags, self.capture, self.text = [], False, []
+        self.tags, self.capture, self.text, self.depth = [], None, [], 0
 
     def handle_starttag(self, tag, attrs):
-        if tag == 'a' and 'app_tag' in dict(attrs).get('class', '').split():
-            self.capture, self.text = True, []
+        if self.capture:
+            if tag == self.capture:
+                self.depth += 1
+        elif tag in {'a', 'div', 'span'} and 'app_tag' in dict(attrs).get('class', '').split():
+            self.capture, self.text, self.depth = tag, [], 1
 
     def handle_data(self, text):
         if self.capture:
             self.text.append(text)
 
     def handle_endtag(self, tag):
-        if tag == 'a' and self.capture:
+        if tag == self.capture:
+            self.depth -= 1
+            if self.depth:
+                return
             name = ' '.join(''.join(self.text).split())[:80]
-            if name and name not in self.tags and len(self.tags) < 20:
+            if any(char.isalnum() for char in name) and name not in self.tags and len(self.tags) < 20:
                 self.tags.append(name)
-            self.capture = False
+            self.capture = None
+
+
+def public_tags(appid):
+    """Dos vistas públicas del mismo anuncio; sin simular una fecha de nacimiento."""
+    for url in (f'https://store.steampowered.com/app/{appid}/',
+                f'https://store.steampowered.com/apphoverpublic/{appid}/'):
+        try:
+            page = releases._http_client().get(url, params={'l': 'english', 'cc': 'ar'}, timeout=5)
+            page.raise_for_status()
+            parser = StoreTags(); parser.feed(page.text[:1500000])
+            if parser.tags:
+                return parser.tags, url
+        except (httpx.HTTPError, ValueError):
+            continue
+    return [], None
 
 
 def announced_game(appid):
@@ -54,7 +83,7 @@ def announced_game(appid):
     now = time.time()
     with _lock:
         cached = _cache.get(appid)
-        if cached and now - cached['cached_at'] < TTL:
+        if cached and now - cached['cached_at'] < (TTL if cached['tags_available'] else INCOMPLETE_TTL):
             return cached
     try:
         response = releases._http_client().get('https://store.steampowered.com/api/appdetails',
@@ -71,19 +100,12 @@ def announced_game(appid):
             raise HTTPException(502, 'Steam devolvió una ficha incompleta. Intentá nuevamente.')
         genres = [GENRE_TRANSLATIONS.get(item['description'].lower(), item['description'])
                   for item in (data.get('genres') or []) if isinstance(item, dict) and isinstance(item.get('description'), str)]
-        tags, tags_available = [], False
         # Las etiquetas de Steam usan slugs ingleses en el modelo existente.
-        try:
-            page = releases._http_client().get(f'https://store.steampowered.com/app/{appid}/',
-                params={'l': 'english', 'cc': 'ar'}, timeout=5)
-            page.raise_for_status()
-            parser = StoreTags(); parser.feed(page.text[:1500000])
-            tags, tags_available = parser.tags, bool(parser.tags)
-        except (httpx.HTTPError, ValueError):
-            pass  # Con géneros solos, la respuesta declara menor respaldo.
+        tags, tag_source = public_tags(appid)
         label = (data.get('release_date') or {}).get('date')
         result = {'appid': appid, 'name': name[:200], 'genres': genres[:15], 'tags': tags,
-                  'tags_available': tags_available, 'release_label': label[:100] if isinstance(label, str) and label.strip() else 'Fecha por anunciar',
+                  'tags_available': bool(tags), 'tag_source': tag_source,
+                  'release_label': label[:100] if isinstance(label, str) and label.strip() else 'Fecha por anunciar',
                   'image': releases._image(data.get('header_image')), 'cached_at': now}
     except (httpx.HTTPError, ValueError, AttributeError, TypeError) as error:
         raise HTTPException(503, 'No pudimos verificar el anuncio en Steam. Volvé a intentar en unos minutos.') from error
@@ -97,7 +119,7 @@ def announced_game(appid):
 def preview_similarities(engine, genres, tags, history_ids):
     if not engine._term_index or not history_ids:
         return {}, set()
-    specific = getattr(engine, 'personal_specific_terms', set())
+    specific = engine.personal_specific_terms - PRESENTATION_TERMS
     query = lil_matrix((1, len(engine._term_index)))
     known = set()
     for term in genres | tags:
@@ -109,23 +131,34 @@ def preview_similarities(engine, genres, tags, history_ids):
         return {}, known
     weights = np.array([1. if term in specific else .15 for term in engine._term_index])
     candidate = normalize(engine._transformer.transform(query.tocsr()).multiply(weights).tocsr())
-    result = {}
-    for gid in history_ids:
-        index = engine._game_index.get(gid)
-        if index is None:
-            continue
-        previous = normalize(engine._tfidf[index].multiply(weights).tocsr())
-        similarity = float((candidate @ previous.T).toarray()[0, 0])
-        shared = known & engine._community_terms_by_game.get(gid, set()) & specific
-        result[gid] = np.array([min(similarity, 1. if shared else .45)])
+    # Un anuncio x historial completo. No usa el recorte global por horas ni
+    # construye la matriz catálogo x historial que necesita el feed general.
+    ids = [gid for gid in history_ids if gid in engine._game_index]
+    if not ids:
+        return {}, known
+    previous = normalize(engine._tfidf[[engine._game_index[gid] for gid in ids]].multiply(weights).tocsr())
+    values = (previous @ candidate.T).toarray().ravel()
+    result = {gid: np.array([float(value)]) for gid, value in zip(ids, values)}
     return result, known
+
+
+def preview_context(db, user):
+    """Señales propias completas, sin inferencias ni recortes del feed del catálogo."""
+    ratings = dict(db.execute(select(Rating.game_id, Rating.score).where(Rating.user_id == user.id)).all())
+    signals, _, _ = personal_history(db, user, ratings)
+    games = {}
+    ids = list(signals)
+    for start in range(0, len(ids), 500):
+        games.update({game.id: game for game in db.scalars(select(Game).where(Game.id.in_(ids[start:start + 500]))).all()})
+    return {'engine': get_engine(db), 'signals': signals, 'history_games': games,
+            'genres': {pref.genre.slug for pref in user.preferences}, 'personal': bool(signals or user.preferences)}
 
 
 def build_preview(announced, context, question=None):
     genres = {slugify(name) for name in announced['genres']}
     tags = {slugify(name) for name in announced['tags']}
     similarities, known = preview_similarities(context['engine'], genres, tags, context['signals'])
-    specific = known & getattr(context['engine'], 'personal_specific_terms', set())
+    specific = known & (context['engine'].personal_specific_terms - PRESENTATION_TERMS)
     positive, cautions, reasons, references = [], [], [], []
     def ref(rid, title, url, detail):
         references.append({'id':rid, 'title':title, 'url':url, 'detail':detail})
@@ -135,34 +168,33 @@ def build_preview(announced, context, question=None):
     checked = datetime.fromtimestamp(announced['cached_at'], timezone.utc).strftime('%d/%m/%Y %H:%M UTC')
     ref('announcement', 'Anuncio en Steam', store_url, f"Fecha anunciada: {announced['release_label']} · consulta {checked}. Géneros y etiquetas públicos; pueden cambiar.")
     ref('profile', 'Mi perfil', '#/perfil', 'Tus valoraciones y tu historial sincronizado. Las horas indican interés, no satisfacción.')
+    if announced.get('tag_source'):
+        ref('tags', 'Etiquetas públicas de Steam', announced['tag_source'], 'Rasgos observados en Steam para este anuncio; sin inferirlos del nombre ni de otros juegos.')
+    tag_refs = ['announcement'] + (['tags'] if announced.get('tag_source') else [])
     comparisons = []
     for gid, similarity in similarities.items():
         previous, signal = context['history_games'].get(gid), context['signals'][gid]
         if previous is None or similarity[0] < .12 or not signal['weight']:
             continue
-        shared = (genres & {genre.slug for genre in previous.genres}) | (tags & context['engine']._community_terms_by_game.get(gid, set()))
+        shared = specific & context['engine']._community_terms_by_game.get(gid, set())
         if not shared:
             continue
-        comparisons.append((float(similarity[0]) * abs(signal['weight']), gid, signal, previous, sorted(shared)))
+        strength = ((own_history_affinity(signal) - .15) / .85
+                    if signal['weight'] > 0 and signal['source'] != 'steam_playtime' else abs(signal['weight']))
+        comparisons.append((float(similarity[0]) * strength, gid, signal, previous, sorted(shared)))
     comparisons.sort(key=lambda item:(-item[0], item[1]))
     value = None
     if comparisons:
-        values, _, _ = combine_history_affinities(similarities, context['signals'], 1)
+        comparable = {item[1]: context['signals'][item[1]] for item in comparisons}
+        values, _, _ = combine_history_affinities(similarities, comparable, 1)
         if values is not None:
-            value = min(75 if specific else 55, round(float(values[0])*100))
-            reasons.append('El puntaje está limitado a 75/100 con rasgos específicos, o a 55/100 con rasgos amplios: todavía no existe una experiencia final para validar la afinidad.')
-    elif context['genres'] and genres:
+            value = min(75, round(float(values[0])*100))
+            reasons.append('Comparamos los rasgos anunciados con los juegos de tu historial que comparten características específicas. El puntaje está limitado a 75/100 porque la experiencia final todavía no está confirmada.')
+    else:
         overlap = genres & context['genres']
-        value = round(25 + 30 * len(overlap) / len(genres))
-        reasons.append('Sólo podemos comparar géneros amplios: el puntaje no supera 55/100.')
         if overlap:
             positive.append(point('Coincide con los géneros de tu perfil: ' + ', '.join(sorted(overlap)) + '. Es una coincidencia amplia, no una experiencia confirmada.', 'announcement','profile'))
-        else:
-            cautions.append(point('Sus géneros anunciados no coinciden con los que elegiste; eso no demuestra que vaya a disgustarte.', 'announcement','profile'))
-    elif context['personal']:
-        reasons.append('Faltan características comparables con tu historial. No asignamos un número por popularidad ni por el nombre del estudio.')
-    else:
-        reasons.append('Completá tus gustos o valorá juegos para obtener una estimación personal.')
+        reasons.append('Faltan rasgos específicos compartidos con tu historial. La falta de información no significa afinidad baja: no asignamos un número ni elegimos ejemplos sólo por compartir un género.')
     selected = [item for item in comparisons if item[2]['weight'] > 0][:2] + [item for item in comparisons if item[2]['weight'] < 0][:2]
     names = {slugify(name): name for name in announced['genres'] + announced['tags']}
     for _, gid, signal, previous, shared in selected:
@@ -185,19 +217,25 @@ def build_preview(announced, context, question=None):
             if label.casefold() not in {item.casefold() for item in labels}:
                 labels.append(label)
         text = f"Anuncia {', '.join(labels[:3])}, también presente en {previous.name}, que {opinion}."
-        (positive if signal['weight'] > 0 else cautions).append(point(text,'announcement',rid,'profile'))
+        (positive if signal['weight'] > 0 else cautions).append(point(text,*tag_refs,rid,'profile'))
         reasons.append(text)
     if not specific:
-        cautions.append(point('La comparación se apoya en géneros o etiquetas amplias. Faltan rasgos específicos para una estimación más detallada.','announcement'))
+        cautions.append(point('Faltan rasgos específicos del anuncio. Compartir sólo «Acción» u otro género amplio no alcanza para elegir juegos parecidos ni calcular tu afinidad.','announcement'))
+    history_count = len(similarities)
+    coverage = f"Revisamos {history_count} juegos de tu historial con datos de contenido disponibles; {len(comparisons)} comparten rasgos específicos con este anuncio."
+    reasons.append(coverage)
+    cautions.append(point(coverage + ' Los títulos todavía sin rasgos en el catálogo no permiten una comparación fiable.', 'profile', *tag_refs))
     cautions.append(point('Todavía no podemos confirmar calidad, rendimiento, duración, monetización ni recepción del juego final. No usamos notas críticas o reseñas de otros títulos para llenar esos datos.','announcement'))
     cautions.append(point('Antes de comprar, contrastá gameplay real, una demo si existe y reseñas posteriores al lanzamiento. Este índice no garantiza satisfacción.','announcement'))
     reasons.append('Estimación previa al lanzamiento; sólo afinidad personal. No representa un porcentaje de probabilidad ni una nota de calidad.')
     score = GameTrackScore(value=value, affinity=value, evidence='prelanzamiento' if value is not None else 'sin_datos',
-        preliminary=True, version='prelaunch-1.0', reasons=reasons,
+        preliminary=True, version='prelaunch-2.0', reasons=reasons,
+        confidence='medium' if value is not None and any(item[2]['source'] != 'steam_playtime' for item in comparisons) else 'low' if value is not None else 'none',
+        confidence_message=coverage + (' Las horas indican interés; no garantizan que te haya gustado.' if value is not None else ' Sin suficiente evidencia no calculamos un puntaje.'),
         components={'affinity':value/100} if value is not None else {}, weights={'affinity':1.} if value is not None else {},
-        explanation='GameTrackScore provisional de 0 a 100. Compara rasgos anunciados con tus opiniones e interés; tus rechazos reducen el índice. Límite heurístico de 75, o 55 con rasgos amplios. No usa Metascore ni recepción pública para predecir una experiencia aún no lanzada.')
+        explanation='GameTrackScore provisional de 0 a 100. Revisa todo el historial con datos disponibles y usa sólo juegos con rasgos específicos compartidos; tus rechazos comparables reducen el índice. Límite heurístico de 75. Sin rasgos comparables no asigna puntaje. No usa Metascore ni recepción pública para predecir una experiencia aún no lanzada.')
     fit = 'prometedora' if value is not None and value >= 60 else 'moderada' if value is not None and value >= 40 else 'baja'
-    summary = f"Afinidad provisional {fit} con los rasgos anunciados. La experiencia final todavía no está confirmada." if value is not None else 'Todavía no hay datos comparables suficientes para estimar tu afinidad. No inventamos un puntaje.'
+    summary = f"Afinidad provisional {fit} con los rasgos anunciados. La experiencia final todavía no está confirmada." if value is not None else 'Faltan rasgos comparables para estimar tu afinidad con este anuncio. Eso no significa que no te vaya a gustar; todavía no calculamos un puntaje.'
     answer = []
     if question:
         query = slugify(question)
@@ -206,7 +244,8 @@ def build_preview(announced, context, question=None):
         elif any(word in query for word in ('no-', 'disgust', 'negativ', 'rechaz')):
             answer = cautions
         elif any(word in query for word in ('parec', 'historial', 'compar')):
-            answer = positive + cautions[:1] if selected else [point('No hay suficientes juegos comparables en tu historial para detallar semejanzas.','profile','announcement')]
+            answer = ([p for p in positive + cautions if any(rid.startswith('history-') for rid in p['reference_ids'])]
+                      if selected else [point('No hay suficientes juegos comparables en tu historial para detallar semejanzas.','profile','announcement')])
         elif any(word in query for word in ('puntaje', 'score', 'numero', 'calcul')):
             answer = [point(score.explanation,'profile','announcement')]
         else:
@@ -214,9 +253,9 @@ def build_preview(announced, context, question=None):
     return GameExplanation(game_id=announced['appid'],game_name=announced['name'],score=score,summary=summary,
         positives=positive,cautions=cautions,answer=answer,references=references,
         suggested_questions=['¿En qué se parece a mi historial?','¿Por qué podría no gustarme?','¿Qué falta confirmar antes de comprar?','¿Cómo se calcula el puntaje?'],
-        method='Modelo local de contenido TF-IDF y reglas con fuentes visibles. Las etiquetas anunciadas se usan por presencia, sin inventar votos. Se conserva la penalización por opiniones negativas. No es una conversación generativa ni una predicción de calidad; no se consulta IA externa.')
+        method='Compara el anuncio con todo tu historial que tiene rasgos disponibles en el catálogo, sin recortarlo a los juegos con más horas. Sólo los juegos con rasgos específicos compartidos intervienen en el puntaje y sus ejemplos. Modelo local de contenido TF-IDF; las etiquetas públicas del anuncio se usan por presencia, sin inventar votos. Se conserva la penalización por opiniones negativas comparables. No es una predicción de calidad ni se consulta IA externa.')
 
 
 def explain_upcoming(db, user, appid, question=None):
     announced = announced_game(appid)
-    return build_preview(announced, score_context(db,user), question)
+    return build_preview(announced, preview_context(db,user), question)

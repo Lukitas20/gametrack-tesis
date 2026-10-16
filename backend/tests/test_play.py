@@ -283,10 +283,10 @@ def _check_migration(filename):
     with closing(sqlite3.connect(filename)) as connection:
         connection.executescript("CREATE TABLE alembic_version(version_num VARCHAR(32) PRIMARY KEY);"
                                  "INSERT INTO alembic_version VALUES ('f7a31d908c42');"
-                                 "CREATE TABLE users(id INTEGER PRIMARY KEY, username TEXT);"
+                                 "CREATE TABLE users(id INTEGER PRIMARY KEY, username TEXT, role TEXT DEFAULT 'jugador');"
                                  "CREATE TABLE games(id INTEGER PRIMARY KEY, name TEXT);"
                                  "CREATE TABLE reviews(id INTEGER PRIMARY KEY, content TEXT);"
-                                 "INSERT INTO users VALUES (1, 'Conservar');"
+                                 "INSERT INTO users(id, username) VALUES (1, 'Conservar');"
                                  "INSERT INTO games VALUES (1, 'Juego existente');"
                                  "INSERT INTO reviews VALUES (1, 'Reseña existente');")
     config = Config('alembic.ini'); config.set_main_option('sqlalchemy.url', 'sqlite:///' + filename.as_posix())

@@ -13,7 +13,7 @@ from app.api.deps import get_current_user
 from app.api.v1.endpoints.recommendations import router
 from app.db.database import Base, get_db
 from app.ml.recommender import invalidate_engine
-from app.models import Game, Genre, Rating, Tag, User, UserPreference
+from app.models import Game, Genre, Rating, Tag, User, UserPreference, SteamIdentity, SteamProfileCache
 from app.models.enums import UserRole
 from app.services import prelaunch_score_service as preview
 from app.services.gametrack_score_service import score_context
@@ -69,7 +69,8 @@ def test_genre_only_is_limited_and_missing_traits_have_no_number(profile):
     game.tags=[];db.commit();invalidate_engine()
     announced['tags']=[]
     report=preview.build_preview(announced,score_context(db,user))
-    assert report.score.value <= 55
+    assert report.score.value is None and report.score.confidence == 'none'
+    assert all(not ref.id.startswith('history-') for ref in report.references)
     assert any('rasgos específicos' in point.text for point in report.cautions)
     announced['genres']=[]
     assert preview.build_preview(announced,score_context(db,user)).score.value is None
@@ -79,7 +80,7 @@ def test_manual_preferences_work_without_history_and_do_not_claim_experience(pro
     db,_,other,game,announced=profile
     db.add(UserPreference(user_id=other.id,genre_id=game.genres[0].id));db.commit()
     report=preview.build_preview(announced,score_context(db,other))
-    assert report.score.value == 55
+    assert report.score.value is None
     assert any('géneros de tu perfil' in point.text for point in report.positives)
     assert all('Historial real' not in point.text for point in report.positives)
 
@@ -158,3 +159,104 @@ def test_preview_routes_auth_role_validation_and_no_store(profile,monkeypatch):
         assert client.get('/api/v1/recommendations/upcoming/0/explanation').status_code==422
         user.role=UserRole.DEVELOPER
         assert client.get(path).status_code==403
+
+
+def test_age_gate_uses_public_hover_tags_without_fabricating_age(monkeypatch):
+    preview._cache.clear(); calls=[]
+    def handler(request):
+        calls.append(request)
+        if request.url.path == '/api/appdetails':
+            return httpx.Response(200,json={'123':{'success':True,'data':{
+                'type':'game','name':'Anuncio observado','genres':[{'description':'Action'}],
+                'release_date':{'coming_soon':True,'date':'2027'}}}})
+        if request.url.path == '/app/123/':
+            return httpx.Response(302,headers={'Location':'https://store.steampowered.com/agecheck/app/123/'})
+        assert request.url.path == '/apphoverpublic/123/'
+        return httpx.Response(200,text='<div class="app_tag"><span>FPS</span></div><div class="app_tag">First-Person</div>')
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        monkeypatch.setattr(preview.releases,'_http_client',lambda:client)
+        metadata=preview.announced_game(123)
+        assert metadata['tags']==['FPS','First-Person']
+        assert metadata['tag_source']=='https://store.steampowered.com/apphoverpublic/123/'
+        assert metadata['tags_available'] is True
+        assert all('birth' not in str(request.url).lower() and not request.headers.get('cookie') for request in calls)
+        assert preview.announced_game(123)==metadata and len(calls)==3
+    preview._cache.clear()
+
+
+def test_tag_parser_ignores_add_button_and_keeps_nested_real_labels():
+    parser=preview.StoreTags()
+    parser.feed('<div class="app_tag">+</div><div class="app_tag"><span>FPS</span></div>'
+                '<a class="app_tag">First-Person</a><div class="app_tag">FPS</div>')
+    assert parser.tags==['FPS','First-Person']
+
+
+def test_incomplete_tags_are_retried_so_outage_does_not_last_an_hour(monkeypatch):
+    preview._cache.clear(); now=[1000]; calls=[]
+    monkeypatch.setattr(preview.time,'time',lambda:now[0])
+    def handler(request):
+        calls.append(request.url.path)
+        if request.url.path == '/api/appdetails':
+            return httpx.Response(200,json={'123':{'success':True,'data':{
+                'type':'game','name':'Future','genres':[{'description':'Action'}],
+                'release_date':{'coming_soon':True}}}})
+        return httpx.Response(200,text='No tags available')
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        monkeypatch.setattr(preview.releases,'_http_client',lambda:client)
+        assert preview.announced_game(123)['tags_available'] is False
+        assert len(calls)==3
+        now[0]+=preview.INCOMPLETE_TTL+1
+        preview.announced_game(123)
+        assert len(calls)==6
+    preview._cache.clear()
+
+
+def test_unrelated_action_game_is_not_cited_or_treated_as_dislike(profile):
+    db,user,_,game,announced=profile
+    fps=Tag(slug='fps',name='FPS',kind='community')
+    db.add(Game(slug='other-shooter',name='Catálogo shooter',genres=game.genres,tags=[fps]))
+    db.commit(); invalidate_engine()
+    announced['tags']=['FPS']
+    result=preview.build_preview(announced,preview.preview_context(db,user))
+    assert result.score.value is None
+    assert result.score.confidence=='none'
+    assert 'baja' not in result.summary
+    assert all(not ref.id.startswith('history-') for ref in result.references)
+    assert all(game.name not in p.text for p in result.positives)
+
+
+def test_comparable_game_beyond_top_40_hours_is_used_and_other_genres_do_not_dilute(profile,monkeypatch):
+    db,user,_,_,announced=profile
+    action=db.query(Genre).filter_by(slug='accion').one()
+    racing=Tag(slug='cars',name='Cars',kind='community')
+    fps=Tag(slug='fps',name='FPS',kind='community')
+    shooter=Game(slug='played-shooter',name='Shooter con menos horas',steam_app_id=999,
+                 genres=[action],tags=[fps])
+    unrelated=[Game(slug=f'racer-{i}',name=f'Carreras {i}',steam_app_id=1000+i,
+                    genres=[action],tags=[racing]) for i in range(45)]
+    user.steam_id='76561198000000001'
+    db.add_all([shooter,*unrelated]); db.flush()
+    db.add(SteamIdentity(user_id=user.id,steam_id=user.steam_id))
+    cache=SteamProfileCache(user_id=user.id,steam_id=user.steam_id,library={'status':'ok','items':[
+        {'appid':999,'minutes':6000},*[{'appid':g.steam_app_id,'minutes':60000} for g in unrelated]]},friends={})
+    db.add(cache); db.commit(); invalidate_engine()
+    announced['tags']=['FPS']
+    monkeypatch.setattr(preview,'announced_game',lambda appid:announced)
+    result=preview.explain_upcoming(db,user,123,'Comparalo con mi historial')
+    assert result.score.value is not None and result.score.value > 40
+    assert any(shooter.name in p.text for p in result.positives)
+    assert any(f'history-{shooter.id}' in p.reference_ids for p in result.answer)
+    assert all(not ref.title.startswith('Carreras') for ref in result.references)
+    assert any('47 juegos' in reason for reason in result.score.reasons)
+    cache.library={'status':'ok','items':[{'appid':999,'minutes':6000}]}; db.commit()
+    assert preview.explain_upcoming(db,user,123).score.value==result.score.value
+
+
+def test_preview_does_not_compute_full_catalog_predictions(profile,monkeypatch):
+    db,user,_,_,announced=profile
+    engine=preview.get_engine(db)
+    def full_matrix(*args,**kwargs): pytest.fail('Un anuncio sólo necesita comparar contra el historial personal')
+    monkeypatch.setattr(engine,'personal_history_similarities',full_matrix)
+    monkeypatch.setattr(engine,'personal_scores',full_matrix)
+    monkeypatch.setattr(preview,'announced_game',lambda appid:announced)
+    assert preview.explain_upcoming(db,user,123).score.value is not None
