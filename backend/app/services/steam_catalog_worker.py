@@ -16,7 +16,7 @@ from sqlalchemy import delete, or_, select, update
 from app.core.config import settings
 from app.db.base import SessionLocal
 from app.models import Game, SteamCatalogEntry, SteamCatalogSync, SteamCatalogWorker
-from app.services import steam_service
+from app.services import steam_service, steamspy_service
 from app.services.steam_catalog_service import catalog_lock, sync_catalog
 
 logger = logging.getLogger(__name__)
@@ -163,7 +163,8 @@ def process_details(db, *, limit: int | None = None,
             result["attempted"] += 1
             remote_failed = False
             try:
-                steam_service.refresh_game(db, game)
+                if steam_service.refresh_game(db, game):
+                    steamspy_service.refresh_known_traits(db, game)
             except steam_service.SteamUnavailable as error:
                 # refresh_game conserva la última ficha y programa el reintento.
                 _details_retry_at = time.monotonic() + max(60, getattr(error, "retry_after_seconds", 60))

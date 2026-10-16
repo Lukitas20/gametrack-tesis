@@ -13,6 +13,7 @@ noche entera de worker.
 from __future__ import annotations
 
 import pytest
+from datetime import datetime, timedelta, timezone
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -28,6 +29,50 @@ from app.services.steamspy_service import (
     is_empty_entry,
     parse_owners,
 )
+
+
+def test_done_traits_are_refreshed_without_deleting_existing_evidence(db):
+    from app.models import SteamCatalogSync
+    now=datetime.now(timezone.utc)
+    ingest_index_entries(db,[INDEX_CS2])
+    enrich_next_batch(db,limit=1,sleep_seconds=0,fetch=lambda _:DETAILS_CS2)
+    game=db.scalar(select(Game).where(Game.steam_app_id==730))
+    row=db.get(SteamSpySync,730);row.synced_at=now-timedelta(days=8);db.commit()
+    revision=db.get(SteamCatalogSync,1).revision
+    payload={**DETAILS_CS2,'tags':{'FPS':92000,'Cyberpunk':40}}
+    assert steamspy_service.refresh_known_traits(db,game,now=now,fetch=lambda _:payload)
+    assert {tag.slug for tag in game.tags} >= {'fps','shooter','cyberpunk'}
+    votes=dict(db.execute(select(Tag.slug,game_tags.c.votes).join(game_tags,game_tags.c.tag_id==Tag.id).where(game_tags.c.game_id==game.id)).all())
+    assert votes['fps']==92000 and votes['cyberpunk']==40 and votes['shooter']==65634
+    assert db.get(SteamCatalogSync,1).revision > revision
+    assert row.status==SYNC_DONE and row.last_error is None
+    def unexpected(_): pytest.fail('La ficha recién actualizada no debe consultarse otra vez')
+    assert not steamspy_service.refresh_known_traits(db,game,now=now,fetch=unexpected)
+
+
+@pytest.mark.parametrize('payload',[None, {'appid':730,'tags':[]}, {'appid':731,'tags':{'FPS':100}}, {'appid':730,'tags':{'FPS':True}}, {'appid':730,'tags':{'FPS':0}}])
+def test_trait_refresh_failure_preserves_data_and_backs_off(db,payload):
+    now=datetime.now(timezone.utc)
+    ingest_index_entries(db,[INDEX_CS2])
+    enrich_next_batch(db,limit=1,sleep_seconds=0,fetch=lambda _:DETAILS_CS2)
+    game=db.scalar(select(Game).where(Game.steam_app_id==730))
+    row=db.get(SteamSpySync,730);row.synced_at=now-timedelta(days=8);db.commit()
+    before=row.raw
+    def fetch(_):
+        if payload is None: raise SteamSpyUnavailable('offline')
+        return payload
+    assert not steamspy_service.refresh_known_traits(db,game,now=now,fetch=fetch)
+    assert row.raw==before and row.last_error and row.status==SYNC_DONE
+    assert {tag.slug for tag in game.tags} >= {'fps','shooter'}
+    def unexpected(_): pytest.fail('Debe respetarse el intervalo de reintento')
+    assert not steamspy_service.refresh_known_traits(db,game,now=now+timedelta(minutes=5),fetch=unexpected)
+
+
+def test_trait_refresh_does_not_expand_catalog_or_contact_unknown_games(db):
+    game=Game(slug='unobserved',name='Sin ficha previa',steam_app_id=111)
+    db.add(game);db.commit()
+    def unexpected(_): pytest.fail('Sólo se revalidan fichas previamente enriquecidas')
+    assert not steamspy_service.refresh_known_traits(db,game,fetch=unexpected)
 
 # Forma real de una entrada de ``request=all`` (endpoint masivo).
 INDEX_CS2 = {

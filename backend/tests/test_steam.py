@@ -440,7 +440,8 @@ def test_refresh_no_borra_una_ficha_pendiente_si_steam_no_responde(
     assert game.steam_synced_at is None
 
 
-def test_refresh_no_borra_las_etiquetas_comunitarias(db: Session, monkeypatch) -> None:
+@pytest.mark.parametrize('kind', ['community', 'platform'])
+def test_refresh_no_borra_las_etiquetas_comunitarias(db: Session, monkeypatch, kind) -> None:
     """Un refresco de la ficha no puede tirar lo que puso la ingesta.
 
     ``refresh_game`` reemplaza la lista de etiquetas con las categorías que
@@ -452,7 +453,7 @@ def test_refresh_no_borra_las_etiquetas_comunitarias(db: Session, monkeypatch) -
     """
     monkeypatch.setattr(steam_service, "get_app_details", lambda _: HALF_LIFE)
 
-    comunitaria = Tag(slug="story-rich", name="Story Rich", kind="community")
+    comunitaria = Tag(slug="story-rich", name="Story Rich", kind=kind)
     game = Game(steam_app_id=220, slug="half-life-2", name="Half-Life 2")
     game.tags = [comunitaria]
     db.add_all([comunitaria, game])

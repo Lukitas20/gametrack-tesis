@@ -58,6 +58,16 @@ def test_small_batches_progress_without_reprocessing_fresh_games(db, monkeypatch
     assert set(seen) == {game.id for game in rows} and len(seen) == 3
 
 
+def test_background_details_revalidate_known_community_traits(db, monkeypatch):
+    rows=games(db,1)
+    successful_details(monkeypatch,[])
+    refreshed=[]
+    monkeypatch.setattr(worker.steamspy_service,'refresh_known_traits',lambda db,game:refreshed.append(game.id) or False)
+    # Un fallo recuperable de la fuente comunitaria no invalida la ficha Steam.
+    assert worker.process_details(db,limit=1)['ready']==1
+    assert refreshed==[rows[0].id]
+
+
 def test_requested_game_has_priority_and_non_games_are_preserved(db, monkeypatch):
     rows = games(db)
     now = datetime.now(timezone.utc)

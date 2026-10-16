@@ -274,3 +274,39 @@ def test_preview_does_not_compute_full_catalog_predictions(profile,monkeypatch):
     monkeypatch.setattr(engine,'personal_scores',full_matrix)
     monkeypatch.setattr(preview,'announced_game',lambda appid:announced)
     assert preview.explain_upcoming(db,user,123).score.value is not None
+
+
+def test_partial_positive_matches_explain_low_score_and_missing_support(profile, monkeypatch):
+    import numpy as np
+    db,user,_,game,announced=profile
+    tags=[Tag(slug='shop-keeper',name='Shop Keeper',kind='community'),
+          Tag(slug='trading',name='Trading',kind='community')]
+    db.add(Game(slug='other-traits',name='Otra propuesta',tags=tags));db.commit();invalidate_engine()
+    announced['tags']=['Shop Keeper','Trading','Souls-like']
+    context=preview.preview_context(db,user)
+    monkeypatch.setattr(preview,'preview_similarities',lambda *args:({game.id:np.array([.18])},{'shop-keeper','trading','souls-like'}))
+    report=preview.build_preview(announced,context,'¿Qué limita mi puntaje?')
+    assert report.score.value==30 and report.score.confidence=='low'
+    assert any('Coincidencia parcial' in item.text for item in report.positives)
+    assert 'no equivale a un rechazo' in report.summary
+    assert any('Shop Keeper, Trading' in item.text and 'no significa' in item.text for item in report.cautions)
+    assert any('Shop Keeper, Trading' in item.text for item in report.answer)
+    assert any('conjunto de rasgos' in item.text for item in report.answer)
+
+
+def test_strong_match_has_no_missing_support_warning(profile):
+    db,user,_,_,announced=profile
+    report=preview.build_preview(announced,preview.preview_context(db,user))
+    assert report.score.confidence=='medium'
+    assert any('Coincidencia fuerte' in item.text for item in report.positives)
+    assert all('Todavía no tenemos respaldo positivo comparable' not in item.text for item in report.cautions)
+
+
+def test_unmodeled_specific_tag_is_reported_as_missing_evidence_not_dislike(profile):
+    db,user,_,_,announced=profile
+    announced['tags']=['Unmodeled Shopkeeping','Simulation','Singleplayer','Souls-like']
+    report=preview.build_preview(announced,preview.preview_context(db,user))
+    gaps=[item.text for item in report.cautions if 'Todavía no tenemos respaldo positivo comparable' in item.text]
+    assert len(gaps)==1 and 'Unmodeled Shopkeeping' in gaps[0]
+    assert 'Simulation' not in gaps[0] and 'Singleplayer' not in gaps[0]
+    assert 'no significa' in gaps[0]

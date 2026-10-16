@@ -25,7 +25,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.ml.analytics import analyze_review, apply_analysis
 from app.ml.recommender import invalidate_engine
-from app.models import Game, Genre, Review, Tag, User
+from app.models import Game, Genre, Review, Tag, User, game_tags
 from app.services.interaction_service import (
     recompute_game_aggregates,
     recompute_median_review_hours,
@@ -886,7 +886,12 @@ def refresh_game(db: Session, game: Game) -> bool:
     for field, value in parsed.items():
         setattr(game, field, value)
     game.genres = [_get_or_create(db, Genre, name) for name in genres]
-    community = [tag for tag in game.tags if tag.kind == "community"]
+    # El motor reconoce también etiquetas antiguas con votos reales cuya
+    # clasificación global quedó como platform. El refresco debe conservar
+    # esa misma evidencia, sin borrar rasgos como Cyberpunk o FPS.
+    voted_tags = set(db.scalars(select(game_tags.c.tag_id).where(
+        game_tags.c.game_id == game.id, game_tags.c.votes > 1)))
+    community = [tag for tag in game.tags if tag.kind == "community" or tag.id in voted_tags]
     platform_tags = [_get_or_create(db, Tag, name) for name in tags]
     game.tags = list(dict.fromkeys(community + platform_tags))
 

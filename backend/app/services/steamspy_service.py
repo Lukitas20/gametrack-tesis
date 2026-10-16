@@ -32,7 +32,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Iterable
 
 import httpx
@@ -304,6 +304,46 @@ def apply_appdetails(db: Session, game: Game, payload: dict) -> None:
             .where(game_tags.c.game_id == game.id, game_tags.c.tag_id == tag_id)
             .values(votes=max(votes, 1))
         )
+
+
+def refresh_known_traits(db: Session, game: Game, *, now=None, force=False, fetch=None) -> bool:
+    """Revalida fichas ya enriquecidas; un estado done no congela sus rasgos.
+
+    Se ejecuta en mantenimiento, nunca desde el cálculo personal. Los fallos
+    conservan etiquetas y votos anteriores y dejan una hora entre reintentos.
+    """
+    row = db.get(SteamSpySync, game.steam_app_id) if game.steam_app_id else None
+    if row is None or row.status != SYNC_DONE:
+        return False
+    now = now or datetime.now(timezone.utc)
+    def utc(value):
+        return value.replace(tzinfo=timezone.utc) if value and value.tzinfo is None else value
+    if not force:
+        if row.synced_at and now - utc(row.synced_at) < timedelta(days=7):
+            return False
+        if row.last_error and row.updated_at and now - utc(row.updated_at) < timedelta(hours=1):
+            return False
+    row.attempts += 1
+    row.updated_at = now
+    try:
+        payload = (fetch or fetch_appdetails)(game.steam_app_id)
+        tags = payload.get('tags') if isinstance(payload, dict) else None
+        if (not isinstance(payload, dict) or type(payload.get('appid')) is not int
+                or payload['appid'] != game.steam_app_id or not isinstance(tags, dict) or not tags
+                or not all(isinstance(name, str) and name.strip() and type(votes) is int and votes > 0
+                           for name, votes in tags.items())):
+            raise SteamSpyUnavailable('Ficha de etiquetas incompleta o incorrecta')
+    except SteamSpyUnavailable:
+        row.last_error = 'No se pudieron actualizar las etiquetas comunitarias; se conservan las anteriores.'
+        db.commit()
+        return False
+    apply_appdetails(db, game, payload)
+    row.raw, row.synced_at, row.last_error = payload, now, None
+    from app.services.steam_catalog_service import bump_catalog_revision
+    bump_catalog_revision(db)
+    db.commit()
+    steam_service.invalidate_engine()
+    return True
 
 
 def enrich_next_batch(

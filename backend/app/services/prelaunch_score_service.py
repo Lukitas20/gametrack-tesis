@@ -181,7 +181,7 @@ def build_preview(announced, context, question=None):
             continue
         strength = ((own_history_affinity(signal) - .15) / .85
                     if signal['weight'] > 0 and signal['source'] != 'steam_playtime' else abs(signal['weight']))
-        comparisons.append((float(similarity[0]) * strength, gid, signal, previous, sorted(shared)))
+        comparisons.append((float(similarity[0]) * strength, gid, signal, previous, sorted(shared), float(similarity[0])))
     comparisons.sort(key=lambda item:(-item[0], item[1]))
     value = None
     if comparisons:
@@ -197,7 +197,7 @@ def build_preview(announced, context, question=None):
         reasons.append('Faltan rasgos específicos compartidos con tu historial. La falta de información no significa afinidad baja: no asignamos un número ni elegimos ejemplos sólo por compartir un género.')
     selected = [item for item in comparisons if item[2]['weight'] > 0][:2] + [item for item in comparisons if item[2]['weight'] < 0][:2]
     names = {slugify(name): name for name in announced['genres'] + announced['tags']}
-    for _, gid, signal, previous, shared in selected:
+    for _, gid, signal, previous, shared, similarity in selected:
         rid = f'history-{gid}'
         ref(rid, previous.name, f'#/juego/{gid}', 'Juego de tu historial usado en la comparación de rasgos.')
         if signal['source'] == 'rating':
@@ -216,8 +216,30 @@ def build_preview(announced, context, question=None):
             label = GENRE_TRANSLATIONS.get(name.lower(), name)
             if label.casefold() not in {item.casefold() for item in labels}:
                 labels.append(label)
-        text = f"Anuncia {', '.join(labels[:3])}, también presente en {previous.name}, que {opinion}."
+        extent = 'Coincidencia fuerte de rasgos' if similarity >= .6 else 'Coincidencia parcial de rasgos'
+        text = f"{extent}: comparte {', '.join(labels[:3])} con {previous.name}, que {opinion}."
+        if similarity < .6:
+            text += ' Esos rasgos compartidos no confirman afinidad con el conjunto de la propuesta.'
         (positive if signal['weight'] > 0 else cautions).append(point(text,*tag_refs,rid,'profile'))
+        reasons.append(text)
+    # Explicar la evidencia ausente, sin convertir juegos no probados o rasgos
+    # incompletos del catálogo en una opinión negativa del usuario.
+    supported = set().union(*(specific & context['engine']._community_terms_by_game.get(item[1], set())
+                              for item in comparisons if item[2]['weight'] > 0)) if comparisons else set()
+    generic = (PRESENTATION_TERMS | genres | {slugify(name) for name in GENRE_TRANSLATIONS}
+               | {'singleplayer', 'multiplayer', 'co-op', 'online-co-op', 'pvp'})
+    unsupported = [name for name in announced['tags'] if slugify(name) not in supported | generic]
+    limits = []
+    if unsupported and comparisons:
+        text = ('Todavía no tenemos respaldo positivo comparable para estos rasgos anunciados: '
+                + ', '.join(unsupported[:4])
+                + '. Pueden faltar experiencias tuyas o etiquetas del catálogo; esto no significa que esos rasgos no te gusten.')
+        limits.append(point(text, *tag_refs, 'profile'))
+        cautions.extend(limits)
+        reasons.append(text)
+    if comparisons:
+        text = 'El puntaje compara el conjunto de rasgos disponibles. Una coincidencia parcial con un juego que te gustó aporta interés, pero no equivale a una recomendación fuerte de toda la propuesta.'
+        limits.append(point(text, *tag_refs, 'profile'))
         reasons.append(text)
     if not specific:
         cautions.append(point('Faltan rasgos específicos del anuncio. Compartir sólo «Acción» u otro género amplio no alcanza para elegir juegos parecidos ni calcular tu afinidad.','announcement'))
@@ -229,25 +251,27 @@ def build_preview(announced, context, question=None):
     cautions.append(point('Antes de comprar, contrastá gameplay real, una demo si existe y reseñas posteriores al lanzamiento. Este índice no garantiza satisfacción.','announcement'))
     reasons.append('Estimación previa al lanzamiento; sólo afinidad personal. No representa un porcentaje de probabilidad ni una nota de calidad.')
     score = GameTrackScore(value=value, affinity=value, evidence='prelanzamiento' if value is not None else 'sin_datos',
-        preliminary=True, version='prelaunch-2.0', reasons=reasons,
-        confidence='medium' if value is not None and any(item[2]['source'] != 'steam_playtime' for item in comparisons) else 'low' if value is not None else 'none',
+        preliminary=True, version='prelaunch-2.1', reasons=reasons,
+        confidence='medium' if value is not None and any(item[2]['source'] != 'steam_playtime' and item[5] >= .25 for item in comparisons) else 'low' if value is not None else 'none',
         confidence_message=coverage + (' Las horas indican interés; no garantizan que te haya gustado.' if value is not None else ' Sin suficiente evidencia no calculamos un puntaje.'),
         components={'affinity':value/100} if value is not None else {}, weights={'affinity':1.} if value is not None else {},
         explanation='GameTrackScore provisional de 0 a 100. Revisa todo el historial con datos disponibles y usa sólo juegos con rasgos específicos compartidos; tus rechazos comparables reducen el índice. Límite heurístico de 75. Sin rasgos comparables no asigna puntaje. No usa Metascore ni recepción pública para predecir una experiencia aún no lanzada.')
     fit = 'prometedora' if value is not None and value >= 60 else 'moderada' if value is not None and value >= 40 else 'baja'
     summary = f"Afinidad provisional {fit} con los rasgos anunciados. La experiencia final todavía no está confirmada." if value is not None else 'Faltan rasgos comparables para estimar tu afinidad con este anuncio. Eso no significa que no te vaya a gustar; todavía no calculamos un puntaje.'
+    if value is not None and value < 40 and any(item[2]['weight'] > 0 for item in comparisons) and not any(item[2]['weight'] < 0 for item in comparisons):
+        summary = 'Encontramos coincidencias parciales con juegos de tu historial, pero poco respaldo sobre el conjunto de rasgos anunciados. Eso no equivale a un rechazo tuyo ni confirma que no te vaya a gustar.'
     answer = []
     if question:
         query = slugify(question)
-        if any(word in query for word in ('compr', 'reserv', 'confirm', 'falt', 'riesg', 'segur', 'rendimiento')):
+        if any(word in query for word in ('puntaje', 'score', 'numero', 'calcul')):
+            answer = [point(score.explanation,'profile','announcement')] + limits
+        elif any(word in query for word in ('compr', 'reserv', 'confirm', 'falt', 'riesg', 'segur', 'rendimiento')):
             answer = cautions[-2:]
         elif any(word in query for word in ('no-', 'disgust', 'negativ', 'rechaz')):
             answer = cautions
         elif any(word in query for word in ('parec', 'historial', 'compar')):
             answer = ([p for p in positive + cautions if any(rid.startswith('history-') for rid in p['reference_ids'])]
                       if selected else [point('No hay suficientes juegos comparables en tu historial para detallar semejanzas.','profile','announcement')])
-        elif any(word in query for word in ('puntaje', 'score', 'numero', 'calcul')):
-            answer = [point(score.explanation,'profile','announcement')]
         else:
             answer = [point(summary,'profile','announcement')] + positive[:2] + cautions[-2:-1]
     return GameExplanation(game_id=announced['appid'],game_name=announced['name'],score=score,summary=summary,
