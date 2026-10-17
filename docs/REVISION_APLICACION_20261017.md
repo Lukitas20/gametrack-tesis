@@ -30,8 +30,12 @@ editó el Google Doc ni el LaTeX. No se implementaron pagos ni un chatbot genera
   pendientes. Fuente SHA-256 `132b93df897435d7dd033a5147f7b4163171f819f716a7990fb8f6497c0716bf`.
   El evaluador devolvió `incomplete`, `judged=0`, `missing=500`, `metrics=null`.
   No es un holdout acreditado ni se usó para entrenar o ajustar.
-- Carga local con catálogo real, sólo GET de salud/listado: 50 solicitudes,
-  concurrencia 5, cero errores, 2,723 s; p50 161,06 ms y p95 1.774,51 ms.
+- Carga local corregida con catálogo real, sólo GET de salud/listado: 50
+  solicitudes, concurrencia 5, cero errores, 1,663 s; p50 199,47 ms y p95 556,81 ms.
+  Se validaron HTTP y contenido (incluida conexión a base), y no aparecieron
+  excepciones en el registro. Se corrigió el soporte de hilos del servidor de
+  prueba manteniendo `mode=ro`/`query_only`; la primera corrida que sólo contaba
+  estados HTTP se descartó como evidencia de ausencia de errores internos.
   Son observaciones de esta corrida sobre SQLite local, no capacidad de Cloud Run.
 - Alembic: una cabeza `d8a104f3b927`; toda la cadena compiló SQL offline para
   PostgreSQL (17.692 caracteres). Estos cambios no necesitan nueva migración.
@@ -48,7 +52,11 @@ de entrenamiento/ajuste no vienen en los artefactos; hace falta recuperarlos y
 auditar intersecciones antes de considerar independiente una nueva muestra.
 Se verificó en código la separación por juegos/textos del clasificador y por
 autores/cronología de afinidad, así como la selección sólo con validación; no se
-reconstruyó ni reentrenó el corpus original en esta revisión.
+reentrenó el corpus original. Se intentó reconstruirlo con el selector original
+sobre la base local actual: se obtuvieron 24.000 ejemplos, pero su huella **no
+coincidió** con la publicada. Por eso esa base no acredita las particiones del
+artefacto ni la independencia de las 50 reseñas piloto. Falta el corpus/snapshot
+original de entrenamiento y sus índices, no cambiar etiquetas de procedencia.
 
 No hay URL de PostgreSQL de pruebas ni herramientas `pg_dump`/`pg_restore`
 disponibles en este equipo. Faltan ejecutar las pruebas PostgreSQL optativas y

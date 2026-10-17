@@ -70,3 +70,10 @@ def test_usability_instrument_has_no_invented_completion_or_time(tmp_path):
     output=tmp_path/"use";usability(tasks,output)
     result=metrics(output,output/"annotations.csv",None)
     assert result["missing"]==1 and result["seconds"] is None and result["metrics"] is None
+
+
+def test_load_does_not_accept_database_errors_hidden_in_http_200(monkeypatch):
+    import httpx
+    monkeypatch.setattr(httpx,"get",lambda *a,**kw:httpx.Response(200,json={"status":"ok","database":"error"}))
+    result=load("http://127.0.0.1:8008",2,1)
+    assert result["errors"]==2 and result["response_bodies_checked"] is True

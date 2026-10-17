@@ -13,7 +13,7 @@ from app.db.database import get_db
 from sqlalchemy.orm import Session
 from scripts.copy_sqlite_to_postgres import readonly_sqlite_engine
 
-engine=readonly_sqlite_engine(Path(os.environ["GAMETRACK_TEST_SQLITE_SNAPSHOT"]))
+engine=readonly_sqlite_engine(Path(os.environ["GAMETRACK_TEST_SQLITE_SNAPSHOT"]),check_same_thread=False)
 app=FastAPI(title="GameTrack · prueba local de sólo lectura")
 
 

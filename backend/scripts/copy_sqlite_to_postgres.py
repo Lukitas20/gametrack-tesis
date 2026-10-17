@@ -37,7 +37,7 @@ class TransferError(Exception):
     """An intentionally sanitized error suitable for displaying in the CLI."""
 
 
-def readonly_sqlite_engine(source: Path) -> Engine:
+def readonly_sqlite_engine(source: Path, *, check_same_thread: bool = True) -> Engine:
     """Open an existing file; SQLite must never create or change the source."""
     try:
         path = source.resolve(strict=True)
@@ -48,7 +48,7 @@ def readonly_sqlite_engine(source: Path) -> Engine:
     uri = f"{path.as_uri()}?mode=ro"
 
     def connect() -> sqlite3.Connection:
-        connection = sqlite3.connect(uri, uri=True, timeout=30)
+        connection = sqlite3.connect(uri, uri=True, timeout=30, check_same_thread=check_same_thread)
         connection.execute("PRAGMA query_only = ON")
         return connection
 

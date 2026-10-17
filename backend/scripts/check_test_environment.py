@@ -81,16 +81,19 @@ def load(url, requests, concurrency):
         start=time.perf_counter()
         try:
             response=httpx.get(url.rstrip('/')+("/api/v1/health" if index%2 else "/api/v1/games?limit=2"),timeout=15,follow_redirects=False)
-            return time.perf_counter()-start,response.status_code
-        except httpx.HTTPError:
-            return time.perf_counter()-start,0
+            payload=response.json()
+            valid=(payload.get("status")=="ok" and payload.get("database")=="ok") if index%2 else (
+                isinstance(payload.get("items"),list) and isinstance(payload.get("total"),int))
+            return time.perf_counter()-start,response.status_code,valid
+        except (httpx.HTTPError,ValueError,AttributeError):
+            return time.perf_counter()-start,0,False
     start=time.perf_counter()
     with ThreadPoolExecutor(max_workers=concurrency) as pool:
         observations=list(pool.map(request,range(requests)))
     elapsed=time.perf_counter()-start
-    times=sorted(seconds for seconds,_ in observations)
+    times=sorted(seconds for seconds,_,_ in observations)
     return dict(environment="local_test_only",requests=requests,concurrency=concurrency,seconds=round(elapsed,3),
-                errors=sum(status!=200 for _,status in observations),p50_ms=round(times[math.ceil(len(times)*.5)-1]*1000,2),
+                errors=sum(status!=200 or not valid for _,status,valid in observations),response_bodies_checked=True,p50_ms=round(times[math.ceil(len(times)*.5)-1]*1000,2),
                 p95_ms=round(times[math.ceil(len(times)*.95)-1]*1000,2),requests_per_second=round(requests/elapsed,2),
                 limitations="Carga acotada de salud y catálogo; no mide capacidad de producción ni tareas humanas.")
 
