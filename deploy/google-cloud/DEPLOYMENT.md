@@ -375,3 +375,36 @@ de perfil, no admite editar el tipo por perfil y no expone la habilitación
 histórica. Aprobaron salud, catálogo, callback HTTPS de Steam y acceso privado
 401; los archivos de pruebas permanecen fuera de la web. No se crearon cuentas
 ni opiniones ficticias en producción.
+
+## Planes como entrada y accesos separados — 17 de octubre de 2026
+
+La entrada de cuentas presenta Jugador gratuito, Jugador Premium (USD 3/mes)
+y Plan Estudio (USD 15/mes por estudio), según las secciones 10.2.1 y 10.2.2
+del modelo de negocio. Los precios y la distribución de funciones se identifican
+como propuestas; no se implementaron cobros, suscripciones ni nuevos permisos
+por plan. Las dos opciones de jugador encaminan a `/acceso/jugadores`; Estudio
+encamina a `/acceso/estudios`. Ambos accesos ofrecen ingreso y registro propios.
+Steam sólo se ofrece en la pantalla de jugadores. El registro recibe el tipo
+del acceso elegido, sin repetir el selector. El ingreso con contraseña rechaza
+el acceso del otro tipo después de validar las credenciales y antes de emitir
+una sesión. El tipo de cuenta sigue siendo permanente.
+
+Las cuentas nuevas creadas con Steam quedan definidas como jugadores desde el
+inicio. Las identidades existentes conservan su tipo, incluso los estudios con
+identidades Steam históricas. No se alteraron cuentas operativas ni el esquema
+de base de datos; el flujo de elección pendiente anterior sigue siendo compatible.
+
+Código `23390fa`, build `27fd836e-38f8-4d6e-95a3-bb11496b39f9`, digest
+`sha256:3dae21682184935644207a5e933905c4c4f7ac2fa6a5da24d610c0e833570f48`.
+Revisión `gametrack-00021-9sc`, activa con el 100 % del tráfico. Se actualizaron
+las imágenes de los cuatro jobs existentes sin ejecutarlos y conservando sus
+configuraciones. No se ejecutaron migraciones, importaciones ni entrenamientos.
+
+Validación: 121 casos distintos de backend y 21 pruebas de frontend aprobados.
+La auditoría de fuente verificó 258 archivos y los modelos permitidos, sin datos
+privados ni fixtures. Siete archivos públicos coinciden con el código probado y
+envían `no-cache`; el esquema publicado admite el tipo opcional en el ingreso y
+las fuentes de pruebas no están disponibles en la web. Aprobaron salud, catálogo,
+callback HTTPS de Steam y protección privada 401. Se recorrieron visualmente los
+planes, el acceso y registro de estudios sin Steam, y el acceso de jugadores con
+Steam en la versión pública. No se crearon perfiles ni opiniones ficticias.
