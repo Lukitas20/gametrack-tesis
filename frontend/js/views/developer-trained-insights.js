@@ -17,6 +17,7 @@ export function trainedReviewInsights(data, { title = "Lo que detecta la IA loca
       ? `Modelo local entrenado con ${count(data.model.examples)} reseñas reales de Steam de ${count(data.model.games)} juegos.`
       : "Modelo local entrenado con reseñas reales de Steam."),
     h("p", null, "Los temas se aprendieron con etiquetas automáticas sobre textos reales. Una mención no indica por sí sola una crítica ni explica por qué alguien no recomienda el juego."),
+    ready && h("p",null,`${count(data.predicted)} textos con al menos una predicción habilitada en esta muestra. Disponibilidad del modelo y aporte a este informe son cosas distintas.`),
     (data.limitations || []).map(text => h("p", null, text)));
   return h("section", { class: `dev-trained-insights${compact ? " is-compact" : ""}`, "aria-label": title },
     h("div", { class: "dev-trained-heading" },
@@ -24,7 +25,7 @@ export function trainedReviewInsights(data, { title = "Lo que detecta la IA loca
       h("div", null, h("h3", null, title), h("p", { class: "dev-caption" }, ready
         ? sampled ? scopeNote : "No hay reseñas disponibles en español para este análisis."
         : data.model?.message || "El modelo entrenado no está disponible. Las métricas del informe siguen disponibles.")),
-      h("span", { class: "dev-badge" }, ready ? "Modelo entrenado activo" : "Modelo no disponible")),
+      h("span", { class: "dev-badge" }, data.used ? "Modelo utilizado en este informe" : ready ? "Disponible · sin aporte en este informe" : "Modelo no disponible")),
     ready && topics.length > 0 && h("div", { class: "dev-trained-topics" }, topics.map(topic =>
       h("details", { class: "dev-trained-topic" },
         h("summary", null, h("span", null, topic.label), h("span", { class: "dev-trained-count" }, `${count(topic.mentions)} ${topic.mentions === 1 ? "mención" : "menciones"}`), icon("chevronDown", 14)),

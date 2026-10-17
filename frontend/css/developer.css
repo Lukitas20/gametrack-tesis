@@ -213,3 +213,7 @@
 }
 @media(prefers-reduced-motion:reduce) { .dev-page * { transition:none!important; } }
 body.motion-paused .dev-hero-tile,body.motion-paused .dev-game-card,body.motion-paused .dev-cover { transition:none; }
+.dev-audience { display: grid; gap: 18px; }
+.dev-audience > h2, .dev-audience > h3, .dev-audience > p { margin: 0; }
+.dev-audience .dev-aspect-grid { margin-top: 12px; }
+.dev-audience .dev-method p { max-width: 90ch; }

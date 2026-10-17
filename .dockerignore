@@ -19,6 +19,8 @@
 **/*.sqlite-*
 **/*.log
 backend/data/generated
+backend/data/evaluation
+backend/eval/*.csv
 # Los corpus y las claves de seudonimización nunca forman parte de la imagen.
 **/.author_hmac.key
 **/*_hmac.key

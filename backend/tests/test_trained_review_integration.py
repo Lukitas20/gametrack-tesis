@@ -164,3 +164,11 @@ def test_unspecified_scope_never_uses_entire_catalog(db, model):
     assert report["scope"]["type"] == "unspecified"
     assert report["sampled"] == 0 and report["total"] == 0
     assert model.calls == []
+
+
+def test_available_model_with_no_predictions_is_not_marked_used(db,data,sample,model,monkeypatch):
+    monkeypatch.setattr(model,"predict",lambda texts:[dict(reception=None,topics=[]) for _ in texts])
+    report=service.review_model_report(db,game_id=data["breve"].id)
+    assert report["model"]["status"]=="ready" and report["sampled"]==7
+    assert report["predicted"]==0 and report["used"] is False
+    assert service.explain_trained_report(report,"¿Qué temas hay?")["trained_ai_used"] is False

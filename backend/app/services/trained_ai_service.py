@@ -33,6 +33,7 @@ def review_model_report(db, *, studio=None, game_id=None, limit=MAX_REVIEWS):
     result = dict(
         model=status, scope=scope, language="es", sample_order="latest_saved",
         sampled=0, total=0, topics=[], reception=dict(compared=0, disagreements=0),
+        used=False, predicted=0,
         limitations=list(LIMITATIONS),
     )
     if game_id is None and not scope["studio"]:
@@ -72,6 +73,9 @@ def review_model_report(db, *, studio=None, game_id=None, limit=MAX_REVIEWS):
         return result
 
     result["sampled"] = len(rows)
+    # Un texto fuera del vocabulario puede ser leído sin producir predicciones.
+    result["predicted"] = sum(item.get("reception") is not None or bool(item.get("topics")) for item in predictions)
+    result["used"] = result["predicted"] > 0
     topics = {
         topic: dict(topic=topic, label=LABELS[topic], mentions=0, not_recommended=0,
                     recommended=0, without_recommendation=0, examples=[])
@@ -133,7 +137,7 @@ def explain_trained_report(report, question):
     }.items() if any(word in query for word in words)), None)
     candidates = [topic for topic in report["topics"] if not requested or topic["topic"] == requested]
     evidence, actions = [], []
-    used = report["model"]["status"] == "ready" and report["sampled"] > 0
+    used = bool(report.get("used"))
     if report["model"]["status"] != "ready":
         answer = report["model"].get("message", "El modelo entrenado no está disponible.")
     elif not report["sampled"]:

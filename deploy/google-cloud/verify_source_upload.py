@@ -36,7 +36,8 @@ def audit_paths(values) -> dict:
         private = (
             path.is_absolute() or ":" in value or ".." in path.parts
             or bool(set(path.parts) & PRIVATE_PARTS)
-            or value.startswith(("backend/data/generated/", "backend/tests/", "frontend/tests/", "deploy/backups/", "deploy/google-cloud/.tools/"))
+            or value.startswith(("backend/data/generated/", "backend/data/evaluation/", "backend/tests/", "frontend/tests/", "deploy/backups/", "deploy/google-cloud/.tools/"))
+            or (value.startswith("backend/eval/") and name.endswith(".csv"))
             or name == ".env" or (name.startswith(".env.") and name != ".env.example")
             or name in {"application_default_credentials.json", "observations.jsonl", "observations.jsonl.tmp"}
             or name.endswith((".key", ".pem", ".p12", ".pfx", ".jsonl", ".tfstate", ".tfplan", ".tfvars", ".tfvars.json", ".db", ".sqlite", ".sqlite3", ".pkl", ".joblib"))

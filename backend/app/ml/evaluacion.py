@@ -20,10 +20,8 @@ signifique lo mismo para los dos integrantes:
   kappa razonable (> 0.6 es el umbral usual de "acuerdo sustancial"), las
   métricas de arriba miden ruido.
 
-Convención sobre lo no juzgado: un ítem del ranking sin juicio cuenta como
-NO relevante (supuesto estándar de pooling). Con el pool a la misma
-profundidad que las métricas, no debería haber ninguno; el arnés los reporta
-aparte para detectar anotaciones incompletas.
+Los casos sin juicio son faltantes, nunca negativos. El arnés exige el pool
+completo y los desacuerdos adjudicados antes de calcular métricas de ranking.
 """
 
 from __future__ import annotations

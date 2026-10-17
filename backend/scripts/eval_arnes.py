@@ -37,6 +37,8 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
+import json
 import random
 import sys
 from dataclasses import dataclass, field
@@ -340,6 +342,8 @@ def _write_annotation_csv(path: Path, pool_rows: list[list[str]]) -> tuple[int, 
 
 
 def cmd_pool(db, args) -> int:
+    if (EVAL_DIR / "rankings.csv").exists():
+        raise ValueError("Usar una carpeta nueva: no se sobrescriben respuestas de una corrida anterior")
     variantes = list(VARIANTES) + (_sweep_variantes() if args.sweep else [])
     print(f"Corriendo {len(variantes)} variantes x {len(CONSULTAS)} consultas...")
 
@@ -352,7 +356,7 @@ def cmd_pool(db, args) -> int:
             pools[consulta_id].update(slugs)
         print(f"  {variante.id}: ok")
 
-    EVAL_DIR.mkdir(exist_ok=True)
+    EVAL_DIR.mkdir(parents=True, exist_ok=True)
     # Los rankings se guardan para --metrics: la anotación es sobre el pool
     # (sin variantes), las métricas necesitan saber qué rankeó cada una.
     with open(EVAL_DIR / "rankings.csv", "w", newline="", encoding="utf-8") as fh:
@@ -382,6 +386,10 @@ def cmd_pool(db, args) -> int:
         kept, pending = _write_annotation_csv(path, rows)
         detalle = f"{pending} por juzgar" + (f", {kept} conservados" if kept else "")
         print(f"  {path}  ({detalle})")
+    (EVAL_DIR / "manifest.json").write_text(json.dumps(dict(
+        purpose="tuning", data_policy="observed-only-v1", queries="researcher_designed_not_observed_user_queries",
+        rankings_sha256=hashlib.sha256((EVAL_DIR / "rankings.csv").read_bytes()).hexdigest(),
+        limitation="Exploración de variantes; no es evaluación independiente ni prueba con participantes."),indent=2),encoding="utf-8")
     print(f"  {EVAL_DIR / 'INSTRUCCIONES.md'}")
     print(f"  {EVAL_DIR / 'rankings.csv'}  (no tocar: lo lee --metrics)")
     return 0
@@ -403,6 +411,14 @@ def _read_annotations(path: str) -> dict[tuple[str, str], int]:
 
 
 def cmd_metrics(db, args) -> int:
+    manifest_path=EVAL_DIR / "manifest.json"
+    if not manifest_path.exists():
+        print("Falta la procedencia de esta corrida. El histórico no acredita una evaluación actual; no se calculan métricas.")
+        return 1
+    manifest=json.loads(manifest_path.read_text(encoding="utf-8"))
+    if manifest.get("rankings_sha256") != hashlib.sha256((EVAL_DIR / "rankings.csv").read_bytes()).hexdigest():
+        raise ValueError("Los rankings cambiaron después de guardar su procedencia")
+    print("Métricas exploratorias para ajuste; no constituyen evaluación independiente con participantes.")
     ann_a = _read_annotations(args.metrics[0])
     ann_b = _read_annotations(args.metrics[1])
 
@@ -445,7 +461,7 @@ def cmd_metrics(db, args) -> int:
         print(f"\n{len(unresolved)} desacuerdos sin adjudicar -> {path}")
         print("Complétenlo juntos (columna `relevante`) y vuelvan a correr con "
               "--adjudicadas eval/desacuerdos.csv")
-        print("La tabla de abajo EXCLUYE esos ítems (cuentan como no juzgados).")
+        print("No se calculan métricas de ranking hasta completar la adjudicación.")
 
     # Rankings de la corrida de --pool
     rankings_path = EVAL_DIR / "rankings.csv"
@@ -460,6 +476,11 @@ def cmd_metrics(db, args) -> int:
                 row["consulta_id"], []
             ).append(row["juego_slug"])
 
+    expected = {(cid, slug) for queries in rankings.values() for cid, slugs in queries.items() for slug in slugs}
+    pending = expected - set(gold)
+    if pending:
+        print(f"Evaluación incompleta: {len(pending)} juicios faltantes. No son ceros; no se publica una tabla de métricas.")
+        return 1
     total_relevant = {
         consulta.id: sum(
             1 for (consulta_id, _slug), label in gold.items()
@@ -489,7 +510,7 @@ def cmd_metrics(db, args) -> int:
                 label = gold.get((consulta.id, slug))
                 if label is None:
                     unjudged += 1
-                    label = 0  # supuesto de pooling, reportado aparte
+                    raise ValueError("Falta un juicio; no debe convertirse en cero")
                 relevances.append(label)
             p_values.append(precision_at_k(relevances, K))
             ndcg_values.append(ndcg_at_k(relevances, total_relevant[consulta.id], K))
@@ -523,10 +544,16 @@ def main() -> int:
                         help="computar kappa y la tabla comparativa")
     parser.add_argument("--adjudicadas", default=None,
                         help="CSV de desacuerdos resueltos entre los dos")
+    parser.add_argument("--output-dir", type=Path, help="Carpeta de una corrida nueva; preserva el histórico eval/")
     args = parser.parse_args()
 
     if not (args.pool or args.metrics):
         parser.error("indicá --pool o --metrics A.csv B.csv")
+    global EVAL_DIR
+    if args.pool and not args.output_dir:
+        parser.error("--pool requiere --output-dir para no sobrescribir el histórico sin procedencia verificada")
+    if args.output_dir:
+        EVAL_DIR = args.output_dir
 
     db = SessionLocal()
     try:

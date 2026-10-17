@@ -25,6 +25,7 @@ venv/
 
 # Datos generados por el seed
 backend/data/generated/
+backend/data/evaluation/
 # Corpus y claves privadas, incluso si el recolector usa un directorio distinto.
 .author_hmac.key
 *_hmac.key

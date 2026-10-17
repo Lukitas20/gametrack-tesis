@@ -11,10 +11,17 @@ Criterio:
 - Si no conocés el juego, mirá su ficha en Steam antes de juzgar (las
   columnas de géneros y etiquetas son un resumen para acelerar, no
   reemplazan conocer el juego).
-- No hay "0.5": si dudás en serio, 0 (la sugerencia tibia no le sirve a
-  nadie). Anotá el caso en `notas` para discutirlo en la adjudicación.
+- Si no podés juzgar, dejá `relevante` vacío y explicá el motivo en `notas`.
+  Un caso sin juzgar no equivale a una sugerencia irrelevante.
 - Cada uno llena SU archivo sin mirar el del otro. Los desacuerdos se
   adjudican hablando, después de medir el kappa — no antes.
 
 El orden de los juegos es aleatorio y ninguna fila dice qué variante lo
 propuso: no se puede (ni se debe poder) anotar a favor de una variante.
+
+Estos archivos históricos no acreditan participantes ni una evaluación actual.
+No regenerarlos encima. Usar una carpeta nueva con `--output-dir`, registrar
+versión del código, fuente y fecha de los datos, y separar las consultas usadas
+para ajustar pesos de las reservadas para evaluar. Las consultas diseñadas son
+tareas del instrumento, no consultas observadas de personas. No usar una misma
+tabla para elegir la variante y luego atribuirle una evaluación independiente.

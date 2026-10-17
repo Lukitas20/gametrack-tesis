@@ -28,6 +28,7 @@ from app.services import steam_service
 from app.services.developer_assistant import explain_developer_report
 from app.services.developer_reviews import explore_reviews
 from app.services.trained_ai_service import review_model_report
+from app.services.audience_service import audience_report
 from app.models.enums import Aspect, Sentiment
 
 router = APIRouter(prefix="/analytics", tags=["analitica"])
@@ -111,12 +112,14 @@ def get_overview(
 
 @router.get("/studio", response_model=StudioAnalyticsOut)
 def get_studio_analytics(
+    response: Response,
     studio: str | None = Query(
         default=None, description="Por defecto, el estudio del usuario autenticado"
     ),
     user: User = Depends(require_developer),
     db: Session = Depends(get_db),
 ) -> dict:
+    response.headers["Cache-Control"] = "no-store"
     target = studio or user.studio
     if not target:
         raise HTTPException(
@@ -125,16 +128,19 @@ def get_studio_analytics(
         )
     report = studio_analytics(db, target)
     report["trained_ai"] = review_model_report(db, studio=target)
+    report["audience"] = audience_report(db, studio=target)
     return report
 
 
 @router.get("/games/{game_id}", response_model=GameAnalyticsOut)
 def get_game_analytics(
     game_id: int,
+    response: Response,
     _: User = Depends(require_developer),
     db: Session = Depends(get_db),
 ) -> dict:
     """Sentimiento y desglose por aspecto de un juego."""
+    response.headers["Cache-Control"] = "no-store"
     game = db.get(Game, game_id)
     if game is None:
         raise HTTPException(status_code=404, detail="El juego no existe")
@@ -145,6 +151,7 @@ def get_game_analytics(
         raise HTTPException(status_code=404, detail="El juego no existe")
     report = game_analytics(db, game)
     report["trained_ai"] = review_model_report(db, game_id=game.id)
+    report["audience"] = audience_report(db, game_id=game.id)
     return report
 
 

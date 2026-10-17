@@ -22,6 +22,7 @@ def test_two_real_models_are_complete_and_publishable():
 
 @pytest.mark.parametrize("private", [
     "backend/.env", "backend/custom/observations.jsonl", "backup/.author_hmac.key",
+    "backend/data/evaluation/session/response.json", "backend/eval/anotacion_a.csv",
     "backend/data/generated/manifest.json", "backend/models/local_model.npz",
     "backend/models/other.json", "deploy/google-cloud/current.tfstate.backup",
     "deploy/google-cloud/settings.auto.tfvars.json", "source/gametrack.db-wal",

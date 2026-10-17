@@ -7,6 +7,8 @@ import { isDeveloper, isLoggedIn, state } from "../store.js";
 import { ASPECT_LABEL, SENTIMENT_LABEL, emptyState, h, icon, mount, pct, signed, spinnerBlock, toast } from "../ui.js";
 import { developerReviewsPanel } from "./developer-reviews.js";
 import { trainedReviewInsights } from "./developer-trained-insights.js";
+import { audiencePanel } from "./developer-audience.js";
+import { exportEvaluation } from "../evaluation-export.js";
 import { STUDIO_DEMO_COPY } from "./experience.js";
 
 const count = value => Number(value || 0).toLocaleString("es-AR");
@@ -126,6 +128,11 @@ function exportReport(report) {
   for(const g of games) rows.push([g.nombre,g.cantidad_ratings_local ? g.rating_local_promedio : "Sin valoraciones",g.cantidad_ratings_local,g.cantidad_resenas,g.resenas_analizadas,g.distribucion.positivo,g.distribucion.neutro,g.distribucion.negativo,g.resenas_analizadas ? g.sentimiento_neto : "Sin análisis"]);
   rows.push([],["Aspecto","Menciones","Positivas","Neutras","Negativas","Neto"]);
   for(const a of report.aspectos) rows.push([aspectName(a.aspecto),a.menciones,a.distribucion.positivo,a.distribucion.neutro,a.distribucion.negativo,a.sentimiento_neto]);
+  if(report.audience) {
+    rows.push([],["Audiencia observada","Tamaño","Unidad","Denominador","Criterio","Procedencia"]);
+    for(const group of report.audience.groups) rows.push([group.label,group.suppressed ? "Menos de 5; oculto" : group.size,group.unit,group.denominator,group.criterion,group.source]);
+    rows.push(...report.audience.limitations.map(text=>["Alcance",text]));
+  }
   rows.push([],["Fuente","Reseñas guardadas; clasificación automática local. No es una puntuación de Metacritic."]);
   const csv=rows.map(row => row.map(value => {let text=String(value ?? "");if(typeof value==="string" && /^[=+\-@\t\r]/.test(text)) text="'"+text;return '"'+text.replaceAll('"','""')+'"';}).join(";")).join("\r\n");
   const url=URL.createObjectURL(new Blob(["\ufeff",csv],{type:"text/csv;charset=utf-8"})),link=h("a",{href:url,download:`gametrack-informe-${new Date().toISOString().slice(0,10)}.csv`});document.body.append(link);link.click();link.remove();setTimeout(() => URL.revokeObjectURL(url),1000);toast("Informe exportado con los datos de esta vista.");
@@ -173,7 +180,9 @@ function workspaceFor(report, scope, initial, comparison) {
   const openReviews=aspect=>{reviews.setFilters({aspect,sentiment:"negativo"});workspace.select("reviews");};
   const items=[{key:"overview",label:"Resumen",icon:"chart",content:h("div",{class:"dev-overview"},trainedReviewInsights(report.trained_ai,{onAsk:question=>{workspace.select("assistant");assistant.ask(question);}}),insightCards(report.aspectos),prioritiesPanel(report.aspectos,openReviews),receptionChart(report),h("p",{class:"dev-data-note"},icon("info",15),"El informe describe la muestra guardada. Una clasificación positiva no equivale a la recomendación de Steam ni al Metascore."))}];
   if(report.juegos) items.push({key:"games",label:`Juegos (${report.juegos.length})`,icon:"gamepad",content:gamesPanel(report.juegos)});
-  items.push({key:"aspects",label:"Aspectos",icon:"list",content:aspectPanel(report.aspectos,comparison)},
+  items.push({key:"audience",label:"Audiencias",icon:"users",content:audiencePanel(report.audience)},
+    {key:"evaluation",label:"Evaluación",icon:"list",content:h("div",null,h("h2",null,"Conservar este resultado"),h("p",null,"Exportá la respuesta de este informe para revisión humana. Incluye fragmentos de reseñas; no contiene juicios humanos ni demuestra exactitud. La separación respecto del entrenamiento debe auditarse antes de calcular métricas."),h("button",{class:"btn",type:"button",onClick:()=>exportEvaluation("reviews",report,scope)},"Exportar resultado para evaluar"))},
+    {key:"aspects",label:"Aspectos",icon:"list",content:aspectPanel(report.aspectos,comparison)},
     {key:"reviews",label:"Reseñas",icon:"quote",content:reviews,onActivate:reviews.load},
     {key:"evidence",label:"Evidencia",icon:"quote",content:evidencePanel(report.citas_negativas)},{key:"assistant",label:"Asistente",icon:"sparkles",content:assistant});
   workspace=tabs(items,initial);return workspace;

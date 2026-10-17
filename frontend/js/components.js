@@ -305,7 +305,7 @@ export function requiresLogin(message) {
       h("strong", null, "Necesitás iniciar sesión. "),
       message,
       " ",
-      h("a", { href: "#/cuentas" }, "Elegir una cuenta de demostración"),
+      h("a", { href: "#/cuentas" }, "Elegir acceso o crear una cuenta"),
       ".",
     ),
   );

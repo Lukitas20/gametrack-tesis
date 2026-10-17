@@ -84,6 +84,30 @@ class TrainedReviewReport(BaseModel):
     topics: list[TrainedReviewTopic]
     reception: dict[str, int]
     limitations: list[str]
+    used: bool = False
+    predicted: int = 0
+
+
+class AudienceGroup(BaseModel):
+    key: str
+    label: str
+    size: int | None
+    suppressed: bool
+    criterion: str
+    denominator: int
+    source: str
+    unit: str
+
+
+class AudienceReport(BaseModel):
+    scope: dict[str, Any]
+    games: int
+    gametrack_users: int
+    steam_reviews: int
+    coverage: dict[str, int]
+    groups: list[AudienceGroup]
+    minimum_group: int
+    limitations: list[str]
 
 
 class GameAnalyticsOut(BaseModel):
@@ -95,6 +119,7 @@ class GameAnalyticsOut(BaseModel):
     # Aspecto -> citas textuales que respaldan la valoración negativa.
     citas_negativas: dict[str, list[str]]
     trained_ai: TrainedReviewReport | None = None
+    audience: AudienceReport | None = None
 
 
 class StudioGameRow(BaseModel):
@@ -120,6 +145,7 @@ class StudioAnalyticsOut(BaseModel):
     aspectos: list[AspectBreakdown]
     citas_negativas: dict[str, list[str]] = {}
     trained_ai: TrainedReviewReport | None = None
+    audience: AudienceReport | None = None
 
 
 class PlatformOverviewOut(BaseModel):
