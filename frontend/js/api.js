@@ -61,8 +61,8 @@ async function request(path, { method = "GET", body, auth = true, params } = {})
 
 export const api = {
   // --- Autenticación ---
-  login: (username, password) =>
-    request("/auth/login", { method: "POST", body: { username, password }, auth: false }),
+  login: (username, password, role) =>
+    request("/auth/login", { method: "POST", body: { username, password, ...(role ? { role } : {}) }, auth: false }),
   register: (data) => request("/auth/register", { method: "POST", body: data, auth: false }),
   steamSession: () => request("/auth/steam/session", { method: "POST", auth: false }),
   startSteamLink: () => request("/auth/steam/link", { method: "POST" }),

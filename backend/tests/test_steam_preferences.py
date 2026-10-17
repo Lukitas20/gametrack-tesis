@@ -83,14 +83,15 @@ def test_steam_preference_action_requires_verified_identity(client, db):
     assert client.post("/api/v1/auth/me/preferences/steam", headers=headers).status_code == 403
 
 
-def test_new_steam_player_infers_genres_after_choosing_account_type(client, db, source, catalog):
+def test_new_steam_player_infers_genres_with_type_already_defined(client, db, source, catalog):
     from tests.test_steam_auth import assertion, callback
     result, _ = callback(client, assertion(client))
     assert "steam-complete" in result.headers["location"]
     session = client.post("/api/v1/auth/steam/session")
     assert session.status_code == 200, session.text
-    assert session.json()["user"]["onboarding_step"] == "choose"
-    assert session.json()["user"]["preferences_source"] is None
+    assert session.json()["user"]["role"] == "jugador"
+    assert session.json()["user"]["onboarding_step"] == "player"
+    assert session.json()["user"]["preferences_source"] == "steam"
     headers = {"Authorization": f"Bearer {session.json()['access_token']}"}
     configured = client.put('/api/v1/auth/me/experience', headers=headers, json={'role':'jugador','complete_onboarding':True})
     assert configured.status_code == 200, configured.text

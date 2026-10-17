@@ -82,8 +82,8 @@ export async function loadCatalog() {
   state.tags = tags;
 }
 
-export async function login(username, password) {
-  const data = await api.login(username, password);
+export async function login(username, password, role) {
+  const data = await api.login(username, password, role);
   return acceptSession(data);
 }
 

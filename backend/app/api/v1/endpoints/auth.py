@@ -53,6 +53,9 @@ def login(data: LoginRequest, db: Session = Depends(get_db)) -> Token:
     user = authenticate_user(db, data.username, data.password)
     if not user:
         raise HTTPException(status_code=401, detail="Credenciales incorrectas")
+    if data.role is not None and user.role is not data.role:
+        access = "jugadores" if user.role is UserRole.PLAYER else "desarrolladores / estudios"
+        raise HTTPException(403, f"Esta cuenta pertenece al acceso de {access}. Ingresá desde ese acceso.")
     ensure_steam_preferences(db, user)
     return _token_for(user)
 

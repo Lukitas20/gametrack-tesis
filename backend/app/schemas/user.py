@@ -63,6 +63,7 @@ class UserResponse(BaseModel):
 class LoginRequest(BaseModel):
     username: str
     password: str
+    role: UserRole | None = None
 
 
 class SteamLinkRequest(BaseModel):

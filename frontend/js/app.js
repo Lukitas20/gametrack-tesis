@@ -24,6 +24,7 @@ import {
 } from "./store.js";
 import { clear, emptyState, h, icon, initials, magicLoader, toast } from "./ui.js";
 import { accountsView } from "./views/auth.js";
+import { plansView } from "./views/access-plans.js";
 import { experienceView } from "./views/experience.js";
 import { catalogView } from "./views/catalog.js";
 import { developerGameView, developerView } from "./views/developer.js";
@@ -192,7 +193,7 @@ function accountMenu() {
       "a",
       { class: "menu-item", href: "#/cuentas", onClick: closeMenu },
       icon("user", 15),
-      "Acceso y registro",
+      "Planes y acceso",
     ),
     h(
       "a",
@@ -300,7 +301,7 @@ let navigationRevision = 0;
 
 function view(loader) {
   return async (context) => {
-    if (state.user?.onboarding_step && !["/bienvenida", "/cuentas"].includes(currentPath())) {
+    if (state.user?.onboarding_step && !["/bienvenida", "/cuentas", "/planes", "/acceso/jugadores", "/acceso/estudios"].includes(currentPath())) {
       navigate("/bienvenida", { replace: true }); return;
     }
     if (!canAccessRoute(currentPath())) {
@@ -347,6 +348,9 @@ route("/", async (context) => {
 });
 
 route("/cuentas", view(async (context) => accountsView(context)));
+route("/planes", view(plansView));
+route("/acceso/jugadores", view(context => accountsView({ ...context, role: "jugador" })));
+route("/acceso/estudios", view(context => accountsView({ ...context, role: "desarrollador" })));
 route("/bienvenida", view(experienceView));
 route("/catalogo", view(catalogView));
 route("/recomendaciones", view(recommendationsView));
@@ -372,7 +376,7 @@ setNotFound(
 
 setNavigateHook((path) => {
   navigationRevision += 1;
-  document.body.classList.toggle("auth-active", path === "/cuentas");
+  document.body.classList.toggle("auth-active", ["/cuentas", "/planes", "/acceso/jugadores", "/acceso/estudios"].includes(path));
   renderNav(path);
   headerSearch?.close();
   syncHeaderSearch();

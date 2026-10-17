@@ -1,26 +1,28 @@
 import { navigate } from "../router.js";
 import { login, register, loginDestination, displayName } from "../store.js";
-import { h, icon, toast } from "../ui.js";
-import { experienceChoices } from "../experience-choices.js";
+import { h, icon, mount, toast } from "../ui.js";
+import { accessHeader, accessPath, accessPlan, plansView } from "./access-plans.js";
 
 function steamIcon() {
   return h("span", { "aria-hidden": "true", html: '<svg viewBox="0 0 24 24" width="25" height="25" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="16.5" cy="7.5" r="5"/><circle cx="16.5" cy="7.5" r="2.7"/><circle cx="6.5" cy="17.5" r="3.7"/><path d="m9.8 19 8-6.7M6.8 13.8l4.8-6M0 13l7.6 3.2a1.9 1.9 0 0 1-1.5 3.5L0 17"/></svg>' });
 }
 
-export function accountsView({ query = new URLSearchParams() } = {}) {
+export function accountsView({ query = new URLSearchParams(), role } = {}) {
   const invite = query.get("invitacion");
   if (invite && /^[A-Za-z0-9_-]{32,64}$/.test(invite)) sessionStorage.setItem("gametrack.invite", invite);
+  if (!role && query.has("steam_error")) role = "jugador";
+  if (!["jugador", "desarrollador"].includes(role)) return plansView({ query });
+  const player = role === "jugador";
+  const selectedPlan = accessPlan(role, query.get("plan"));
   let mode = query.get("modo") === "registro" ? "register" : "login";
   let steamError = query.get("steam_error");
   if (query.has("steam_error")) {
     // Mostrar el resultado una vez, sin conservar un fallo viejo al recargar.
     query.delete("steam_error");
-    const remaining = query.toString();
-    history.replaceState(history.state, "", `#/cuentas${remaining ? `?${remaining}` : ""}`);
+    history.replaceState(history.state, "", `#${accessPath(role, { plan: selectedPlan.id, register: mode === "register" })}`);
   }
   let busy = false;
-  let selectedRole = null;
-  const panel = h("section", { class: "auth-panel", "aria-label": "Acceso a GameTrack" });
+  const panel = h("section", { class: "auth-panel", "aria-label": player ? "Acceso de jugadores" : "Acceso de desarrolladores y estudios" });
   function renderForm() {
     const creating = mode === "register";
     const error = h("p", { class: "auth-error", role: "alert", hidden: true });
@@ -44,7 +46,7 @@ export function accountsView({ query = new URLSearchParams() } = {}) {
       tabs.append(h("button", { type: "button", class: mode === value ? "active" : "", "aria-pressed": String(mode === value), onClick: () => {
         if (busy || mode === value) return;
         mode = value; query.delete("steam_error");
-        history.replaceState(null, "", `#/cuentas${mode === "register" ? "?modo=registro" : ""}`);
+        history.replaceState(null, "", `#${accessPath(role, { plan: selectedPlan.id, register: mode === "register" })}`);
         renderForm(); panel.querySelector("h2").focus();
       } }, label));
     }
@@ -73,7 +75,7 @@ export function accountsView({ query = new URLSearchParams() } = {}) {
       panel.querySelectorAll("button, input").forEach(el => { el.disabled = true; });
       submit.textContent = creating ? "Creando tu cuenta…" : "Entrando…";
       try {
-        const user = creating ? await register({ username: username.value.trim(), email: email.value.trim(), password: password.value, role: selectedRole }) : await login(username.value.trim(), password.value);
+        const user = creating ? await register({ username: username.value.trim(), email: email.value.trim(), password: password.value, role }) : await login(username.value.trim(), password.value, role);
         toast(creating ? `¡Bienvenido a GameTrack, ${displayName(user)}!` : `¡Hola, ${displayName(user)}!`);
         navigate(loginDestination(user));
       } catch (failure) { report(failure instanceof TypeError ? "No pudimos conectar con GameTrack. Revisá tu conexión e intentá de nuevo." : failure.message); }
@@ -86,25 +88,29 @@ export function accountsView({ query = new URLSearchParams() } = {}) {
       field("Contraseña", password, h("div", { class: "auth-password-wrap" }, password, reveal)),
       creating && h("div", null, strength, h("p", { class: "auth-field-help", id: "auth-password-help" }, "Usá al menos 8 caracteres; una frase larga es mejor.")),
       creating && field("Confirmá tu contraseña", confirm), submit);
-    panel.replaceChildren(tabs,
+    mount(panel, tabs,
       h("div", { class: "auth-form-heading" },
-        h("h2", { id: "auth-title", tabindex: "-1" }, creating ? "Creá tu cuenta" : "Bienvenido de nuevo")),
-      ...(creating ? [experienceChoices({ value: selectedRole, form: "auth-form", onChange: role => { selectedRole = role; } })] : []),
-      h("a", { class: "auth-steam", href: "/api/v1/auth/steam/start", onClick: e => {
+        h("p", { class: "auth-kicker" }, player ? "ACCESO DE JUGADORES" : "ACCESO DE DESARROLLADORES / ESTUDIOS"),
+        h("h2", { id: "auth-title", tabindex: "-1" }, creating ? player ? "Creá tu cuenta de jugador" : "Creá tu cuenta de estudio" : player ? "Ingresá como jugador" : "Ingresá a tu estudio"),
+        h("p", null, creating ? player ? "Conectá Steam o creá tu usuario para empezar." : "Registrá tu cuenta profesional con usuario, email y contraseña." : player ? "Entrá con Steam o con tu usuario." : "Entrá con el usuario y la contraseña de tu cuenta de desarrollador.")),
+      h("p", { class: "auth-plan-summary" }, selectedPlan.name, selectedPlan.id !== "gratis" && " · Propuesta de plan, sin cobros"),
+      creating && h("p", { class: "auth-account-kind" }, player ? "Estás creando una cuenta de jugador. El tipo no se puede cambiar después." : "Estás creando una cuenta de desarrollador / estudio. El tipo no se puede cambiar después."),
+      player && h("a", { class: "auth-steam", href: "/api/v1/auth/steam/start", onClick: e => {
         if (busy) { e.preventDefault(); return; }
         sessionStorage.removeItem("gametrack.registration-role");
-        if (creating && selectedRole) sessionStorage.setItem("gametrack.registration-role", selectedRole);
+        sessionStorage.setItem("gametrack.registration-role", "jugador");
         error.hidden = true;
       } }, steamIcon(), h("span", null, "Continuar con Steam"), icon("chevron", 17)),
-      h("div", { class: "auth-divider" }, h("span", null, "o con tu usuario")),
-      error, form);
+      player && h("div", { class: "auth-divider" }, h("span", null, "o con tu usuario")),
+      error, form,
+      h("nav", { class: "auth-other-access", "aria-label": "Otros accesos" },
+        h("a", { href: "#/cuentas" }, icon("arrowLeft", 14), "Volver a los planes"),
+        h("a", { href: `#${accessPath(player ? "desarrollador" : "jugador")}` }, player ? "Soy desarrollador / estudio" : "Soy jugador")));
 
   }
   renderForm();
   return h("div", { class: "auth-page auth-minimal" },
-    h("header", { class: "auth-header" },
-      h("a", { class: "auth-brand", href: "#/cuentas" }, h("img", { src: "/assets/brand/logo.png", width: "42", height: "42", alt: "" }), "GameTrack"),
-      h("a", { class: "auth-explore", href: "#/catalogo" }, "Explorar catálogo", icon("chevron", 15))),
+    accessHeader(),
     h("div", { class: "auth-layout" }, panel),
-    h("footer", { class: "auth-footer" }, "Tu próxima partida empieza acá."));
+    h("footer", { class: "auth-footer" }, player ? "Tu próxima partida empieza acá." : "Recepción, reseñas y juegos de referencia para tu estudio."));
 }
