@@ -523,3 +523,31 @@ vista local del componente usando el informe real de Cloud. El recorrido
 autenticado completo de desarrollador sigue pendiente: la sesión disponible en
 el navegador era de jugador y se respetó su separación de permisos.
 Procedimiento, límites y evidencias: `docs/AUDIENCIAS_HISTORIALES_20261017.md`.
+
+## Claridad de pantallas y acciones — 17 de octubre de 2026
+
+Fuente `324d9d7328c6c0bf763b23e7dade64da6c0b1bc6`, build
+`ae1b6df0-448f-4bd0-b495-55245721e5db`, digest
+`sha256:c0f0ab05590b8a6ef0d065ecf79df49bcf6fba63ad000b7fcc277723a0e0b90c`.
+Servicio publicado como `gametrack-00026-8x7`, con el 100 % del tráfico.
+Sólo cambian recursos de interfaz. No se ejecutaron migraciones ni jobs; las
+cuatro tareas existentes conservan sus imágenes y argumentos anteriores.
+
+Se revisaron 29 módulos de vistas y se simplificaron 26: textos repetidos,
+acciones equivalentes, filtros y ayudas secundarias. Las reseñas largas
+conservan su texto completo al desplegarse. No se cambiaron respuestas del
+servidor, puntajes, grupos de audiencia, roles ni condiciones de los modelos.
+
+Pasaron 30 pruebas del frontend, sintaxis de los 29 módulos de vistas más
+`ui.js` y `git diff --check`. La auditoría previa a la construcción aprobó
+280 archivos, los tres artefactos de modelos permitidos y cero rutas privadas.
+Los 29 recursos públicos modificados coinciden con las fuentes probadas y
+envían `no-cache`; evidencia de hashes:
+`docs/evidence/clarity-release-cloud-20261017.json`.
+Aprobaron salud/base de datos, catálogo, callback HTTPS de Steam y protección
+privada 401. La revisión local incluyó catálogo con datos públicos reales,
+accesos separados y audiencias usando el informe agregado real de Cloud.
+
+Alcance, capturas, procedimiento y límites de la revisión visual:
+`docs/CLARIDAD_INTERFAZ_20261017.md`. No se hicieron pruebas con participantes
+ni se atribuyeron mejoras medidas de satisfacción o relevancia.

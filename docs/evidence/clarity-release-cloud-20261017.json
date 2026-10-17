@@ -1,0 +1,181 @@
+{
+  "source_commit": "324d9d7328c6c0bf763b23e7dade64da6c0b1bc6",
+  "url": "https://gametrack-591398735968.us-central1.run.app",
+  "files_verified": 29,
+  "files": [
+    {
+      "path": "frontend/css/clarity.css",
+      "sha256": "c4ad80cdc383e6599732eb6d1c7fa0ff073678065ec94b0585d4f8e71e5de853",
+      "matches": true,
+      "cache_control": "no-cache"
+    },
+    {
+      "path": "frontend/index.html",
+      "sha256": "70c590b3ccf7a6c272366a4256bec4994b84f33976880e2d07eed3d164eb9769",
+      "matches": true,
+      "cache_control": "no-cache"
+    },
+    {
+      "path": "frontend/js/ui.js",
+      "sha256": "a94fa1dfc9095ccd2497a8adebedff4c461575a54a411ed1ae49085c3dd99a7e",
+      "matches": true,
+      "cache_control": "no-cache"
+    },
+    {
+      "path": "frontend/js/views/access-plans.js",
+      "sha256": "b2cb1c8c6d95351874763cbbd0c96e6a2aa792ff7ef236f1024690c9bb255d35",
+      "matches": true,
+      "cache_control": "no-cache"
+    },
+    {
+      "path": "frontend/js/views/auth.js",
+      "sha256": "d9a31afb7eaa91fe971ddf9488a4da844631705fb89e314ab908440a8921cc48",
+      "matches": true,
+      "cache_control": "no-cache"
+    },
+    {
+      "path": "frontend/js/views/catalog.js",
+      "sha256": "84ec7d9539167be98cea3b6ad7c5840f78c83f0f63f0f97d51599e81116d9af0",
+      "matches": true,
+      "cache_control": "no-cache"
+    },
+    {
+      "path": "frontend/js/views/developer-audience.js",
+      "sha256": "b417d2d2c7ce8ac44c2e42a760e27e346e9cee445baa61733f787d38728da498",
+      "matches": true,
+      "cache_control": "no-cache"
+    },
+    {
+      "path": "frontend/js/views/developer-catalog.js",
+      "sha256": "830c56ea67335d735a414d0c4869bcc634fccb3539962b0815896d10ade5ac5c",
+      "matches": true,
+      "cache_control": "no-cache"
+    },
+    {
+      "path": "frontend/js/views/developer-reviews.js",
+      "sha256": "2c6ba7cc9f86e9867bafcbc9ecdbdd8648b95f39a84395ccccc3711f28a85c6c",
+      "matches": true,
+      "cache_control": "no-cache"
+    },
+    {
+      "path": "frontend/js/views/developer-trained-insights.js",
+      "sha256": "3b4da147026876be2203ae28e08e128673456e47d77cc58daebd44c456947300",
+      "matches": true,
+      "cache_control": "no-cache"
+    },
+    {
+      "path": "frontend/js/views/developer.js",
+      "sha256": "f875cf7489ec5381cbd25eb893078b479633b4dfdb9513eff4dd3655ed2e12f9",
+      "matches": true,
+      "cache_control": "no-cache"
+    },
+    {
+      "path": "frontend/js/views/experience.js",
+      "sha256": "d84518ecc9f0dca5f1241e08936fd13fc3d3827656cb78a719665708d3e4479e",
+      "matches": true,
+      "cache_control": "no-cache"
+    },
+    {
+      "path": "frontend/js/views/friends.js",
+      "sha256": "9605532fb54d24c57c742a01c40f24f544b9ce4b1a6af6375b5cbb38068fe72c",
+      "matches": true,
+      "cache_control": "no-cache"
+    },
+    {
+      "path": "frontend/js/views/game-comparison.js",
+      "sha256": "4c249c416e650c9d074afd32edbbd69c6104a8b7dbe7130021bb3cfbc0db74c4",
+      "matches": true,
+      "cache_control": "no-cache"
+    },
+    {
+      "path": "frontend/js/views/game-insights.js",
+      "sha256": "3ba7bc8cea8eda38cd8bc72fbf1047aac251356f6e93f5220e4ce7c583d06b92",
+      "matches": true,
+      "cache_control": "no-cache"
+    },
+    {
+      "path": "frontend/js/views/game.js",
+      "sha256": "62d9b5aaa40af7d0bc3bfcb0ec028bdb951728a7a618a318b19d1a7afbc7af1b",
+      "matches": true,
+      "cache_control": "no-cache"
+    },
+    {
+      "path": "frontend/js/views/gametrack-score.js",
+      "sha256": "ca2291cf0af1a965f1d2a8f1d6103d2af0671d1a6ba8a8d18a260a7d1d93df5d",
+      "matches": true,
+      "cache_control": "no-cache"
+    },
+    {
+      "path": "frontend/js/views/home-sections.js",
+      "sha256": "18f96a55c9db3f3eb84ade0794bbaddcd5d34a4ac76843c75eca58e6b76f140e",
+      "matches": true,
+      "cache_control": "no-cache"
+    },
+    {
+      "path": "frontend/js/views/invite.js",
+      "sha256": "7a0082a0e91f85eb8ca8533514a63e7560f14a53fc7088ddc89736fbc7022653",
+      "matches": true,
+      "cache_control": "no-cache"
+    },
+    {
+      "path": "frontend/js/views/lists.js",
+      "sha256": "e6b04065bca03282a499f52d591243bc88c4d39e0618c326331dbdccbf6ce78d",
+      "matches": true,
+      "cache_control": "no-cache"
+    },
+    {
+      "path": "frontend/js/views/play-feedback.js",
+      "sha256": "0feb471c3b3b99dbaee5d673e7fb7281f32a385408c153b43808a02d272f9131",
+      "matches": true,
+      "cache_control": "no-cache"
+    },
+    {
+      "path": "frontend/js/views/play-hub.js",
+      "sha256": "a89b3ec50cdd25a614c2e64dba5bcfc975be0a4836e87bf82653aa2ea7763dbe",
+      "matches": true,
+      "cache_control": "no-cache"
+    },
+    {
+      "path": "frontend/js/views/profile.js",
+      "sha256": "5f0219cfea444f8bac4c4e39700966d2d818496e1043a768e3f892ad6e55afed",
+      "matches": true,
+      "cache_control": "no-cache"
+    },
+    {
+      "path": "frontend/js/views/quiz.js",
+      "sha256": "3dc4b59f1fd242316bd660ef00b1952431222b045f614c6eb478b817801d4648",
+      "matches": true,
+      "cache_control": "no-cache"
+    },
+    {
+      "path": "frontend/js/views/ratings.js",
+      "sha256": "bee679476da352ff33377161a3498f226792e47697798ae62940ea7b542c0e80",
+      "matches": true,
+      "cache_control": "no-cache"
+    },
+    {
+      "path": "frontend/js/views/recommendations.js",
+      "sha256": "d36259678258e2b79d9fff33ea58ca3e9cc74c632e1cadfd98eed67aff193596",
+      "matches": true,
+      "cache_control": "no-cache"
+    },
+    {
+      "path": "frontend/js/views/steam-friends.js",
+      "sha256": "90ef756038633dea15c9a1c371dc5709939caca87c5f01c5e7d53788e3df7882",
+      "matches": true,
+      "cache_control": "no-cache"
+    },
+    {
+      "path": "frontend/js/views/steam-profile.js",
+      "sha256": "c2bc86fced458492c38ab135918481c676b75fd24a2a0ef7787e806990f8aa7b",
+      "matches": true,
+      "cache_control": "no-cache"
+    },
+    {
+      "path": "frontend/js/views/steam-reviews.js",
+      "sha256": "f1b02ffb4cab46497b591814bccd35f24a8ef7e23e8f8de7617340d18e8ae6e7",
+      "matches": true,
+      "cache_control": "no-cache"
+    }
+  ]
+}

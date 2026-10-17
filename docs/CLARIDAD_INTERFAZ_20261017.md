@@ -67,3 +67,14 @@ en dispositivos móviles siguen pendientes de comprobación visual.
 No se entrenaron modelos, alteraron datos operativos, migraron tablas ni
 restauraron bases. No se editó el Google Doc ni el LaTeX. La publicación y sus
 comprobaciones se registran en `deploy/google-cloud/DEPLOYMENT.md`.
+
+## Publicación
+
+Publicada en `gametrack-00026-8x7`, con el 100 % del tráfico, desde la fuente
+`324d9d7`. Los 29 recursos públicos modificados coincidieron con el código
+probado y enviaron `no-cache`. Pasaron salud/base de datos, catálogo, callback
+HTTPS de Steam y acceso privado 401. No se modificaron los jobs existentes.
+Los hashes comprobados están en `evidence/clarity-release-cloud-20261017.json`.
+También se abrió el catálogo público publicado en el navegador: tres filtros
+alineados, 194.262 juegos, sin errores de consola registrados. Captura:
+`evidence/clarity-catalog-cloud-20261017.png`.
