@@ -2,7 +2,7 @@
 import { api } from '../api.js';
 import { cover } from '../components.js';
 import { state, isDeveloper } from '../store.js';
-import { ASPECT_LABEL, h, icon, modalHead, mount, signed, spinnerBlock } from '../ui.js';
+import { ASPECT_LABEL, h, icon, infoDetails, modalHead, mount, signed, spinnerBlock } from '../ui.js';
 import { aspectComparisons, comparisonHighlights, reviewMetrics } from './developer-comparison-data.js';
 import { trainedReviewInsights } from './developer-trained-insights.js';
 
@@ -63,7 +63,7 @@ function openDeveloperGame(game, ownGames, studio) {
   document.body.append(dialog); dialog.showModal(); window.addEventListener('hashchange', onRoute);
 
   function section(title, caption, ...children) {
-    return h('section', { class: 'dev-compare-section' }, h('h3', null, title), h('p', { class: 'dev-compare-note' }, caption), ...children);
+    return h('section', { class: 'dev-compare-section' }, h('h3', null, title), ...children, infoDetails('Cómo leer estas métricas', h('p', null, caption)));
   }
   function gameHeader(report, label) {
     const g = report.juego, detail = details.get(g.id) || {}, art = cover({ name: g.nombre, background_image: g.background_image || detail.background_image });

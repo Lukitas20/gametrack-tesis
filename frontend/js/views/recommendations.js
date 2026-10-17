@@ -6,7 +6,6 @@
  */
 
 import { api } from "../api.js";
-import { exportEvaluation } from "../evaluation-export.js";
 import { gameCard, cover, saveToListButton, starRating } from "../components.js";
 import { isDeveloper, isLoggedIn } from "../store.js";
 import {
@@ -53,13 +52,12 @@ const DISCOVERY = [
 function discoveryHero(guest = false) {
   return h("section", { class: "discovery-hero play-hero console-hero" },
     h("div", { class: "discovery-hero-copy" },
-      h("p", { class: "eyebrow" }, "TU PRÓXIMA PARTIDA"),
       h("h1", null, "¿Qué jugamos ", h("br"), h("span", null, "hoy?")),
       h("p", { class: "discovery-lead" }, "Algo para vos. O para todo el grupo."),
       h("div", { class: "discovery-actions" },
         h("button", { class: "btn btn-primary", onClick: startNewQuiz }, "Encontrar un juego", icon("chevron", 17)),
         h("a", { class: "hero-catalog-link", href: "#/catalogo" }, "Explorar catálogo")),
-      h("p", { class: "discovery-caption" }, "4 elecciones · A tu manera")),
+      ),
     h("div", { class: "console-hero-art", "aria-label": "Juegos del catálogo" }));
 }
 
@@ -113,10 +111,6 @@ export async function recommendationsView({ query } = { query: new URLSearchPara
   let comparing = query.get("comparar") === "1";
   let discovery = DISCOVERY.some(([key]) => key === query.get("variedad")) ? query.get("variedad") : "balanced";
   let requestVersion = 0;
-  let evaluationResponse = null;
-  const evaluationButton = h("button",{class:"btn",type:"button",disabled:true,onClick:()=>{
-    if(evaluationResponse) exportEvaluation("recommendations",evaluationResponse.response,evaluationResponse.context);
-  }},"Exportar resultado para evaluar");
 
   const hero = discoveryHero();
   const body = h("div");
@@ -186,13 +180,11 @@ export async function recommendationsView({ query } = { query: new URLSearchPara
 
   async function load() {
     const version = ++requestVersion;
-    evaluationResponse=null;evaluationButton.disabled=true;
     body.replaceChildren(spinnerBlock("Calculando recomendaciones…"));
     meta.replaceChildren();
     try {
       const response = await api.recommendations(strategy, 12, discovery);
       if (version !== requestVersion) return;
-      evaluationResponse={response,context:{strategy,discovery}};evaluationButton.disabled=false;
       profileHint.textContent = response.profile_hint || "Una selección a partir de tus gustos y valoraciones.";
       const parts = [
         h(
@@ -233,7 +225,6 @@ export async function recommendationsView({ query } = { query: new URLSearchPara
 
   async function loadComparison() {
     const version = ++requestVersion;
-    evaluationResponse=null;evaluationButton.disabled=true;
     body.replaceChildren(spinnerBlock("Comparando estrategias…"));
     meta.replaceChildren();
     try {
@@ -401,7 +392,7 @@ export async function recommendationsView({ query } = { query: new URLSearchPara
     ),
     h("details", { class: "recommendation-lab", open: comparing || strategy !== "auto" },
       h("summary", null, icon("chart", 15), "Ajustes de recomendaciones"),
-      meta, profileHint, varietyNote, h("div", { class: "filter-bar" }, segmented, compareButton, evaluationButton), note),
+      meta, profileHint, varietyNote, h("div", { class: "filter-bar" }, segmented, compareButton), note),
     body),
     sections,
   );

@@ -12,10 +12,10 @@ export async function openInviteDialog(name = "tus amigos") {
         try { await navigator.clipboard.writeText(invite.url); copy.textContent = "¡Enlace copiado!"; }
         catch { input.focus(); input.select(); toast("Seleccionamos el enlace para que lo copies."); }
       } }, "Copiar enlace");
-      return h("div", null, modalHead(`Invitá a ${name}`, "Compartí este enlace. Tu amigo podrá crear una cuenta y enviarte una solicitud para jugar juntos.", close),
+      return h("div", null, modalHead(`Invitá a ${name}`, "Compartí el enlace para conectar en GameTrack.", close),
         h("div", { class: "steam-invite-link" }, input, copy),
         !invite.public && h("p", { class: "steam-notice" }, icon("info", 16), "GameTrack está abierto sólo en esta computadora. Para que un amigo abra el enlace desde la suya, la web tiene que estar publicada."),
-        h("p", { class: "muted", style: { marginTop: "16px", fontSize: "12px" } }, "El enlace dura 30 días. No envía mensajes ni agrega amigos automáticamente."));
+        h("p", { class: "muted", style: { marginTop: "16px", fontSize: "12px" } }, "Válido por 30 días."));
     });
   } catch (error) { toast(error.message, "error"); }
 }

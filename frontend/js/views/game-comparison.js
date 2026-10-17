@@ -10,7 +10,7 @@ export function gameComparePanel(gameId, gameName) {
   const output = h("div", {class:"game-compare-output", "aria-live":"polite"});
   const root = h("details", {class:"game-compare"},
     h("summary", null, icon("sparkles",16), "Comparar con otro juego", icon("chevronDown",14)),
-    h("div", {class:"game-compare-body"}, h("p",null,`¿${gameName} u otro juego? Compará qué encaja mejor con tus gustos y qué dudas hay. Todo se analiza localmente.`), search, choices, output));
+    h("div", {class:"game-compare-body"}, search, choices, output));
   const current = version => version === revision && root.isConnected && state.user?.id === owner;
   const cover = game => game.background_image ? h("img",{src:game.background_image, alt:"", loading:"lazy"}) : icon("gamepad",24);
 

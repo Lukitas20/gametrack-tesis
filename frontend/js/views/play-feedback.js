@@ -28,12 +28,12 @@ export function openPlayFeedback(gameId,name="este juego",onSaved=()=>{}) {
         enjoy.disabled=!played.checked;minutes.disabled=!played.checked;
         if(!played.checked) {enjoy.value="not_sure";minutes.value="";}
         notice.textContent=played.checked && reason.value==="experience" && ["liked","disliked"].includes(enjoy.value) ?
-          "Tu opinión ayudará a ordenar próximas recomendaciones. Tus estrellas no se modifican." :
-          "Esto se guarda como contexto. No confundimos una interrupción o una opinión incierta con que te disguste el juego.";
+          "Ayuda a recomendarte mejor; no cambia tus estrellas." :
+          "Se guarda como contexto, sin asumir que el juego te disgustó.";
       }
       for(const control of [played,enjoy,reason]) control.addEventListener("change",explain);explain();
       const field=(label,node)=>h("div",{class:"play-feedback-field"},h("label",{for:node.id},label),node);
-      mount(root,h("p",null,`Contanos cómo te fue con ${name}. Es privado y podés editarlo más adelante.`),h("form",{class:"play-feedback-form",onSubmit:async event=>{
+      mount(root,h("p",null,`${name} · Experiencia privada y editable.`),h("form",{class:"play-feedback-form",onSubmit:async event=>{
         event.preventDefault();if(!current() || submit.disabled) return;
         submit.disabled=true;submit.textContent="Guardando…";errorBox.textContent="";
         try {
@@ -44,7 +44,7 @@ export function openPlayFeedback(gameId,name="este juego",onSaved=()=>{}) {
         h("div",{class:"play-feedback-grid"},field("¿Te gustó?",enjoy),field("¿Qué explica tu experiencia?",reason),field("¿Lo volverías a jugar?",replay),field("Minutos de esta sesión (declarados por vos)",minutes)),
         field("Nota personal (opcional)",note),notice,errorBox,h("div",{class:"play-feedback-footer"},h("a",{href:"#/que-jugamos?modo=experiencias",onClick:close},"Mis opiniones"),submit)));
     }
-    load();return h("div",null,modalHead("Contar mi experiencia","Una opinión breve y privada que ayuda a recomendarte mejor.",close),root);
+    load();return h("div",null,modalHead("Contar mi experiencia",null,close),root);
   });
 }
 

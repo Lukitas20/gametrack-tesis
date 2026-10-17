@@ -1,0 +1,16 @@
+/* Ayuda y metodología: desplegables nativos, accesibles por teclado. */
+.ui-details { margin-block: 12px; min-width: 0; }
+.ui-details > summary { width: fit-content; max-width: 100%; cursor: pointer; color: var(--ink-secondary); font-size: var(--fs-sm); padding-block: 6px; }
+.ui-details > summary:hover { color: var(--ink); }
+.ui-details > summary:focus-visible { outline: 2px solid var(--brand-teal-ui); outline-offset: 4px; border-radius: 3px; }
+.ui-details-body { padding: 10px 0; }
+.ui-details-body > p { max-width: 80ch; color: var(--ink-secondary); font-size: var(--fs-sm); line-height: 1.65; }
+.ui-details-body > p + p { margin-top: 10px; }
+.ui-details-body .filter-bar { margin-block: 12px; }
+.audience-reception { color: var(--ink-secondary); }
+.ui-text-body { white-space: pre-wrap; overflow-wrap: anywhere; }
+.ui-text-body.is-collapsed { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; line-clamp: 4; overflow: hidden; }
+.dev-audience .dev-aspect-card > strong { display: block; margin-block: 8px; }
+.dev-audience .dev-aspect-card .ui-details { margin-bottom: 0; }
+.catalog-filters > .select { flex: 1 1 220px; width: auto; min-width: 0; }
+@media (max-width: 600px) { .ui-details > summary { padding-block: 10px; } }

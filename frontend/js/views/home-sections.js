@@ -1,6 +1,6 @@
 import { api } from "../api.js";
 import { cover, ratingChip } from "../components.js";
-import { h, icon, toast } from "../ui.js";
+import { h, icon, infoDetails, toast } from "../ui.js";
 import { openUpcomingAnalysis } from "./game-insights.js";
 
 const number = value => new Intl.NumberFormat("es-AR").format(value);
@@ -9,7 +9,7 @@ const releaseDate = value => value ? new Date(`${value}T12:00:00`).toLocaleDateS
 
 function heading(kicker, title, note, href, label = "Ver todos") {
   return h("div", {class:"section-head home-section-heading"},
-    h("div", null, h("p", {class:"eyebrow"}, kicker), h("h2", null, title), note && h("p", {class:"home-section-note"}, note)),
+    h("div", null, h("h2", null, title), note && h("p", {class:"home-section-note"}, note)),
     href && h("a", {class:"btn btn-ghost btn-sm",href,target:href.startsWith("https:") ? "_blank" : null,
       rel:href.startsWith("https:") ? "noopener noreferrer" : null},label,icon("chevron",14)));
 }
@@ -80,13 +80,13 @@ function upcomingSearch() {
     }
     if(!Number.isInteger(appid) || appid<=0 || appid>4294967295) {toast("El enlace o App ID no es válido.","error");return;}
     openUpcomingAnalysis(appid);
-  }},h("div",null,h("label",{for:input.id},"¿Tenés otro lanzamiento en mente?"),h("p",null,"Consultá su afinidad provisional antes de comprar. No es una garantía de calidad.")),
+  }},h("label",{for:input.id},"Enlace o App ID de Steam"),
     h("div",{class:"prelaunch-search-controls"},input,h("button",{class:"btn btn-primary btn-sm",type:"submit"},"Consultar afinidad",icon("chevron",14))));
 }
 
 async function loadUpcoming(section) {
   const href="https://store.steampowered.com/explore/upcoming/";
-  section.append(heading("LO QUE VIENE","Próximos lanzamientos","Explorá si sus características anunciadas encajan con tus gustos.",href,"Explorar en Steam"),upcomingSearch(),
+  section.append(heading("LO QUE VIENE","Próximos lanzamientos",null,href,"Explorar en Steam"),infoDetails("Consultar otro lanzamiento", upcomingSearch()),
     h("div",{class:"home-agenda-loading",role:"status"},icon("clock",18),"Consultando próximos juegos en Steam…"));
   try {
     const data=await api.upcoming();

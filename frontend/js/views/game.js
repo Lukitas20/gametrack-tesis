@@ -64,8 +64,7 @@ export async function gameView({params,query}) {
   addSection("resenas","Reseñas",h("div",{class:"game-community"},sectionHead("Opiniones de jugadores","Reseñas reales de Steam y GameTrack."),composer,reviewBody,more));
   const related=similar.length?h("section",{class:"game-scroll-related"},sectionHead("Juegos parecidos"),gameGrid(similar.map(item=>item.game))):null;
   const overview=h("div",{class:"game-overview-layout"},h("div",{class:"game-overview-main"},[...sections.values()],related),
-    h("aside",{class:"game-overview-side"},scorePanel,experience,progressSummary,
-      isDeveloper()?h("a",{class:"btn",href:`#/dev/juego/${game.id}`},icon("chart",16),"Ver analítica"):null));
+    h("aside",{class:"game-overview-side"},scorePanel,experience,progressSummary));
   mount(root,h("div",{class:"game-breadcrumb"},h("a",{href:query?.get("volver")==="que-jugamos"?"#/que-jugamos?modo=plan":"#/catalogo"},icon("arrowLeft",14),query?.get("volver")==="que-jugamos"?"Volver a los resultados":"Explorar juegos")),
     game.steam_sync_status==="unavailable"?h("p",{class:"notice notice-warn"},"Steam no pudo actualizar la ficha. Mostramos los últimos datos guardados."):null,
     h("header",{class:"game-showcase"},h("div",{class:"game-showcase-media","aria-hidden":"true"},cover(game).firstChild.cloneNode(true)),

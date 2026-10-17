@@ -2,7 +2,7 @@
 import { api } from "../api.js";
 import { requiresLogin } from "../components.js";
 import { isLoggedIn, isDeveloper, state } from "../store.js";
-import { h, icon, initials, emptyState, spinnerBlock, toast, openModal, modalHead } from "../ui.js";
+import { h, icon, infoDetails, initials, emptyState, spinnerBlock, toast, openModal, modalHead } from "../ui.js";
 import { steamFriendsSection } from "./steam-friends.js";
 import { startNewQuiz } from "./quiz.js";
 import { openInviteDialog } from "./invite.js";
@@ -16,7 +16,7 @@ export async function friendsView() {
   const send = h("button", { class: "btn btn-primary", type: "submit" }, icon("plus", 14), "Enviar solicitud");
   let revision = 0;
   const owner = state.user.id;
-  const steam = state.user.steam_verified ? steamFriendsSection(state.user, { onChange: load }) : null;
+  const steam = state.user.steam_verified ? steamFriendsSection(state.user, { onChange: load, showInvite: false }) : null;
 
   function person(user) {
     return h("div", { class: "friend-person" },
@@ -53,7 +53,6 @@ export async function friendsView() {
         h("section", { class: "section" }, h("h2", null, `Tus amigos · ${data.friends.length}`),
           data.friends.length ? h("div", { class: "friend-list" }, data.friends.map(user =>
             h("article", { class: "friend-row" }, person(user), h("div", { class: "row", style: { gap: "8px" } },
-              h("button", { class: "btn btn-primary btn-sm", onClick: startNewQuiz }, "Jugar juntos"),
               h("button", { class: "btn btn-ghost btn-sm", onClick: () => remove(user), "aria-label": `Quitar a ${user.username}` }, "Quitar")))))
             : emptyState("Todavía no hay amigos", "Enviá una solicitud por nombre de usuario. Cuando la acepten, podrás elegirlos en ¿Qué jugamos?")),
         h("section", { class: "section" }, h("h2", null, `Solicitudes recibidas · ${data.incoming.length}`),
@@ -78,6 +77,7 @@ export async function friendsView() {
     h("div", { class: "view-head" }, h("div", null, h("p", { class: "eyebrow" }, "Mejor en compañía"),
       h("h1", null, "Amigos"), h("p", null, "Crucen sus gustos para encontrar una próxima partida en común.")),
       h("div", { class: "row", style: { gap: "8px" } },
+        h("button", { class: "btn btn-primary btn-sm", onClick: startNewQuiz }, "Jugar con amigos"),
         h("button", { class: "btn btn-sm", onClick: () => openInviteDialog() }, "Invitar con un enlace"))),
     h("section", { class: "card" },
       h("p", null, "Tu usuario: ", h("strong", null, state.user.username)),
@@ -90,6 +90,6 @@ export async function friendsView() {
         finally { send.disabled = false; }
       } }, h("label", { for: "friend-username" }, "Agregar un amigo"),
       h("div", { class: "discovery-actions" }, username, send)),
-      h("p", { class: "discovery-control-note" }, "Aceptar una amistad permite incluir tus gustos en recomendaciones del grupo. Se muestra una afinidad estimada, sin publicar tu historial completo.")),
+      infoDetails("Qué compartís al aceptar",h("p",null,"Tus amigos pueden incluir tus gustos en recomendaciones del grupo; no ven tu historial completo."))),
     content, steam?.element);
 }

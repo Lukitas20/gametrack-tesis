@@ -5,7 +5,7 @@ import { navigate } from "../router.js";
 import { accountSetupRole, saveAccountSetup, isLoggedIn, loginDestination, refreshUser, state } from "../store.js";
 import { h, icon, mount, toast } from "../ui.js";
 
-export const STUDIO_DEMO_COPY = "Espacio de estudio · Demostración. Podés explorar las herramientas profesionales del prototipo; no estás contratando una suscripción.";
+export const STUDIO_DEMO_COPY = "Prototipo del espacio de estudio · sin suscripción ni cobros.";
 
 export function experienceView({ query = new URLSearchParams() } = {}) {
   if (!isLoggedIn()) return requiresLogin("Iniciá sesión para configurar tu experiencia.");
@@ -73,7 +73,7 @@ export function experienceView({ query = new URLSearchParams() } = {}) {
     }
     mount(roleBody, h("h2", null, "Empecemos por tus gustos"),
       h("p", { class: "muted" }, user.preferences_source === "steam" ? "Partimos de tus juegos de Steam. Podés ajustar la selección." : "Elegí los géneros que te gustan para personalizar las recomendaciones. También podés hacerlo después."),
-      genres, status, !user.steam_verified && h("p", { class: "muted" }, "Después podés vincular Steam desde tu perfil para traer tu biblioteca."));
+      genres, status);
     load();
   }
 
@@ -109,10 +109,10 @@ export function experienceView({ query = new URLSearchParams() } = {}) {
     mount(roleBody, h("p", { class: "experience-demo" }, icon("info", 18), STUDIO_DEMO_COPY),
       h("label", { for: studio.id }, "Nombre del estudio o desarrollador independiente"), studio,
       h("h2", null, "¿Qué juego querés analizar primero?"),
-      h("p", { class: "muted" }, "Elegí un título propio o de referencia. Después podés consultar otros juegos del catálogo; esta elección no acredita su propiedad."),
+      h("p", { class: "muted" }, "Elegí un juego propio o de referencia (opcional)."),
       h("label", { for: input.id }, "Buscar en el catálogo"),
       h("div", { class: "experience-search" }, input, h("button", { type: "button", class: "btn", onClick: search }, icon("search", 16), "Buscar")), picked, results,
-      h("p", { class: "muted" }, "Si tu juego todavía no aparece, podés continuar sin elegirlo y volver a configurar este espacio después."));
+      );
   }
 
   function renderRole() {
@@ -131,6 +131,6 @@ export function experienceView({ query = new URLSearchParams() } = {}) {
   return h("div", { class: "experience-page" },
     h("div", { class: "view-head" }, h("div", null, h("p", { class: "eyebrow" }, "TU CUENTA DE GAMETRACK"),
       h("h1", null, user.onboarding_step === "choose" ? "Elegí tu tipo de cuenta" : selectedRole === "desarrollador" ? "Configurá tu estudio" : "Personalizá tu perfil de jugador"),
-      h("p", { class: "muted" }, user.onboarding_step === "choose" ? "Elegí jugador o desarrollador / estudio para completar el registro. El tipo de cuenta queda definido al continuar." : "El tipo de cuenta que elegiste al registrarte es permanente."))),
+      user.onboarding_step === "choose" && h("p", { class: "muted" }, "El tipo de cuenta queda definido al continuar."))),
     form);
 }

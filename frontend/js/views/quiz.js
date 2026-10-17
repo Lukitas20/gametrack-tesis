@@ -250,7 +250,7 @@ async function guidedQuizView() {
 
   function head(eyebrow, title, note) {
     return h("header", { class: "play-banner" },
-      h("div",{class:"play-banner-copy"},h("p",{class:"play-eyebrow"},icon("gamepad",16),eyebrow),h("h1", null, title), note && h("p", { class: "play-banner-note" }, note)),
+      h("div",{class:"play-banner-copy"},h("h1", null, title), note && h("p", { class: "play-banner-note" }, note)),
       h("div",{class:"play-banner-emblem","aria-hidden":"true"},icon("gamepad",44)));
   }
 
@@ -281,11 +281,11 @@ async function guidedQuizView() {
         h("span", { class: "play-option-check", "aria-hidden": "true" }, icon("check", 12)));
       options.append(button);
     });
-    mount(container, head("DESCUBRÍ TU PRÓXIMA PARTIDA", "¿Qué jugamos hoy?", "Elegí tu momento. Nosotros buscamos el juego."), progress(step),
+    mount(container, head("DESCUBRÍ TU PRÓXIMA PARTIDA", "¿Qué jugamos hoy?", null), progress(step),
       h("div", { class: "play-workspace" }, h("section", { class: "play-question-panel" },
         h("p", { class: "eyebrow" }, `PASO ${String(step + 1).padStart(2, "0")} / ${question.label.toLocaleUpperCase()}`),
         h("h2", { class: "quiz-question-title", id: "play-question-title", tabindex: "-1" }, question.title),
-        h("p", { class: "play-question-note" }, question.note), options,
+        options,
         question.help && h("details",{class:"play-method-details"},h("summary",null,icon("info",13),"Cómo usamos el tiempo"),h("p", { class: "play-method-note" }, question.help)),
         h("div", { class: "play-question-actions" },
           h("button", { class: "btn btn-ghost", onClick: () => {

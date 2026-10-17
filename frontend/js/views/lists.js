@@ -45,7 +45,6 @@ export async function listsView() {
         null,
         h("p", { class: "eyebrow" }, "Colecciones"),
         h("h1", null, "Mis listas"),
-        h("p", null, "Favoritos, Jugando y Pendientes existen desde el registro; el resto las creás vos."),
       ),
       h("span", { class: "chip" }, `${lists.length} listas`),
     ),
@@ -66,9 +65,6 @@ export async function listsView() {
                   { class: "row", style: { gap: "var(--s-3)" } },
                   h("h2", null, list.name),
                   h("span", { class: "chip" }, `${list.items.length}`),
-                  list.list_type !== "personalizada"
-                    ? h("span", { class: "chip chip-accent" }, "del sistema")
-                    : null,
                 ),
                 list.description &&
                   h(

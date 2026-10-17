@@ -29,8 +29,7 @@ function guard() {
 }
 
 function intro(kicker, title, text) {
-  return h("header", { class: "play-hub-intro" }, h("p", { class: "eyebrow" }, kicker),
-    h("h1", null, title), h("p", null, text));
+  return h("header", { class: "play-hub-intro" }, h("h1", null, title), text && h("p", null, text));
 }
 
 function sourceLabel(item) {
@@ -61,17 +60,9 @@ function analysisAction(gameId) {
     icon("sparkles", 15), "¿Por qué este juego?", icon("chevron", 13));
 }
 
-function feedbackAction(game, onSaved, label = "Ya lo probé: contar cómo me fue") {
+function feedbackAction(game, onSaved, label = "Registrar experiencia") {
   return h("button", { type: "button", class: "btn btn-ghost btn-sm", onClick: () => openPlayFeedback(game.id, game.name, onSaved) },
     icon("heart", 14), label);
-}
-
-function selectionReason(item) {
-  const origin = item.source === "pending" ? "Lo guardaste en tu lista para jugar más adelante." :
-    item.source === "steam_pending" ? "Ya lo tenés en Steam y lo guardaste en Pendientes." :
-    "Ya lo tenés en Steam y registra como máximo 2 horas jugadas.";
-  return origin + (item.score.value == null ? " Todavía faltan datos para estimar si te gustaría." :
-    " Es la primera propuesta según tu afinidad y el historial disponible.");
 }
 
 function achievementsButton(item) {
@@ -89,7 +80,6 @@ function rescueSpotlight(item, onSaved) {
     h("div", { class: "rescue-copy" },
       h("div", { class: "rescue-meta" }, h("span", null, sourceLabel(item)), timeLabel(item) ? h("span", null, timeLabel(item)) : null),
       h("h2", null, item.game.name),
-      h("p", null, selectionReason(item)),
       h("div", { class: "rescue-main-actions" },
         h("a", { class: "btn rescue-primary", href: `#/juego/${item.game.id}` }, "Ver detalles del juego", icon("chevron", 15)),
         analysisAction(item.game.id)),
@@ -101,12 +91,12 @@ function companionTiles() {
     h("a", { class: "play-companion-tile play-plan-tile", href: "#/que-jugamos?modo=plan" },
       h("div", { class: "play-plan-orbits", "aria-hidden": "true" }, h("span"), h("span"), h("span")),
       h("span", { class: "play-tile-icon" }, icon("gamepad", 24)),
-      h("div", null, h("small", null, "BUSCAR ALGO PARA JUGAR"), h("h2", null, "¿No sabés qué elegir?"), h("p", null, "Respondé 4 preguntas sobre tu tiempo, ánimo y compañía. Te sugerimos juegos.")),
-      h("span", { class: "play-tile-link" }, "Buscar recomendaciones", icon("chevron", 14))),
+      h("div", null, h("h2", null, "Buscar recomendaciones"), h("p", null, "Según tu tiempo, ánimo y compañía.")),
+      h("span", { class: "play-tile-link", "aria-hidden":"true" }, icon("chevron", 14))),
     h("a", { class: "play-companion-tile play-experience-tile", href: "#/que-jugamos?modo=experiencias" },
       h("span", { class: "play-tile-icon" }, icon("heart", 22)),
-      h("div", null, h("small", null, "DESPUÉS DE JUGAR"), h("h2", null, "Revisá tus opiniones"), h("p", null, "Mirá qué contaste de tus partidas y editá tus respuestas.")),
-      h("span", { class: "play-tile-link" }, "Ver mis opiniones", icon("chevron", 14))));
+      h("div", null, h("h2", null, "Mis opiniones"), h("p", null, "Consultá o editá tus experiencias.")),
+      h("span", { class: "play-tile-link", "aria-hidden":"true" }, icon("chevron", 14))));
 }
 
 function backlogCard(item, onSaved) {
@@ -140,18 +130,17 @@ export function backlogView({ hub = false } = {}) {
   const current = request => request === revision && owner === state.user?.id;
   const filter = h("select", { id: "play-backlog-filter", "aria-label": "Filtrar juegos pendientes", onChange: () => { mode = filter.value; load(); } },
     h("option", { value: "light" }, "Todos mis pendientes"), h("option", { value: "unplayed" }, "Sin jugar en Steam"), h("option", { value: "pending" }, "Sólo mi lista Pendientes"));
-  const reload = h("button", { class: "btn btn-ghost btn-sm", onClick: load }, icon("refresh", 14), "Actualizar");
-  const sync = h("button", { class: "btn btn-sm", onClick: async () => {
-    sync.disabled = true; sync.textContent = "Sincronizando…";
-    try { await api.syncSteamProfile(); if (owner === state.user?.id) await load(); }
+  const reload = h("button", { class: "btn btn-ghost btn-sm", onClick: async () => {
+    reload.disabled = true;
+    try { if(state.user.steam_verified) await api.syncSteamProfile(); if (owner === state.user?.id) await load(); }
     catch (error) { if (owner === state.user?.id) toast(error.message, "error"); }
-    finally { sync.disabled = false; sync.textContent = "Sincronizar Steam"; }
-  } }, icon("refresh", 14), "Sincronizar Steam");
+    finally { reload.disabled = false; }
+  } }, icon("refresh", 14), "Actualizar");
   const controls = h("div", { class: "play-backlog-controls" },
     h("div", { class: "play-library-heading" }, icon("list", 18), h("h2", null, "Volvé a tus pendientes")),
-    h("div", { class: "play-library-filters" }, h("label", { for: "play-backlog-filter" }, "Mostrar:"), filter, reload, state.user.steam_verified ? sync : null));
+    h("div", { class: "play-library-filters" }, h("label", { for: "play-backlog-filter" }, "Mostrar:"), filter, reload));
   root.append(intro("ELEGÍ TU PRÓXIMA PARTIDA", hub ? "¿Qué jugamos hoy?" : "Mis pendientes",
-    hub ? "Retomá un pendiente, buscá recomendaciones o revisá cómo te fue al jugar." : "Encontrá juegos que guardaste para después o apenas probaste en Steam."),
+    null),
     controls, context, spotlight, more, meta);
 
   async function load() {
@@ -179,7 +168,6 @@ export function backlogView({ hub = false } = {}) {
       mount(meta, h("div", { class: "play-library-status" },
         h("span", null, icon("list", 13), `${data.eligible_count} ${data.eligible_count === 1 ? "juego con este filtro" : "juegos con este filtro"}`),
         h("a", { href: "#/listas" }, "Mis listas", icon("chevron", 12))),
-        featured ? h("p", { class: "play-score-help" }, "GameTrackScore (0–100) combina tus gustos y la recepción del juego. Tocá “¿Por qué este juego?” para ver los motivos.") : null,
         status[data.library_status] ? h("p", null, status[data.library_status]) : null,
         h("details", { class: "play-backlog-note" }, h("summary", null, "Cómo elegimos estos juegos", icon("chevronDown", 13)),
           h("p", null, "GameTrackScore va de 0 a 100 y combina tus gustos con la recepción del juego. No es una probabilidad de que te guste. Los juegos guardados en Pendientes pueden ser títulos que todavía no compraste."),
@@ -199,7 +187,7 @@ export function backlogView({ hub = false } = {}) {
 export function experienceView() {
   const blocked = guard(); if (blocked) return blocked;
   const owner = state.user.id, root = h("div", { class: "play-hub" }), body = h("div"); let revision = 0;
-  root.append(intro("DESPUÉS DE JUGAR", "Mis opiniones", "Revisá tus respuestas y editalas. Lo que te gustó o no ayuda a mejorar las próximas sugerencias."), body);
+  root.append(intro("DESPUÉS DE JUGAR", "Mis opiniones", "Experiencias privadas que podés editar."), body);
   async function load() {
     const request = ++revision; mount(body, h("p", { role: "status" }, "Leyendo tus devoluciones…"));
     try {
@@ -209,7 +197,7 @@ export function experienceView() {
           h("p", null, feedback.played ? enjoymentLabel[feedback.enjoyment] : "No llegué a jugar", " · ", reasonLabel[feedback.reason]),
           h("small", null, `${new Date(feedback.updated_at).toLocaleDateString("es-AR")}${feedback.minutes != null ? ` · ${feedback.minutes} min declarados` : ""}${feedback.replay != null ? ` · ${feedback.replay ? "Volvería a jugarlo" : "No volvería a jugarlo"}` : ""}`),
           feedback.note ? h("p", { class: "play-experience-note" }, feedback.note) : null), feedbackAction(game, load, "Editar mi respuesta")))) :
-        emptyState("Todavía no contaste cómo te fue", "En un pendiente, tocá “Ya lo probé: contar cómo me fue”. También podés registrar tu experiencia desde la ficha del juego o desde una recomendación."),
+        emptyState("Todavía no registraste experiencias", "Podés hacerlo desde la ficha de un juego o desde tus pendientes."),
         h("p", { class: "play-experience-help" }, "Tus últimas 40 devoluciones. Las interrupciones se guardan como contexto; tus estrellas no se modifican."));
     } catch (error) {
       if (request === revision && owner === state.user?.id) mount(body, h("p", { role: "alert" }, error.message), h("button", { class: "btn", onClick: load }, "Reintentar"));

@@ -1,7 +1,7 @@
 import { api } from "../api.js";
 import { gameComparePanel } from "./game-comparison.js";
 import { state, isLoggedIn, isDeveloper } from "../store.js";
-import { h, icon, mount, openModal, modalHead } from "../ui.js";
+import { h, icon, infoDetails, mount, openModal, modalHead } from "../ui.js";
 
 /** Sólo el cálculo del servidor puede confirmar si el modelo aportó al puntaje. */
 export function affinityLearningNote(learning) {
@@ -30,6 +30,22 @@ export function affinityLearningNote(learning) {
     used && h("p", null, `El ${percent}% corresponde al índice base del GameTrackScore. No es una probabilidad de que te guste.`),
     details.length ? h("p", { class: "affinity-learning-source" }, details.join(" ")) : null,
     h("p", { class: "affinity-learning-source" }, "Modelo de recomendación distinto del que analiza reseñas en el panel de desarrollador. Las horas indican interés; no se convierten en opiniones positivas."));
+}
+
+function scoreExplanation(score) {
+  const labels = { affinity: "Afinidad con tus gustos", local_model: "IA de afinidad", steam_affinity: "IA de afinidad", metacritic: "Metacritic", community: "Reseñas de Steam", reach: "Respaldo público", own_rating: "Tu valoración" };
+  const compatibility = score.calibration === "compatibility" && Number.isFinite(score.base_value) && Number.isFinite(score.value);
+  const breakdown = Object.entries(score.weights || {}).map(([key, weight]) => {
+    const value = Math.round((score.components?.[key] ?? 0) * 100);
+    return h("div", { class: "gts-component" },
+      h("div", null, h("span", null, labels[key] || key), h("span", null, `${value}/100 · peso ${Math.round(weight * 100)}%`)),
+      h("div", { class: "gts-component-track", "aria-hidden": "true" }, h("span", { style: { width: `${value}%` } })));
+  });
+  return infoDetails("Desglose del puntaje",
+    h("p", null, score.explanation),
+    compatibility && h("p", null, `Índice base ${score.base_value.toLocaleString("es-AR", { maximumFractionDigits: 1 })}/100 → GameTrackScore ${score.value}/100. Es una escala de compatibilidad, no una probabilidad.`),
+    breakdown.length ? h("div", { class: "gts-breakdown" }, breakdown) : null,
+    h("ul", null, (score.reasons || []).map(reason => h("li", null, reason))));
 }
 
 function referenceLink(ref, compact = false) {
@@ -80,7 +96,7 @@ function analysisContent(gameId, close, upcoming = false) {
       event.preventDefault();
       if (input.value.trim()) ask(input.value.trim());
     } }, h("label", { for: inputId }, "Preguntá sobre este juego"), input,
-      h("div", { class: "insight-form-footer" }, h("span", null, "Explicaciones con evidencia. Sin servicios de IA externos."), submit));
+      h("div", { class: "insight-form-footer" }, submit));
 
     function setBusy(value) {
       busy = value; submit.disabled = value; input.disabled = value;
@@ -130,9 +146,10 @@ function analysisContent(gameId, close, upcoming = false) {
       h("div", { class: "insight-columns" }, column("Podría gustarte", data.positives, "heart", "insight-fit"),
         column("Para tener en cuenta", data.cautions, "info", "insight-caution")),
       h("p",{class:"insight-confidence",dataset:{confidence:data.score.confidence||"low"}},icon("info",14),data.score.confidence_message||"Estimación provisional con los datos disponibles."),
+      scoreExplanation(data.score),
       !upcoming && gameComparePanel(gameId,data.game_name),
-      h("section", { class: "insight-consult" }, h("h3", null, "Mirá más allá del número"),
-        h("p", null, "Explorá los motivos, compará con tu historial y revisá las referencias."), suggestions, thread, form),
+      h("section", { class: "insight-consult" }, h("h3", null, "Más preguntas"),
+        infoDetails("Preguntas sugeridas", suggestions), thread, form),
       h("details", { class: "insight-references" }, h("summary", null, "Fuentes y referencias"),
         h("div", null, data.references.map(ref => referenceLink(ref))), h("p", { class: "insight-method" }, data.method)));
   }
@@ -142,7 +159,7 @@ function analysisContent(gameId, close, upcoming = false) {
 
 export function openUpcomingAnalysis(appid) {
   openModal(close => h("div", null,
-    modalHead("¿Podría gustarte cuando salga?", "GameTrackScore previo al lanzamiento, con tus gustos y referencias.", close),
+    modalHead("Afinidad antes del lanzamiento", null, close),
     !isLoggedIn() || isDeveloper() ? h("div", {class:"game-insights"},
       h("p",null,isDeveloper() ? "Esta estimación necesita una cuenta de jugador con gustos e historial personal." : "Iniciá sesión para comparar este anuncio con tus gustos e historial."),
       h("a",{class:"btn btn-primary",href:"#/cuentas",onClick:close},"Ir a mi cuenta")) : analysisContent(appid, close, true)), {wide:true});
@@ -150,7 +167,7 @@ export function openUpcomingAnalysis(appid) {
 
 export function openGameAnalysis(gameId) {
   openModal(close => h("div", null,
-    modalHead("¿Este juego es para vos?", "Una explicación de tu afinidad, con referencias.", close), analysisContent(gameId, close)), { wide: true });
+    modalHead("Tu afinidad con este juego", null, close), analysisContent(gameId, close)), { wide: true });
 }
 
 export function gameAnalysisButton(gameId) {

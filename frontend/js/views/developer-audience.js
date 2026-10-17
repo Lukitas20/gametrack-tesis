@@ -1,4 +1,4 @@
-import { h, mount } from "../ui.js";
+import { h, infoDetails, mount } from "../ui.js";
 import { api } from "../api.js";
 
 const number = value => Number(value || 0).toLocaleString("es-AR");
@@ -12,15 +12,13 @@ export function audiencePanel(initial, scope) {
     const s=data.steam_histories || {}, groups=s.groups || [], coverageNames={ratings:"Valoraciones",reviews:"Reseñas propias",feedback:"Experiencias",public_lists:"Listas públicas",preferences:"Preferencias guardadas"};
     const gtGroups=data.groups.filter(group=>!group.suppressed && group.unit==="usuarios");
     const cards=kind=>groups.filter(g=>g.kind===kind).slice(0,expanded?undefined:12).map(g=>h("article",{class:"dev-aspect-card"},
-      h("h3",null,g.label),h("strong",null,`${number(g.size)} de ${number(g.denominator)} autores con historial público consultado`),
-      h("p",null,g.criterion),
-      h("h4",null,"Recepción de los juegos del informe"),
-      h("p",null,`${number(g.reception.recommended)} sólo recomiendan · ${number(g.reception.not_recommended)} sólo desaconsejan · ${number(g.reception.mixed)} con votos distintos entre títulos · ${number(g.reception.unknown)} sin voto guardado.`),
-      g.examples.length>0 && h("div",null,h("h4",null,"Otros juegos que recomendaron en común"),h("ul",null,g.examples.map(game=>h("li",null,h("a",{href:`#/juego/${game.game_id}`},game.name),` · ${number(game.authors)} autores de este grupo`))))));
-    mount(root,h("h2",null,"Qué otros juegos recomienda esta audiencia"),
-      h("p",null,`Agrupamos a los autores de las ${number(data.steam_reviews)} reseñas Steam guardadas para ${number(data.games)} ${data.games===1?"juego":"juegos"}, según sus recomendaciones públicas de otros juegos.`),
-      h("p",{class:"dev-data-note"},"Cada grupo requiere al menos dos juegos distintos recomendados con el mismo rasgo y cinco autores. Excluimos los juegos de este informe. Los grupos pueden superponerse."),
-      h("div",{class:"dev-toolbar-actions"},scope && h("button",{class:"btn",type:"button",disabled:running,onClick:()=>collect()},running?"Consultando historiales…":missing()?"Continuar consulta de historiales":"Comprobar datos disponibles")),
+      h("h3",null,g.label),h("strong",null,`${number(g.size)} de ${number(g.denominator)} autores`),
+      h("p",{class:"audience-reception"},[["recommended","sólo recomiendan"],["not_recommended","sólo desaconsejan"],["mixed","con votos distintos entre títulos"],["unknown","sin voto guardado"]].filter(([key])=>g.reception[key]>0).map(([key,label])=>`${number(g.reception[key])} ${label}`).join(" · ")),
+      g.examples.length>0 && infoDetails("Juegos recomendados en común",h("ul",null,g.examples.map(game=>h("li",null,h("a",{href:`#/juego/${game.game_id}`},game.name),` · ${number(game.authors)} autores de este grupo`))))));
+    mount(root,h("h2",null,"Audiencias por gustos"),
+      h("p",null,`Muestra observada de Steam · ${number(data.steam_reviews)} reseñas · ${number(data.games)} ${data.games===1?"juego":"juegos"}. Los votos de cada grupo corresponden a los juegos de este informe.`),
+      h("p",{class:"dev-data-note"},"Cada grupo: al menos 5 autores con 2 o más recomendaciones de otros juegos con ese rasgo. Los grupos pueden superponerse."),
+      h("div",{class:"dev-toolbar-actions"},scope && (missing() || running || failed) && h("button",{class:"btn",type:"button",disabled:running,onClick:()=>collect()},running?"Consultando historiales…":"Continuar consulta")),
       h("p",{class:"dev-caption",role:failed?"alert":"status","aria-live":"polite"},notice || (missing()?"Al abrir esta solapa consultamos los historiales públicos por lotes. Los grupos aparecen a medida que hay evidencia suficiente.":"Consulta de la muestra completada; los resultados se conservan durante 24 horas.")),
       h("details",{class:"dev-method"},h("summary",null,`Cobertura: ${number(s.public_histories)} historiales públicos de ${number(s.selected_authors)} autores seleccionados`),
       h("ul",null,

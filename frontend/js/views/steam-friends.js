@@ -4,7 +4,7 @@ import { state } from "../store.js";
 import { h, icon, initials, mount, emptyState, spinnerBlock, toast } from "../ui.js";
 import { openInviteDialog } from "./invite.js";
 
-export function steamFriendsList(data, { onChange = () => {}, heading = "Amigos de Steam" } = {}) {
+export function steamFriendsList(data, { onChange = () => {}, heading = "Amigos de Steam", showInvite = true } = {}) {
   const owner = state.user?.id;
   const friends = data.friends;
   const results = h("div", { "aria-live": "polite" });
@@ -38,7 +38,6 @@ export function steamFriendsList(data, { onChange = () => {}, heading = "Amigos 
         friend.avatar ? h("img", { src: friend.avatar, width: "46", height: "46", alt: "", loading: "lazy", onError: event => event.currentTarget.replaceWith(avatar) }) : avatar,
         h("div", null, h("strong", null, friend.name), h("p", { class: "steam-caption", dataset: { online: String(friend.online === true) } },
           friend.playing ? `Jugando a ${friend.playing}` : friend.online === true ? "En línea en Steam" : friend.online === false ? "Desconectado en Steam" : "Estado no disponible"))),
-      h("p", { class: "steam-friend-account" }, friend.account ? "También está en GameTrack" : "Todavía no vinculó Steam en GameTrack"),
       h("div", { class: "steam-friend-action" }, action));
   }
   function render() {
@@ -51,14 +50,14 @@ export function steamFriendsList(data, { onChange = () => {}, heading = "Amigos 
   }
   render();
   return h("div", { class: "steam-friends-shared" },
-    h("div", { class: "steam-section-head" }, h("div", null, h("p", { class: "eyebrow" }, "TU COMUNIDAD"), h("h2", null, heading), h("p", { class: "muted" }, "Los de siempre, también acá. Sumalos a GameTrack para descubrir qué jugar juntos.")),
-      h("button", { class: "btn btn-sm", onClick: () => openInviteDialog() }, icon("plus", 14), "Mi enlace de invitación")),
+    h("div", { class: "steam-section-head" }, h("h2", null, heading),
+      showInvite && h("button", { class: "btn btn-sm", onClick: () => openInviteDialog() }, icon("plus", 14), "Mi enlace de invitación")),
     notices[friends.status] && h("p", { class: "steam-notice", role: "status" }, notices[friends.status], friends.status === "private" && h("a", { href: "https://steamcommunity.com/my/edit/settings", target: "_blank", rel: "noopener noreferrer" }, " Revisar privacidad ↗")),
     friends.partial_profiles && h("p", { class: "steam-notice" }, "Algunos perfiles de Steam no tienen nombre o avatar disponible."),
     query, results);
 }
 
-export function steamFriendsSection(user, { onChange } = {}) {
+export function steamFriendsSection(user, { onChange, showInvite = true } = {}) {
   const body = h("div");
   const element = h("section", { class: "friends-steam-section", "aria-label": "Amigos de Steam" }, body);
   const owner = user.id;
@@ -71,7 +70,7 @@ export function steamFriendsSection(user, { onChange } = {}) {
     try {
       data = await (force ? api.syncSteamProfile() : api.steamProfile());
       if (current !== revision || state.user?.id !== owner) return;
-      mount(body, steamFriendsList(data, { onChange: onChange || (() => refresh()) }));
+      mount(body, steamFriendsList(data, { onChange: onChange || (() => refresh()), showInvite }));
     } catch (error) {
       if (current !== revision || state.user?.id !== owner) return;
       mount(body, emptyState("No pudimos cargar los amigos de Steam", error.message,

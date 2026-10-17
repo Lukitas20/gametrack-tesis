@@ -112,7 +112,7 @@ export function steamDashboard(user) {
     }
     rows();
     return h("div", null, sectionNotice(library, "tu biblioteca"),
-      h("div", { class: "steam-section-head" }, h("div", null, h("h2", null, "Tu biblioteca"), h("p", { class: "muted" }, "Juegos, tiempo de juego y progreso.")),
+      h("div", { class: "steam-section-head" }, h("h2", null, "Tu biblioteca"),
         h("a", { class: "btn btn-sm", href: data.profile_url + "games/?tab=all", target: "_blank", rel: "noopener noreferrer" }, "Ver en Steam ↗")),
       h("div", { class: "steam-library-tools" }, query, sort), filters, results);
   }
@@ -148,7 +148,7 @@ export function steamDashboard(user) {
   function ratingsTab() {
     const gamesById = new Map((data?.library.items || []).map(game => [game.game_id, game]));
     return h("div", null,
-      h("div", { class: "steam-section-head" }, h("div", null, h("h2", null, "Tus reseñas de Steam"), h("p", { class: "muted" }, "Lo que recomendaste y lo que no, con tus propias palabras.")),
+      h("div", { class: "steam-section-head" }, h("h2", null, "Reseñas de Steam"),
         data && h("a", { class: "btn btn-sm", href: data.reviews_url, target: "_blank", rel: "noopener noreferrer" }, "Mis reseñas en Steam ↗")),
       steamReviewsList(),
       h("div", { class: "steam-section-head steam-gametrack-ratings-head" }, h("div", null, h("h2", null, "Tus notas en GameTrack"), h("p", { class: "muted" }, "Las puntuaciones de 1 a 5 que guardaste acá."))),

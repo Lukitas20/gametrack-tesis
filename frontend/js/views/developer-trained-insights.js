@@ -3,7 +3,7 @@ import { h, icon } from "../ui.js";
 
 const count = value => Number(value || 0).toLocaleString("es-AR");
 
-export function trainedReviewInsights(data, { title = "Lo que detecta la IA local", onAsk = null, compact = false } = {}) {
+export function trainedReviewInsights(data, { title = "Temas de las reseñas", onAsk = null, compact = false } = {}) {
   if (!data) return null;
   const ready = data.model?.status === "ready";
   const topics = (data.topics || []).filter(topic => topic.mentions > 0).slice(0, compact ? 3 : 5);

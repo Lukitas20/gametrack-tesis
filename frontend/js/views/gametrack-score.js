@@ -1,8 +1,8 @@
 import { api } from "../api.js";
 import { gameCard, saveToListButton } from "../components.js";
 import { isLoggedIn, isDeveloper, state } from "../store.js";
-import { h, icon } from "../ui.js";
-import { affinityLearningNote, gameAnalysisButton } from "./game-insights.js";
+import { h, icon, infoDetails } from "../ui.js";
+import { gameAnalysisButton } from "./game-insights.js";
 import {playFeedbackButton} from "./play-feedback.js";
 
 const EVIDENCE = { sin_datos: "Falta evidencia personal", inicial: "Afinidad provisional", en_desarrollo: "Perfil en desarrollo", amplia: "Más historial disponible", valoracion_propia: "Según tu valoración", steam: "Usa tu historial de Steam" };
@@ -12,21 +12,6 @@ function scoreBadge(score) {
   return h("div", { class: "gts-badge", "aria-label": value == null ? "GameTrackScore sin datos" : `GameTrackScore ${value} de 100` },
     h("span", { class: "gts-number", style: { background: `conic-gradient(var(--brand-teal-ui) ${(value ?? 0) * 3.6}deg, var(--border) 0deg)` } }, h("b", null, value ?? "—")),
     h("span", null, h("strong", null, "GameTrackScore"), h("small", null, EVIDENCE[score?.evidence] || "Afinidad personal"),score?.confidence&&h("small",{class:"gts-confidence",title:score.confidence_message},({known:"Confianza: tu opinión guardada",high:"Confianza alta",medium:"Confianza moderada",low:"Confianza provisional",none:"Confianza: sin evidencia suficiente"})[score.confidence])));
-}
-
-function scoreExplanation(score) {
-  const labels = { affinity: "Afinidad con tu historial y gustos", local_model: score.learning?.used ? "IA de afinidad con opiniones reales" : "Aprendizaje local de tus opiniones", steam_affinity: "IA de afinidad con opiniones reales", metacritic: "Metacritic", community: "Reseñas públicas de Steam", reach: "Respaldo público", own_rating: "Tu valoración" };
-  const compatibility = score.calibration === "compatibility" && Number.isFinite(score.base_value) && Number.isFinite(score.value);
-  const calibrationNote = compatibility ? h("p", null, `Índice base ${score.base_value.toLocaleString("es-AR", { maximumFractionDigits: 1 })}/100 → GameTrackScore ${score.value}/100: escala de compatibilidad. No es una garantía ni una probabilidad.`) : null;
-  const breakdown = Object.entries(score.weights || {}).map(([key, weight]) => {
-    const value = Math.round((score.components?.[key] ?? 0) * 100);
-    return h("div", { class: "gts-component" },
-      h("div", null, h("span", null, labels[key] || key), h("span", null, `${value}/100 · peso ${Math.round(weight * 100)}%`)),
-      h("div", { class: "gts-component-track", "aria-hidden": "true" }, h("span", { style: { width: `${value}%` } })));
-  });
-  return h("details", { class: "gts-explanation" }, h("summary", null, "¿Por qué este puntaje?"),
-    h("p", null, score.explanation), calibrationNote, h("p", null, "La confianza indica cuánta evidencia respalda la estimación y se evalúa por separado del puntaje."), breakdown.length ? h("div", { class: "gts-breakdown" }, compatibility && h("strong", null, "Componentes del índice base"), breakdown) : null,
-    affinityLearningNote(score.learning), h("ul", null, score.reasons.map(reason => h("li", null, reason))));
 }
 
 export function personalScorePanel(gameId, name="este juego", {showFeedback=true}={}) {
@@ -43,7 +28,7 @@ export function personalScorePanel(gameId, name="este juego", {showFeedback=true
     try {
       const score = await api.gameTrackScore(gameId);
       if (request !== revision || owner !== state.user?.id) return;
-      panel.replaceChildren(scoreBadge(score), scoreExplanation(score), gameAnalysisButton(gameId));
+      panel.replaceChildren(scoreBadge(score), gameAnalysisButton(gameId));
       if(showFeedback)panel.append(h("div",null,playFeedbackButton(gameId,name,panel.refresh)));
       if (score.value == null) panel.append(h("a", { href: "#/perfil" }, "Completar mis gustos"));
     } catch {
@@ -69,9 +54,8 @@ export function discoverySection() {
   const friendRow = h("div", { class: "gts-friend-row", hidden: true },
     h("label", { for: "gts-friend" }, "Tu compañero"), selector, friendHint);
   root.append(h("div", { class: "gts-heading" },
-    h("div", null, h("p", { class: "eyebrow" }, "HECHO PARA VOS"), h("h2", null, "Tu próximo favorito")),
-    h("a", { class: "btn btn-ghost btn-sm", href: "#/que-jugamos?modo=plan" }, icon("dice", 16), "Armar una partida")),
-    h("p", { class: "gts-intro" }, "Tus gustos, la crítica y tus amigos. Tres formas de encontrar qué jugar."), tabs, friendRow, note, body);
+    h("div", null, h("h2", null, "Para vos"))),
+    tabs, friendRow, body, infoDetails("Cómo se elige esta selección", note));
   function renderTabs() {
     tabs.replaceChildren(...modes.map(([key, label, symbol]) => h("button", {
       class: "gts-tab", "aria-pressed": String(mode === key), onClick: () => { mode = key; renderTabs(); load(); },
@@ -116,8 +100,7 @@ export function discoverySection() {
           h("div", { class: "gts-card-info" }, scoreBadge(item.gametrack_score),
             h("p", { class: "gts-meta" }, "Metascore ", h("strong", null, item.gametrack_score.metascore != null ? `${item.gametrack_score.metascore}/100` : "Sin dato")),
             h("p", { class: "gts-public" }, `${new Intl.NumberFormat("es-AR").format(item.gametrack_score.review_count)} reseñas públicas`),
-            item.reasons.length ? h("ul", { class: "gts-reasons" }, item.reasons.map(reason => h("li", null, reason))) : null,
-            scoreExplanation(item.gametrack_score), gameAnalysisButton(item.game.id), saveToListButton(item.game)))))
+            gameAnalysisButton(item.game.id), saveToListButton(item.game)))))
         : emptyDiscovery(currentMode));
     } catch (error) {
       if (request !== revision || owner !== state.user?.id) return;

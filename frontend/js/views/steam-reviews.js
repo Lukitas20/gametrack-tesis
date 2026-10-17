@@ -1,7 +1,7 @@
 /* Reseñas de Steam: el veredicto original se conserva, sin inventar estrellas. */
 import { api } from "../api.js";
 import { state } from "../store.js";
-import { emptyState, h, icon, initials, spinnerBlock, toast } from "../ui.js";
+import { emptyState, expandableText, h, icon, initials, spinnerBlock, toast } from "../ui.js";
 
 const number = value => new Intl.NumberFormat("es-AR", { maximumFractionDigits: 1 }).format(value);
 
@@ -25,7 +25,7 @@ export function steamReviewsList(reviews, { error = null, loading = false, onLoa
           h("a", { class: "steam-review-cover", href: review.game_id ? `#/juego/${review.game_id}` : `https://store.steampowered.com/app/${review.appid}/`, target: review.game_id ? null : "_blank", rel: review.game_id ? null : "noopener noreferrer", "aria-label": `Ver ${review.name}` }, cover),
           h("div", null, h("h3", null, review.name), review.minutes != null && h("p", { class: "steam-caption" }, `${number(review.minutes / 60)} h en Steam`)),
           h("span", { class: `steam-review-verdict ${review.is_recommended ? "is-recommended" : "is-not-recommended"}` }, icon(review.is_recommended ? "check" : "x", 14), review.is_recommended ? "Recomendado" : "No recomendado")),
-        h("p", { class: "steam-review-content" }, review.content),
+        expandableText(review.content, { className: "steam-review-content" }),
         h("div", { class: "steam-review-footer" }, h("span", { class: "steam-caption" }, (review.posted || "").replace(/Posted /g, "Publicada ").replace(/Updated /g, "Actualizada ")),
           h("a", { href: review.url, target: "_blank", rel: "noopener noreferrer" }, "Ver reseña en Steam ↗")));
     })) : reviews.status === "ok" ? emptyState("No hay reseñas publicadas en Steam", "Cuando publiques una reseña en Steam, vas a poder consultarla acá.") : null,
@@ -36,7 +36,7 @@ export function steamReviewsPanel(user) {
   const body = h("div");
   const refresh = h("button", { class: "btn btn-sm", type: "button", onClick: () => load({ force: true }) }, icon("refresh", 14), "Sincronizar reseñas");
   const root = h("section", { "aria-label": "Tus reseñas de Steam" },
-    h("div", { class: "steam-section-head" }, h("div", null, h("h2", null, "Tus reseñas de Steam"), h("p", { class: "muted" }, "Lo que recomendaste y lo que no, con tus propias palabras.")), refresh), body);
+    h("div", { class: "steam-section-head" }, h("h2", null, "Reseñas de Steam"), refresh), body);
   let reviews = null, error = null, loading = false;
   const currentUser = () => state.user?.id === user.id && state.user?.steam_id === user.steam_id && state.user?.steam_verified;
   const render = () => body.replaceChildren(steamReviewsList(reviews, { error, loading, onLoadMore: () => load({ page: reviews.next_page }) }));

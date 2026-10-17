@@ -4,7 +4,7 @@ import { api } from "../api.js";
 import { openOnboarding } from "./onboarding.js";
 import { isLoggedIn, refreshUser, state, displayName, updateSteamPreferences } from "../store.js";
 import { steamDashboard } from "./steam-profile.js";
-import { h, icon, initials, mount, toast } from "../ui.js";
+import { expandableText, h, icon, infoDetails, initials, mount, toast } from "../ui.js";
 import { requiresLogin } from "../components.js";
 
 function field(label, input) {
@@ -20,8 +20,7 @@ function experienceSection(user) {
   const developer = user.role === "desarrollador";
   return h("section", { class: "card profile-experience" },
     h("h2", null, developer ? "Cuenta de desarrollador / estudio" : "Cuenta de jugador"),
-    h("p", { class: "muted" }, "Tipo de cuenta definido al registrarte."),
-    developer && h("p", { class: "muted" }, `${user.studio || "Tu estudio"} · Espacio profesional de demostración.`),
+    developer && h("p", { class: "muted" }, user.studio || "Tu estudio"),
     developer && h("a", { class: "btn", href: "#/bienvenida" }, "Configurar estudio y juego inicial"));
 }
 
@@ -90,7 +89,7 @@ function genresSection(user) {
         "Modificar",
       )),
     ),
-    fromSteam && h("p", { class: "steam-caption", style: { marginBottom: "var(--s-3)" } }, "Asignados según tus juegos más jugados en Steam. Podés modificarlos cuando quieras."),
+    fromSteam && h("p", { class: "steam-caption" }, "Intereses inferidos de tu tiempo en Steam."),
     user.genres.length
       ? h(
           "div",
@@ -150,11 +149,11 @@ function myReviewsSection(user) {
   let offset=0;
   const more=h("button",{class:"btn btn-sm",onClick:load,hidden:true},"Ver más reseñas");
   root.append(h("div",{class:"profile-section-heading"},h("div",null,h("p",{class:"eyebrow"},"TU VOZ EN GAMETRACK"),h("h2",null,"Mis reseñas"))),
-    h("p",{class:"steam-caption"},"Las reseñas que escribís se guardan acá y también aparecen en la ficha de cada juego."),body,status,more);
+    body,status,more);
   async function load(){more.disabled=true;try{const rows=await api.myReviews({limit:6,offset});if(state.user?.id!==user.id)return;
     rows.forEach(review=>body.append(h("article",{class:"profile-written-review"},
       h("a",{class:"profile-review-game",href:`#/juego/${review.game_id}`},review.game.background_image?h("img",{src:review.game.background_image,alt:"",loading:"lazy",onError:event=>event.target.remove()}):icon("gamepad",25),h("strong",null,review.game.name)),
-      h("h3",null,review.title||"Mi experiencia"),h("p",null,review.content),
+      h("h3",null,review.title||"Mi experiencia"),expandableText(review.content),
       h("div",{class:"profile-review-footer"},h("small",null,new Date(review.created_at).toLocaleDateString("es-AR")),h("a",{class:"btn btn-ghost btn-sm",href:`#/juego/${review.game_id}?resena=editar`},"Editar mi reseña",icon("chevron",13))))));
     offset+=rows.length;more.hidden=rows.length<6;status.replaceChildren();
     if(offset===0)mount(status,"Todavía no escribiste una reseña. ",h("a",{href:"#/catalogo"},"Elegir un juego"));
@@ -203,16 +202,14 @@ async function buildBody() {
         ),
       ),
       h("div",{class:"profile-hero-actions"},
-        h("a",{href:user.role === "jugador" ? "#/que-jugamos" : "#/dev",class:"btn btn-primary"},icon(user.role === "jugador" ? "gamepad" : "chart",18),user.role === "jugador" ? "¿Qué jugamos?" : "Panel del estudio",icon("chevron",14)),
-        dashboard ? h("button",{class:"btn profile-secondary-action",onClick:() => {dashboard.showSection("achievements");dashboard.scrollIntoView({block:"start",behavior:"instant"});}},icon("trophy",16),"Mis logros")
-          : user.role === "jugador" && h("a",{href:"#/listas",class:"btn profile-secondary-action"},icon("list",16),"Mis listas")),
+        h("a",{href:user.role === "jugador" ? "#/que-jugamos" : "#/dev",class:"btn btn-primary"},icon(user.role === "jugador" ? "gamepad" : "chart",18),user.role === "jugador" ? "¿Qué jugamos?" : "Panel del estudio",icon("chevron",14))),
     ),
-    experienceSection(user),
     user.role === "jugador" ? tastes : null,
     dashboard || (user.role === "jugador" ? profileActivity(user,heroMedia) : null),
     user.role === "jugador" ? myReviewsSection(user) : null,
     user.role === "jugador" && !user.steam_verified ? steamSection(user) : null,
-    h("details",{class:"profile-settings-fold"},h("summary",null,icon("user",16),"Ajustes del perfil",icon("chevronDown",14)),h("div",{class:"profile-settings"},dataSection(user))),
+    h("details",{class:"profile-settings-fold"},h("summary",null,icon("user",16),"Ajustes del perfil",icon("chevronDown",14)),h("div",{class:"profile-settings"},experienceSection(user),
+      user.role === "desarrollador" && infoDetails("Plan de estudio",h("p",null,"Es una propuesta comercial del prototipo, sin suscripción ni cobros.")),dataSection(user))),
   );
   return wrap;
 }

@@ -4,11 +4,10 @@ import { developerOnly, requiresLogin } from "../components.js";
 import { chartCard, divergingBar, divergingStackedBar, sentimentLegend, tableView } from "../charts.js";
 import { navigate } from "../router.js";
 import { isDeveloper, isLoggedIn, state } from "../store.js";
-import { ASPECT_LABEL, SENTIMENT_LABEL, emptyState, h, icon, mount, pct, signed, spinnerBlock, toast } from "../ui.js";
+import { ASPECT_LABEL, SENTIMENT_LABEL, emptyState, h, icon, infoDetails, mount, pct, signed, spinnerBlock, toast } from "../ui.js";
 import { developerReviewsPanel } from "./developer-reviews.js";
 import { trainedReviewInsights } from "./developer-trained-insights.js";
 import { audiencePanel } from "./developer-audience.js";
-import { STUDIO_DEMO_COPY } from "./experience.js";
 
 const count = value => Number(value || 0).toLocaleString("es-AR");
 const aspectName = key => ASPECT_LABEL[key] || key;
@@ -98,7 +97,7 @@ function evidencePanel(quotes) {
   return h("div",null,heading("Escuchá a la comunidad","Fragmentos que el análisis local clasificó como negativos. Abrí cada aspecto para revisar la evidencia."),entries.length ? h("div",{class:"dev-evidence-grid"},entries.map(([aspect,list]) => h("details",{class:"dev-evidence-card"},h("summary",null,icon("quote",18),h("span",null,aspectName(aspect)),h("span",{class:"dev-badge"},`${list.length} fragmentos`),icon("chevronDown",16)),h("div",{class:"dev-evidence-content"},list.map(quote => h("blockquote",null,quote)))))) : emptyState("Sin fragmentos negativos disponibles","No hay evidencia textual guardada para mostrar en este informe."));
 }
 function assistantPanel(scope, trainedAI) {
-  const response=h("div",{class:"dev-assistant-response",role:"status","aria-live":"polite"},h("p",{class:"dev-caption"},"Elegí una consulta o escribí sobre el informe. La respuesta combina las métricas guardadas con los temas detectados por el modelo local, cuando están disponibles."));
+  const response=h("div",{class:"dev-assistant-response",role:"status","aria-live":"polite"},h("p",{class:"dev-caption"},"Consultá prioridades, temas o evidencia del informe."));
   const input=h("input",{class:"dev-question-input",placeholder:"¿Qué debería revisar de la optimización?",maxlength:"600",required:true,"aria-label":"Pregunta al asistente del estudio"});
   const submit=h("button",{class:"btn btn-primary",type:"submit"},icon("sparkles",16),"Consultar"),suggestions=h("div",{class:"dev-suggestions"});
   let busy=false;
@@ -117,7 +116,7 @@ function assistantPanel(scope, trainedAI) {
     finally {busy=false;input.disabled=submit.disabled=false;response.removeAttribute("aria-busy");suggestions.querySelectorAll("button").forEach(b => b.disabled=false);}
   }
   for(const question of ["¿Qué conviene mejorar?","¿Qué temas detecta la IA?","¿Qué funciona mejor?","¿Hay suficiente evidencia?","Comparar con el catálogo"]) suggestions.append(h("button",{type:"button",class:"dev-suggestion",onClick:() => {input.value=question;ask(question);}},question));
-  const panel=h("section",{class:"dev-assistant","aria-label":"Asistente del estudio"},h("div",{class:"dev-assistant-heading"},h("span",{class:"dev-assistant-mark"},icon("sparkles",22)),h("div",null,h("span",{class:"dev-eyebrow"},"De las opiniones a las decisiones"),h("h2",null,"Una segunda mirada a tu informe"),h("p",null,"Consultá prioridades, fortalezas y evidencia.")),h("span",{class:"dev-badge"},trainedAI?.model?.status==="ready" ? "Con IA local entrenada" : "Basado en tus reseñas")),suggestions,response,h("form",{class:"dev-question-form",onSubmit:event => {event.preventDefault();ask(input.value);}},input,submit));
+  const panel=h("section",{class:"dev-assistant","aria-label":"Asistente del estudio"},h("div",{class:"dev-assistant-heading"},h("span",{class:"dev-assistant-mark"},icon("sparkles",22)),h("h2",null,"Consultá tu informe"),h("span",{class:"dev-badge"},trainedAI?.model?.status==="ready" ? "Modelo disponible" : "Sin modelo disponible")),infoDetails("Preguntas sugeridas",suggestions),response,h("form",{class:"dev-question-form",onSubmit:event => {event.preventDefault();ask(input.value);}},input,submit));
   panel.ask=question=>{input.value=question;ask(question);};
   return panel;
 }
@@ -185,7 +184,7 @@ function receptionChart(report) {
 function workspaceFor(report, scope, initial, comparison) {
   const reviews=developerReviewsPanel(scope,report.juegos),assistant=assistantPanel(scope,report.trained_ai),audience=audiencePanel(report.audience,scope);let workspace;
   const openReviews=aspect=>{reviews.setFilters({aspect,sentiment:"negativo"});workspace.select("reviews");};
-  const items=[{key:"overview",label:"Resumen",icon:"chart",content:h("div",{class:"dev-overview"},trainedReviewInsights(report.trained_ai,{onAsk:question=>{workspace.select("assistant");assistant.ask(question);}}),insightCards(report.aspectos),prioritiesPanel(report.aspectos,openReviews),receptionChart(report),h("p",{class:"dev-data-note"},icon("info",15),"El informe describe la muestra guardada. Una clasificación positiva no equivale a la recomendación de Steam ni al Metascore."))}];
+  const items=[{key:"overview",label:"Resumen",icon:"chart",content:h("div",{class:"dev-overview"},trainedReviewInsights(report.trained_ai,{onAsk:question=>{workspace.select("assistant");assistant.ask(question);}}),insightCards(report.aspectos),infoDetails("Prioridades y reseñas para revisar",prioritiesPanel(report.aspectos,openReviews)),receptionChart(report),h("p",{class:"dev-data-note"},"Muestra guardada · el sentimiento del texto se distingue del voto de Steam y del Metascore."))}];
   if(report.juegos) items.push({key:"games",label:`Juegos (${report.juegos.length})`,icon:"gamepad",content:gamesPanel(report.juegos)});
   items.push({key:"audience",label:"Audiencias",icon:"users",content:audience,onActivate:audience.load},
     {key:"aspects",label:"Aspectos",icon:"list",content:aspectPanel(report.aspectos,comparison)},
@@ -197,7 +196,6 @@ export async function developerView({query=new URLSearchParams()} = {}) {
   const blocked=guard();if(blocked) return blocked;
   if (!query.get("estudio") && state.user?.analysis_game_id) return developerGameView({params:{id:state.user.analysis_game_id}});
   if (!query.get("estudio") && !state.user?.studio) return h("div", {class:"dev-page"},
-    h("p", {class:"experience-demo"}, STUDIO_DEMO_COPY),
     emptyState("Prepará tu espacio de estudio", "Indicá tu nombre y elegí un juego propio o de referencia para empezar.", h("a", {class:"btn btn-primary",href:"#/bienvenida"}, "Configurar mi estudio")));
   const target=query.get("estudio") || state.user?.studio,container=h("div",{class:"dev-page"});let workspace;
   async function load() {
@@ -211,7 +209,6 @@ export async function developerView({query=new URLSearchParams()} = {}) {
           h("div",{class:"dev-hero-content"},
             h("span",{class:"dev-eyebrow"},icon("chart",16),"Tu espacio de desarrollo"),
             h("h1",null,studio.estudio),
-            h("p",null,"Cada opinión cuenta. Descubrí qué disfrutan tus jugadores y dónde podés mejorar."),
             h("div",{class:"dev-hero-meta"},
               h("span",{class:"dev-badge"},icon("gamepad",14),`${studio.juegos.length} títulos`),
               h("span",{class:"dev-badge"},icon("quote",14),`${count(studio.resenas.analizadas+studio.resenas.pendientes)} reseñas guardadas`))),
@@ -219,7 +216,7 @@ export async function developerView({query=new URLSearchParams()} = {}) {
         h("div",{class:"dev-toolbar"},h("div",null,h("span",{class:"dev-eyebrow"},"La voz de tus jugadores"),h("h2",null,"Tu estudio, de un vistazo")),h("div",{class:"dev-toolbar-actions"},studioPicker(studio.estudio),h("button",{class:"btn",type:"button",onClick:() => exportReport(studio)},icon("list",15),"Exportar informe"),h("button",{class:"btn",type:"button",onClick:async event => {event.currentTarget.disabled=true;await load();}},icon("refresh",15),"Actualizar"),processButton(scope,studio.resenas.pendientes,load))),metricRow(studio),workspace);
     } catch(error) {mount(container,heading("Panel del estudio","Elegí un estudio para explorar su recepción."),studioPicker(target || ""),emptyState("No pudimos abrir este informe",error.message),h("button",{class:"btn",onClick:load},"Volver a intentar"));}
   }
-  await load();return h("div",null,h("p",{class:"experience-demo"},icon("info",17),STUDIO_DEMO_COPY),h("a",{class:"btn btn-sm",href:"#/bienvenida"},"Elegir juego para analizar"),container);
+  await load();return container;
 }
 export async function developerGameView({params}) {
   const blocked=guard();if(blocked) return blocked;
@@ -231,5 +228,5 @@ export async function developerGameView({params}) {
       mount(container,h("a",{class:"dev-back",href:`#/dev${game.desarrollador ? `?estudio=${encodeURIComponent(game.desarrollador)}` : ""}`},icon("arrowLeft",16),"Volver al estudio"),h("header",{class:"dev-hero dev-game-hero"},cover(game,"dev-hero-cover"),h("div",{class:"dev-hero-content"},h("span",{class:"dev-eyebrow"},"Informe del juego"),h("h1",null,game.nombre),h("p",null,game.desarrollador || "Desarrollador no informado"),h("div",{class:"dev-hero-meta"},h("span",{class:"dev-badge"},game.cantidad_ratings_local ? `${game.rating_local_promedio.toFixed(2)}/5 · ${count(game.cantidad_ratings_local)} valoraciones GameTrack` : "Sin valoraciones GameTrack")))),h("div",{class:"dev-toolbar"},h("a",{class:"btn",href:`#/juego/${game.id}`},"Ver ficha pública",icon("chevron",15)),h("div",{class:"dev-toolbar-actions"},h("button",{class:"btn",onClick:() => exportReport(data)},icon("list",15),"Exportar informe"),h("button",{class:"btn",type:"button",onClick:async event => {event.currentTarget.disabled=true;await load();}},icon("refresh",15),"Actualizar"),processButton({game_id:game.id},s.pendientes,load))),metricRow(data),workspace);
     } catch(error) {mount(container,h("a",{class:"dev-back",href:"#/dev"},"Volver al estudio"),emptyState("No pudimos abrir la analítica",error.message),h("button",{class:"btn",onClick:load},"Volver a intentar"));}
   }
-  await load();return h("div",null,h("p",{class:"experience-demo"},icon("info",17),STUDIO_DEMO_COPY),h("a",{class:"btn btn-sm",href:"#/bienvenida"},"Elegir otro juego"),container);
+  await load();return container;
 }

@@ -59,6 +59,24 @@ export function mount(node, ...children) {
   return node;
 }
 
+/** Información secundaria disponible sin ocupar la lectura principal. */
+export function infoDetails(label, ...children) {
+  return h("details", { class: "ui-details" }, h("summary", null, label),
+    h("div", { class: "ui-details-body" }, children));
+}
+
+let readableSequence = 0;
+/** Acorta la presentación, conservando íntegro el texto del usuario. */
+export function expandableText(text, { className = "", limit = 320 } = {}) {
+  const content = String(text ?? ""), long = content.length > limit || content.split("\n").length > 5;
+  const body = h("p", { class: `${className} ui-text-body${long ? " is-collapsed" : ""}`, id: `readable-${++readableSequence}` }, content);
+  const button = long ? h("button", { class: "review-read-more", type: "button", "aria-expanded": "false", "aria-controls": body.id, onClick: () => {
+    const collapsed = body.classList.toggle("is-collapsed");
+    button.setAttribute("aria-expanded", String(!collapsed)); button.textContent = collapsed ? "Leer completo" : "Mostrar menos";
+  } }, "Leer completo") : null;
+  return h("div", { class: "ui-readable-text" }, body, button);
+}
+
 /* ------------------------------------------------------------------ *
  * Íconos
  * ------------------------------------------------------------------ */

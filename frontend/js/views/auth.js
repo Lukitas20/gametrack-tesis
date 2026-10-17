@@ -92,9 +92,9 @@ export function accountsView({ query = new URLSearchParams(), role } = {}) {
       h("div", { class: "auth-form-heading" },
         h("p", { class: "auth-kicker" }, player ? "ACCESO DE JUGADORES" : "ACCESO DE DESARROLLADORES / ESTUDIOS"),
         h("h2", { id: "auth-title", tabindex: "-1" }, creating ? player ? "Creá tu cuenta de jugador" : "Creá tu cuenta de estudio" : player ? "Ingresá como jugador" : "Ingresá a tu estudio"),
-        h("p", null, creating ? player ? "Conectá Steam o creá tu usuario para empezar." : "Registrá tu cuenta profesional con usuario, email y contraseña." : player ? "Entrá con Steam o con tu usuario." : "Entrá con el usuario y la contraseña de tu cuenta de desarrollador.")),
+        ),
       h("p", { class: "auth-plan-summary" }, selectedPlan.name, selectedPlan.id !== "gratis" && " · Propuesta de plan, sin cobros"),
-      creating && h("p", { class: "auth-account-kind" }, player ? "Estás creando una cuenta de jugador. El tipo no se puede cambiar después." : "Estás creando una cuenta de desarrollador / estudio. El tipo no se puede cambiar después."),
+      creating && h("p", { class: "auth-account-kind" }, "El tipo de cuenta no se puede cambiar después."),
       player && h("a", { class: "auth-steam", href: "/api/v1/auth/steam/start", onClick: e => {
         if (busy) { e.preventDefault(); return; }
         sessionStorage.removeItem("gametrack.registration-role");

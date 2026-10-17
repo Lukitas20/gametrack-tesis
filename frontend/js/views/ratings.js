@@ -37,9 +37,7 @@ export async function ratingsView() {
       h(
         "div",
         null,
-        h("p", { class: "eyebrow" }, "Historial"),
         h("h1", null, "Mis valoraciones"),
-        h("p", null, "Tus reseñas de Steam y las notas que guardaste en GameTrack."),
       ),
     ),
     user.steam_verified && user.steam_id ? steamReviewsPanel(user) : h("p", { class: "steam-notice" }, "Conectá tu cuenta de Steam para ver también tus reseñas.", h("a", { href: "#/perfil" }, " Ir a mi perfil →")),

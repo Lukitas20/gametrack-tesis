@@ -3,7 +3,7 @@
 import { api } from "../api.js";
 import { gameGrid } from "../components.js";
 import { isDeveloper, loadCatalog, state } from "../store.js";
-import { emptyState, h, magicLoader } from "../ui.js";
+import { emptyState, h, infoDetails, magicLoader } from "../ui.js";
 import { createDeveloperCatalog } from "./developer-catalog.js";
 
 const PAGE_SIZE = 24;
@@ -122,37 +122,12 @@ export async function catalogView({ query }) {
     ),
   );
 
-  // Los filtros van en una sola fila por encima de todo lo que condicionan.
-  const tagRow = h(
-    "div",
-    { class: "tag-scroll" },
-    h(
-      "button",
-      {
-        class: "chip",
-        "aria-pressed": String(!filters.tag),
-        onClick: () => {
-          filters.tag = "";
-          reload();
-        },
-      },
-      "Todas",
-    ),
-    state.tags.slice(0, 22).map((tag) =>
-      h(
-        "button",
-        {
-          class: "chip",
-          "aria-pressed": String(filters.tag === tag.slug),
-          onClick: () => {
-            filters.tag = filters.tag === tag.slug ? "" : tag.slug;
-            reload();
-          },
-        },
-        tag.name,
-      ),
-    ),
-  );
+  const visibleTags = state.tags.filter(tag => tag.name && !tag.name.startsWith("#"));
+  const tagSelect = h("select", { class: "select", "aria-label": "Filtrar por característica", onChange: event => {
+    filters.tag = event.target.value; reload();
+  } }, h("option", { value: "" }, "Todas las características"),
+    filters.tag && !visibleTags.some(tag => tag.slug === filters.tag) && h("option", { value: filters.tag, selected: true }, "Característica seleccionada"),
+    visibleTags.map(tag => h("option", { value: tag.slug, selected: tag.slug === filters.tag }, tag.name)));
 
   async function reload({ append = false } = {}) {
     if (loading) return;
@@ -233,18 +208,18 @@ export async function catalogView({ query }) {
         null,
         h("p", { class: "eyebrow" }, developer ? "Catálogo del desarrollador" : "Catálogo"),
         h("h1", null, developer ? "Investigar y comparar juegos" : "Explorar juegos"),
-        h("p", null, developer ? "Tocá un juego para ver su recepción y compararlo con un título de tu estudio. Podés elegir qué métricas mostrar." : "Buscá arriba, en el header, o filtrá por género y etiquetas."),
+        developer && h("p", null, "Elegí un juego para analizarlo o compararlo."),
       ),
       count,
     ),
-    syncNotice,
     h(
       "div",
-      { class: "filter-bar" },
+      { class: "filter-bar catalog-filters" },
       genreSelect,
+      tagSelect,
       sortSelect,
     ),
-    h("div", { style: { marginBottom: "var(--s-5)" } }, tagRow),
     results,
+    infoDetails("Estado y actualización del catálogo", syncNotice),
   );
 }

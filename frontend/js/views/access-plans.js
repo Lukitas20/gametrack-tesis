@@ -43,13 +43,12 @@ export function plansView({ query = new URLSearchParams() } = {}) {
           h("p", { class: "access-audience" }, icon(plan.symbol, 19), plan.role === "jugador" ? "PARA JUGADORES" : "PARA DESARROLLADORES"),
           h("h2", null, plan.name), h("p", { class: "access-description" }, plan.description),
           h("div", { class: "access-price" }, h("strong", null, plan.price), h("span", null, plan.period)),
-          h("p", { class: "access-features-label" }, "Distribución propuesta de funciones"),
           h("ul", null, plan.features.map(feature => h("li", null, icon("check", 15), h("span", null, feature)))),
           h("a", { class: "btn btn-primary access-plan-cta", href: `#${accessPath(plan.role, { plan: plan.id, register })}` }, plan.cta, icon("chevron", 17))))),
-      h("p", { class: "access-proposal-note" }, "Estamos probando los planes del modelo de negocio. Los precios son propuestos, antes de impuestos. Elegir una opción no contrata una suscripción ni genera cobros."),
+      h("p", { class: "access-proposal-note" }, "Precios propuestos, antes de impuestos. Elegir un plan no contrata una suscripción ni genera cobros."),
       h("nav", { class: "access-returning", "aria-label": "Acceso para cuentas existentes" },
         h("span", null, "¿Ya tenés cuenta?"),
         h("a", { href: `#${accessPath("jugador")}` }, "Ingresar como jugador", icon("chevron", 14)),
         h("a", { href: `#${accessPath("desarrollador")}` }, "Ingresar como estudio", icon("chevron", 14)))),
-    h("footer", { class: "auth-footer" }, "El tipo de cuenta se define al registrarte. Cada tipo tiene su propio acceso y sus funciones."));
+    h("footer", { class: "auth-footer" }, "El tipo de cuenta se define al registrarte."));
 }
