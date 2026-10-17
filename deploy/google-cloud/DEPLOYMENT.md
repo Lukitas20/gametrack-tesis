@@ -490,3 +490,36 @@ ni la acción de exportación para evaluar. Aprobaron salud, catálogo, callback
 HTTPS de Steam y protección privada 401. No se ejecutaron migraciones ni jobs;
 las tareas programadas conservan su imagen anterior. No se recorrió una sesión
 autenticada de desarrollador en el navegador para este cambio.
+
+## Segmentación por historiales públicos reales — 17 de octubre de 2026
+
+Código `3c8ea7a`, build `13d4bf25-4112-4af4-9f1f-c2164def962d`, digest
+`sha256:293294882fa3e2e1a8000043b84799de553ae8b5db68c18ca86925450275aa8c`.
+Revisión `gametrack-00025-v2j`, 100 % del tráfico. Las cuatro tareas usan esa
+imagen y conservan sus argumentos permanentes. Pasaron 35 pruebas pertinentes
+de backend y 25 de frontend, sintaxis JavaScript, `git diff --check` y auditoría
+de fuentes: 271 archivos, tres artefactos permitidos y cero rutas privadas.
+
+Se confirmó el respaldo exitoso `1792216800000` de `gametrack-postgres`, con
+respaldos/PITR habilitados y siete días de retención. La migración
+`gametrack-migrate-mlcvp` agregó las dos tablas de caché/coordinación hasta
+`b71f4a920c83` y terminó correctamente antes de dirigir tráfico a la imagen
+nueva. No se restauró ni sobrescribió producción.
+
+`gametrack-train-n52mv` reemplazó sus argumentos sólo para ejecutar
+`collect_audience_histories.py` para CD PROJEKT RED, sin entrenar: 433 de 436
+reseñas identificadas, 421 autores distintos, muestra de 60 historiales públicos
+consultados, seis parciales, 42 autores con dos recomendaciones externas al
+conjunto, 341 recomendaciones externas y 224 con metadatos. Se formaron 23
+grupos superpuestos con al menos cinco autores: 17 por rasgos y seis por géneros.
+`gametrack-train-92fc9` verificó el informe tipado en transacción PostgreSQL de
+sólo lectura. Ambas ejecuciones terminaron correctamente; las salidas guardadas
+son agregadas, sin identidades ni textos.
+
+Los cuatro archivos públicos afectados coinciden con el código probado y envían
+`no-cache`. Aprobaron salud, catálogo, callback Steam, esquema tipado y 401 en
+consulta/colección anónimas. Evaluación continúa ausente. Se inspeccionó una
+vista local del componente usando el informe real de Cloud. El recorrido
+autenticado completo de desarrollador sigue pendiente: la sesión disponible en
+el navegador era de jugador y se respetó su separación de permisos.
+Procedimiento, límites y evidencias: `docs/AUDIENCIAS_HISTORIALES_20261017.md`.

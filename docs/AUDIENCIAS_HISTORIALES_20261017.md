@@ -1,10 +1,9 @@
-# Audiencias por historiales públicos — integración local
+# Audiencias por historiales públicos — publicada en Cloud
 
-Estado al 17 de octubre de 2026: código integrado localmente; **sin commit, push,
-migración en Cloud, nueva compilación ni publicación confirmados**. La revisión
-automática de permisos falló por límite de uso de la cuenta al consultar la
-configuración de PostgreSQL. No fue una determinación de riesgo. No se intentó
-eludir ese control. La versión pública sigue mostrando la audiencia anterior.
+Estado al 17 de octubre de 2026: **publicada y comprobada en Cloud**. Código
+`3c8ea7a` en `feature/IA`, revisión `gametrack-00025-v2j`, 100 % del tráfico.
+El límite de uso que interrumpió el primer intento fue restablecido por el
+usuario; la publicación se retomó con la revisión automática funcionando.
 
 ## Cambio
 
@@ -83,27 +82,63 @@ Comprobaciones ejecutadas sobre fixtures aislados, nunca publicados como datos:
 
 No se atribuyen estas pruebas a personas ni a calidad de la segmentación.
 
-## Pendiente para publicar y comprobar
+## Publicación y comprobaciones ejecutadas en Cloud
 
-1. Resolver el límite que impide completar la revisión automática de permisos.
-   Revisar el diff y guardar/subir a `feature/IA` conservando cambios remotos.
-2. Consultar el nombre/configuración de la instancia PostgreSQL y sus respaldos.
-   El intento de consultar `gametrack-db` respondió 404; no se supone su nombre.
-3. Auditar fuentes con `verify_source_upload.py`, compilar la imagen y actualizar
-   el job de migración a su digest. Ejecutar la migración **antes** de dirigir
-   tráfico a la imagen nueva. No restaurar ni sobrescribir la base de producción.
-4. Publicar el servicio y verificar salud, catálogo, permisos y los módulos
-   públicos. Las tablas sólo agregan caché; no cambian modelos o identidades GT.
-5. Usar un job con argumentos puntuales para ejecutar
-   `scripts/collect_audience_histories.py --studio "CD PROJEKT RED" --steps 16`.
-   No ejecutar entrenamiento ni importación normal por accidente. Este script
-   escribe sólo las identidades recuperadas y la caché de observaciones públicas;
-   imprime contadores y el informe agregado. No crea usuarios ni reseñas.
-6. Comprobar el informe agregado en PostgreSQL y una sesión real de desarrollador:
-   abrir Audiencias en el estudio y en un juego; ver grupos, cobertura, progreso,
-   reintento y exportación CSV. Verificar también 401/403 sin permisos y que
-   Evaluación continúe ausente. Guardar sólo evidencia agregada de lo ejecutado.
+Se volvió a consultar `origin/feature/IA`, sin cambios remotos pendientes. La
+validación final aprobó **35 pruebas de backend y 25 de frontend**. La auditoría
+de fuentes aprobó 271 archivos, los tres archivos de modelos permitidos y cero
+rutas privadas, fixtures o bases de datos. Build
+`13d4bf25-4112-4af4-9f1f-c2164def962d`, digest
+`sha256:293294882fa3e2e1a8000043b84799de553ae8b5db68c18ca86925450275aa8c`.
 
-Siguen pendientes el recorrido autenticado en navegador, la consulta nueva de
-Steam desde Cloud y la ejecución de esta migración en PostgreSQL. No se modificó
+La instancia real es `gametrack-postgres`. Se verificaron respaldos habilitados,
+PITR y retención de siete días; el respaldo `1792216800000` terminó con estado
+`SUCCESSFUL`. No se restauró ni sobrescribió la base. La ejecución
+`gametrack-migrate-mlcvp` aplicó Alembic correctamente, antes de publicar el
+servicio nuevo. Las cuatro tareas conservan sus argumentos permanentes y usan
+la misma imagen nueva; las ejecuciones especiales sólo reemplazan argumentos
+para esa ejecución.
+
+`gametrack-train-n52mv` ejecutó el recolector de historiales públicos con
+`--studio "CD PROJEKT RED" --steps 16`, sin entrenamiento ni creación de perfiles
+o reseñas. Terminó correctamente. Para las 436 reseñas de siete juegos:
+
+- 433 reseñas quedaron vinculadas a 421 autores distintos por identificador
+  exacto; tres reseñas siguen sin identidad recuperada.
+- Se consultaron los 60 autores seleccionados: 60 historiales públicos, seis
+  parciales dentro del límite de dos páginas; cero pendientes de la muestra.
+- 42 autores tenían al menos dos recomendaciones de otros juegos observadas.
+  De 341 recomendaciones externas al conjunto, 224 tenían metadatos para agrupar.
+- Se publican 23 grupos superpuestos: 17 por etiquetas y seis por géneros.
+  Por ejemplo, mundo abierto: 11 autores (nueve sólo recomiendan juegos del
+  informe, dos sólo desaconsejan); shooters: nueve (siete/dos); rol: 17 (14/3).
+  Son conteos descriptivos de la muestra guardada, no métricas de relevancia,
+  inferencias causales ni estimaciones de mercado.
+- Siguen siendo cero usuarios GameTrack con interacciones en este conjunto;
+  se mantienen separados de los reseñadores de Steam.
+
+`gametrack-train-92fc9` verificó el informe completo con
+`SET TRANSACTION READ ONLY` y validó el esquema `AudienceReport`; terminó
+correctamente. Los resultados agregados se conservaron, con Unicode intacto:
+`docs/evidence/audience-histories-cloud-20261017.json` y
+`docs/evidence/audience-report-cloud-20261017.json`. No contienen identidades de
+autores ni textos de reseñas.
+
+El HTML, `api.js`, `developer.js` y `developer-audience.js` públicos coinciden con
+las fuentes probadas y envían `no-cache`. El esquema público incorpora los
+grupos tipados; las rutas de consulta y colección sin sesión responden 401.
+Aprobaron salud, catálogo, callback HTTPS de Steam y protección privada. La
+solapa Evaluación sigue ausente del componente compartido de estudio y juego.
+
+Se verificó visualmente el componente con el informe agregado real de Cloud en
+un servidor local aislado que sólo contenía archivos públicos y ese informe:
+`docs/evidence/audiences-component-cloud-20261017.png`. **No es una captura de
+una sesión autenticada de desarrollador en producción.** La sesión de navegador
+disponible era de jugador y el acceso profesional la redirigió a su inicio;
+no se cambió su tipo ni se creó una cuenta para la prueba.
+
+Sigue pendiente el recorrido completo en navegador con una sesión real de
+desarrollador, incluyendo colección y descarga CSV desde la interfaz pública.
+La API y el avance entre lotes se comprobaron con tests aislados; la consulta
+real, persistencia y agregación también se ejecutaron en Cloud. No se modificó
 el Google Doc ni el LaTeX.
