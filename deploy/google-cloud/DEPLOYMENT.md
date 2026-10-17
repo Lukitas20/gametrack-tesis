@@ -472,3 +472,21 @@ y herramientas, como las pruebas con personas y la auditoría del corpus origina
 El informe y el procedimiento completos están en
 `docs/REVISION_APLICACION_20261017.md` y `docs/EVALUACION_REAL.md`. No se editó
 el Google Doc ni el LaTeX de la tesis.
+
+## Retiro de la solapa Evaluación — 17 de octubre de 2026
+
+Por pedido del usuario, `1d8bfbb` retira la solapa Evaluación del componente
+compartido por los informes de estudio y juego, junto con su import sin uso.
+Actualiza la versión del módulo para renovar la caché. Las herramientas de
+evaluación locales permanecen en el repositorio. Pasaron las 24 pruebas del
+frontend, la comprobación sintáctica y `git diff --check`.
+
+Build `686c7cbe-6773-49a4-bc4c-ccd0ab05b017`, digest
+`sha256:5c660c163c42850c7e7a6da65517ae96876831d842009c2a7fefe88b25ad4620`.
+Servicio publicado como `gametrack-00024-cvg`, con 100 % del tráfico. La auditoría
+aprobó 266 archivos y cero rutas privadas. El HTML y el módulo públicos coinciden
+con las fuentes probadas y envían `no-cache`; el módulo ya no contiene la solapa
+ni la acción de exportación para evaluar. Aprobaron salud, catálogo, callback
+HTTPS de Steam y protección privada 401. No se ejecutaron migraciones ni jobs;
+las tareas programadas conservan su imagen anterior. No se recorrió una sesión
+autenticada de desarrollador en el navegador para este cambio.
