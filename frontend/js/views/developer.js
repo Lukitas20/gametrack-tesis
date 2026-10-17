@@ -8,7 +8,6 @@ import { ASPECT_LABEL, SENTIMENT_LABEL, emptyState, h, icon, mount, pct, signed,
 import { developerReviewsPanel } from "./developer-reviews.js";
 import { trainedReviewInsights } from "./developer-trained-insights.js";
 import { audiencePanel } from "./developer-audience.js";
-import { exportEvaluation } from "../evaluation-export.js";
 import { STUDIO_DEMO_COPY } from "./experience.js";
 
 const count = value => Number(value || 0).toLocaleString("es-AR");
@@ -181,7 +180,6 @@ function workspaceFor(report, scope, initial, comparison) {
   const items=[{key:"overview",label:"Resumen",icon:"chart",content:h("div",{class:"dev-overview"},trainedReviewInsights(report.trained_ai,{onAsk:question=>{workspace.select("assistant");assistant.ask(question);}}),insightCards(report.aspectos),prioritiesPanel(report.aspectos,openReviews),receptionChart(report),h("p",{class:"dev-data-note"},icon("info",15),"El informe describe la muestra guardada. Una clasificación positiva no equivale a la recomendación de Steam ni al Metascore."))}];
   if(report.juegos) items.push({key:"games",label:`Juegos (${report.juegos.length})`,icon:"gamepad",content:gamesPanel(report.juegos)});
   items.push({key:"audience",label:"Audiencias",icon:"users",content:audiencePanel(report.audience)},
-    {key:"evaluation",label:"Evaluación",icon:"list",content:h("div",null,h("h2",null,"Conservar este resultado"),h("p",null,"Exportá la respuesta de este informe para revisión humana. Incluye fragmentos de reseñas; no contiene juicios humanos ni demuestra exactitud. La separación respecto del entrenamiento debe auditarse antes de calcular métricas."),h("button",{class:"btn",type:"button",onClick:()=>exportEvaluation("reviews",report,scope)},"Exportar resultado para evaluar"))},
     {key:"aspects",label:"Aspectos",icon:"list",content:aspectPanel(report.aspectos,comparison)},
     {key:"reviews",label:"Reseñas",icon:"quote",content:reviews,onActivate:reviews.load},
     {key:"evidence",label:"Evidencia",icon:"quote",content:evidencePanel(report.citas_negativas)},{key:"assistant",label:"Asistente",icon:"sparkles",content:assistant});
