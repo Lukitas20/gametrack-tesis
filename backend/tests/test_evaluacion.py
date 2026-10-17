@@ -194,3 +194,16 @@ def test_regenerar_el_pool_conserva_lo_ya_anotado(tmp_path: Path) -> None:
     assert resultado["counter-strike-2"]["notas"] == "clarísimo"
     assert resultado["rainbow-six-siege"]["relevante"] == ""
     assert "dota-2" not in resultado
+
+
+def test_legacy_harness_does_not_publish_agreement_for_one_judgment(tmp_path,monkeypatch,capsys):
+    import hashlib,json
+    from types import SimpleNamespace
+    from scripts import eval_arnes
+    monkeypatch.setattr(eval_arnes,"EVAL_DIR",tmp_path)
+    rankings=tmp_path/"rankings.csv"
+    rankings.write_text("variante,consulta_id,posicion,juego_slug\nunit,C01,1,unit\n")
+    (tmp_path/"manifest.json").write_text(json.dumps({"rankings_sha256":hashlib.sha256(rankings.read_bytes()).hexdigest()}))
+    annotation=tmp_path/"annotation.csv";annotation.write_text("consulta_id,juego_slug,relevante\nC01,unit,1\n")
+    assert eval_arnes.cmd_metrics(None,SimpleNamespace(metrics=[str(annotation),str(annotation)],adjudicadas=None))==1
+    assert "Anotación insuficiente" in capsys.readouterr().out

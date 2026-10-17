@@ -40,6 +40,24 @@ editó el Google Doc ni el LaTeX. No se implementaron pagos ni un chatbot genera
 - Alembic: una cabeza `d8a104f3b927`; toda la cadena compiló SQL offline para
   PostgreSQL (17.692 caracteres). Estos cambios no necesitan nueva migración.
   Compilar SQL no equivale a ejecutar una migración o una restauración.
+- PostgreSQL desplegado: la ejecución de sólo lectura `gametrack-train-xb2ht`
+  verificó dos perfiles reales, 100 candidatos y 68 aportes del modelo; conservó
+  dos notas explícitas y 40 señales de historial propio, sin fallos de integridad.
+  El clasificador se utilizó sobre 246 reseñas de tres alcances, con seis grupos
+  Steam publicables. Los usuarios GameTrack por alcance fueron 1, 0 y 0; esos
+  grupos pequeños no se publicaron. Ambos artefactos coincidieron con los hashes
+  aprobados y sólo la cabeza explícita de afinidad estaba habilitada.
+  [Salida agregada, sin perfiles ni textos](evidence/application-runtime-20261017.json).
+  La primera ejecución se conserva por separado como evidencia previa. La imagen
+  final activa es `d701914b…`, revisión `gametrack-00023-g5w`, código `4dc73b4`.
+- Pruebas automatizadas: 992 casos distintos de backend aprobados entre la
+  suite general y las repeticiones de los cambios finales; 16 casos condicionales
+  omitidos (3 PostgreSQL de prueba y 13 golden live de catálogo local). Pasaron
+  24 pruebas de frontend. El único fallo inicial fue una comprobación de valores
+  por defecto afectada por variables de entorno de la corrida; pasó al repetirla
+  con los valores por defecto y una base efímera. La corrección del instrumento
+  de carga también pasó 39 casos de transferencia/evaluación; esos casos ya están
+  incluidos en el total, no se suman otra vez.
 
 Las pruebas, publicación y verificación Cloud se registran al finalizar en
 [DEPLOYMENT.md](../deploy/google-cloud/DEPLOYMENT.md).
@@ -57,6 +75,11 @@ sobre la base local actual: se obtuvieron 24.000 ejemplos, pero su huella **no
 coincidió** con la publicada. Por eso esa base no acredita las particiones del
 artefacto ni la independencia de las 50 reseñas piloto. Falta el corpus/snapshot
 original de entrenamiento y sus índices, no cambiar etiquetas de procedencia.
+No se recorrió de principio a fin una sesión real autenticada en la interfaz
+publicada: se verificaron contratos HTTP en bases efímeras, el componente visual
+con agregados reales y los servicios de inferencia sobre datos reales en Cloud,
+sin crear cuentas ni saltar autenticación. Ese recorrido con una persona sigue
+incluido en el procedimiento de evaluación.
 
 No hay URL de PostgreSQL de pruebas ni herramientas `pg_dump`/`pg_restore`
 disponibles en este equipo. Faltan ejecutar las pruebas PostgreSQL optativas y

@@ -32,6 +32,9 @@ lee una base local existente en modo `ro` y `query_only`; no inicia la app ni
 modifica reseñas. Selecciona las primeras reseñas reales guardadas en español por
 ID, sin seleccionar por acierto. No exporta identidades de autores. La muestra es
 un **piloto sin separación acreditada**, no un nuevo conjunto de evaluación.
+Este comando ejecuta y conserva una inferencia actual separada; no reproduce ni
+reemplaza un informe histórico. Para evaluar la respuesta que vio una persona,
+usar la exportación de esa vista, que conserva el resultado sin recalcularlo.
 
 La hoja ciega conserva el texto y oculta las predicciones y el voto guardado.
 Los seis temas se anotan como presencia 1/ausencia 0. Los cuatro aspectos se

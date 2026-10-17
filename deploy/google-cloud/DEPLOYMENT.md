@@ -408,3 +408,67 @@ las fuentes de pruebas no están disponibles en la web. Aprobaron salud, catálo
 callback HTTPS de Steam y protección privada 401. Se recorrieron visualmente los
 planes, el acceso y registro de estudios sin Steam, y el acceso de jugadores con
 Steam en la versión pública. No se crearon perfiles ni opiniones ficticias.
+
+## Audiencias observadas y evidencia de los modelos — 17 de octubre de 2026
+
+Se revisó `feature/IA` desde `fafe5db`, sin cambios remotos pendientes al comenzar.
+Se conservaron los accesos, planes propuestos, tipos permanentes y permisos.
+El código funcional `7456b9d` incorporó audiencias agregadas en los informes de
+juego/estudio, separando usuarios GameTrack de reseñas Steam, fuente de preferencias,
+criterios, cobertura y tamaños. No se publican grupos menores de cinco, perfiles,
+notas privadas ni bibliotecas privadas. No son una estimación del mercado o de
+compradores potenciales. Los informes protegidos envían `no-store`.
+
+El clasificador ya integrado distingue disponibilidad de uso en este resultado;
+el modelo de afinidad y sus pesos no se rehicieron. Se verifican los mismos
+artefactos auditados, conservando la cabeza de horas no habilitada. Se retiró
+el enlace que ofrecía elegir una cuenta de demostración.
+
+Las exportaciones conservan respuestas sin recalcular, y las herramientas locales
+preparan hojas ciegas y juicios, errores y tiempos vacíos. Los faltantes no se
+convierten en negativos. El arnés anterior queda como ajuste exploratorio, con
+procedencia y barreras de anotación suficiente. El cálculo de evaluación nueva
+requiere una auditoría externa de separación; no se generaron juicios humanos ni
+métricas de satisfacción. Las herramientas offline y el protocolo se mantienen en
+el repositorio; no se ejecutó el arnés de evaluación en Cloud.
+
+Se corrigió el servidor local de prueba para compartir conexiones SQLite entre
+hilos sin retirar `mode=ro` y `query_only`; el importador mantiene su valor por
+defecto anterior. La carga valida contenido además de HTTP. Esa corrección es
+`4dc73b4`, fuente de la imagen activa. Build `fa12ecc3-7d65-46be-9ccc-f4afbbaa5f78`,
+digest `sha256:d701914b20fc6fc0dfea2c144b823f7d906cfcc455a813f12ca4841d5bd53674`.
+Revisión `gametrack-00023-g5w`, con el 100 % del tráfico. Las cuatro tareas
+existentes conservan sus configuraciones y usan esa misma imagen.
+
+La ejecución `gametrack-train-xb2ht` reemplazó únicamente sus argumentos por
+`scripts/verify_application_evidence.py`, sin modificar los argumentos permanentes
+del job. Exigió PostgreSQL y `SET TRANSACTION READ ONLY`; terminó con código 0 y
+resultado `verified`. Verificó dos perfiles reales, 100 candidatos, 68 aportes del
+modelo, dos notas propias y 40 señales de historial preservadas, sin fallos de
+integridad. El clasificador se utilizó en 246 reseñas de tres juegos; las audiencias
+tenían 1/0/0 usuarios GameTrack y seis grupos Steam publicables. La ejecución
+anterior `gametrack-train-mxs2x`, sobre la imagen preliminar, dio los mismos conteos
+y también se conserva. Ninguna ejecución entrenó, sincronizó, migró ni importó
+datos. Las salidas versionadas contienen sólo agregados, hashes y procedencia.
+
+Validación: 992 casos distintos de backend aprobados entre suite y repeticiones
+finales; 16 condicionales omitidos (3 PostgreSQL de prueba, 13 golden live).
+Pasaron 24 pruebas de frontend. Los fixtures y el paquete de 50 reseñas reales
+con 500 juicios pendientes quedaron fuera de la imagen. La auditoría aprobó 264
+archivos, los tres archivos de modelos permitidos y cero rutas privadas. Ocho
+archivos públicos coincidieron con el código probado y enviaron `no-cache`; el
+esquema contiene audiencias y uso por resultado. Aprobaron salud, catálogo,
+callback HTTPS de Steam y protección privada 401.
+
+La carga local corregida completó 50 lecturas con concurrencia 5: cero errores
+HTTP/de contenido, sin excepciones en el registro, 1,663 s; p50 199,47 ms y
+p95 556,81 ms. No mide capacidad de Cloud Run. La primera corrida que sólo contaba
+HTTP se descartó al descubrir errores internos del servidor de prueba. Compiló
+la cadena SQL offline para PostgreSQL hasta la única cabeza `d8a104f3b927`.
+No se restauró ni sobrescribió producción. La restauración y la ejecución de
+migraciones en una base PostgreSQL de pruebas siguen pendientes de sus accesos
+y herramientas, como las pruebas con personas y la auditoría del corpus original.
+
+El informe y el procedimiento completos están en
+`docs/REVISION_APLICACION_20261017.md` y `docs/EVALUACION_REAL.md`. No se editó
+el Google Doc ni el LaTeX de la tesis.

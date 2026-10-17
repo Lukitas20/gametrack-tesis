@@ -1,0 +1,60 @@
+{
+  "execution": "gametrack-train-mxs2x",
+  "source_commit": "7456b9d",
+  "image_digest": "sha256:d38052d932da14aa869fc41691c162341da8d3107ec1511d61a5885372dc228e",
+  "timestamp": "2026-10-17T17:59:11.015384Z",
+  "aggregate_result": {
+    "affinity": {
+      "candidates_checked": 100,
+      "candidates_with_model_contribution": 68,
+      "external_http_calls": 0,
+      "integrity_failures": 0,
+      "model_status": "ready",
+      "model_version": "1",
+      "own_history_checks": 40,
+      "own_rating_checks": 2,
+      "profiles_sampled": 2,
+      "profiles_with_comparable_history": 2,
+      "profiles_with_model_contribution": 2,
+      "read_only": true,
+      "result": "verified"
+    },
+    "affinity_artifact": {
+      "algorithm": "history_content_logistic_regression_cpu",
+      "catalog_sha256": "23ca31e38aa85bdfb0c5f68bc74203606dc1060b5cbe134265024c8bac878dfe",
+      "data_policy": "observed-only-v1",
+      "dataset_sha256": "877e4f82549e6ad8cbfbb8b0d3c338616069609725cf14f6f31f06eea4efb6cc",
+      "eligible_heads": [
+        "explicit"
+      ],
+      "features": 24,
+      "sha256": "9d11c8ac94af5822ab2bbbea49f3822ac71db710753efea88fef6d335d014365",
+      "source": "steam_public_review_api",
+      "status": "verified"
+    },
+    "audience_groups_published": 6,
+    "audience_users_by_scope": [
+      1,
+      0,
+      0
+    ],
+    "external_http_calls": 0,
+    "read_only": true,
+    "result": "verified",
+    "review_artifact": {
+      "dataset_fingerprint": "f8a1ee239c552cc78b93e9359244546702aa5bc0dfc0b737cbd1f1130e91246e",
+      "examples": 24000,
+      "games": 2687,
+      "sha256": {
+        "review_model.json": "be03c3c241a8d214829578d4e43b4174371e5ae5e9fe259420c2f204b55276bd",
+        "review_model.npz": "8af574d2fa306364f1689bafe30c257c53dfe8d6d35ad3b7143a851b991d9789"
+      },
+      "source": "real_steam_reviews",
+      "status": "verified"
+    },
+    "review_status": "ready",
+    "reviews_sampled": 246,
+    "scopes_checked": 3,
+    "scopes_using_review_model": 3
+  }
+}

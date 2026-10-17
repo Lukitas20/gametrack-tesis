@@ -430,6 +430,11 @@ def cmd_metrics(db, args) -> int:
     if missing:
         print(f"Aviso: {len(missing)} ítems juzgados por uno solo (se ignoran).")
 
+    if len(shared) < 20 or any(sum(annotations[key] == label for key in shared) < 5
+                               for annotations in (ann_a, ann_b) for label in (0, 1)):
+        print("Anotación insuficiente para el acuerdo: se requieren veinte pares y cinco juicios de cada clase por anotador. No se calculan métricas.")
+        return 1
+
     kappa = cohen_kappa([ann_a[key] for key in shared], [ann_b[key] for key in shared])
     agreement = sum(1 for key in shared if ann_a[key] == ann_b[key])
     print(f"Acuerdo inter-anotador: {agreement}/{len(shared)} "
