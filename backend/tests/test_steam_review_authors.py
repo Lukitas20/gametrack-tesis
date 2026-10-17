@@ -228,3 +228,16 @@ def test_malformed_profile_response_is_unavailable_without_inventing_names(monke
     client = SimpleNamespace(get=lambda *args, **kwargs: SimpleNamespace(status_code=200, json=lambda: payload))
     monkeypatch.setattr(steam_service, "_http_client", lambda: client)
     assert player_summaries(["111"]) == {}
+
+
+def test_repair_known_alias_without_identity_uses_exact_public_id_without_key(db,monkeypatch):
+    item=game(db)
+    row=review(db,item,author_name="Alias ya guardado")
+    before=evidence(row)
+    monkeypatch.setattr(steam_service.settings,"STEAM_API_KEY","")
+    monkeypatch.setattr(authors,"_review_page",lambda *_args,**_kwargs:([
+        {"recommendationid":row.steam_review_id,"author":{"steamid":"112"}}],None))
+    monkeypatch.setattr(authors,"hydrate_authors",lambda *_:pytest.fail("El panel no solicita aliases"))
+    result=authors.repair_game_authors(db,item,max_pages=2,hydrate=False)
+    assert result["identities_recovered"]==1
+    assert row.steam_author_id=="112" and row.author_name=="Alias ya guardado" and evidence(row)==before

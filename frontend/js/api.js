@@ -149,6 +149,8 @@ export const api = {
   studios: (search = "") => request("/analytics/studios", { params: { search } }),
   developerAssistant: (body) => request("/analytics/assistant", { method: "POST", body }),
   developerReviews: (params = {}) => request("/analytics/reviews", { params }),
+  audience: (scope) => request("/analytics/audience", { params: scope }),
+  collectAudience: (scope) => request("/analytics/audience/collect", { method: "POST", params: scope }),
   processReviews: (reanalyze = false, scope = {}) =>
     request("/analytics/process", { method: "POST", params: { ...scope, reanalyze } }),
 };

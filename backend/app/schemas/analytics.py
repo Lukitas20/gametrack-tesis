@@ -99,6 +99,55 @@ class AudienceGroup(BaseModel):
     unit: str
 
 
+class SteamTasteGame(BaseModel):
+    appid: int
+    game_id: int
+    name: str
+    authors: int
+
+
+class SteamTasteReception(BaseModel):
+    recommended: int
+    not_recommended: int
+    mixed: int
+    unknown: int
+
+
+class SteamTasteGroup(BaseModel):
+    key: str
+    label: str
+    kind: str
+    size: int
+    denominator: int
+    criterion: str
+    reception: SteamTasteReception
+    examples: list[SteamTasteGame]
+
+
+class SteamHistoryReport(BaseModel):
+    identified_reviews: int
+    identified_authors: int
+    sample_limit: int
+    selected_authors: int
+    checked_authors: int
+    public_histories: int
+    private_histories: int
+    unavailable_histories: int
+    partial_histories: int
+    pending_authors: int
+    identity_games_pending: int
+    authors_with_two_other_recommendations: int
+    other_recommendations: int
+    recommendations_with_metadata: int
+    oldest_checked_at: str | None
+    newest_checked_at: str | None
+    page_limit: int
+    cache_hours: int
+    groups: list[SteamTasteGroup]
+    selection: str
+    source: str
+
+
 class AudienceReport(BaseModel):
     scope: dict[str, Any]
     games: int
@@ -108,6 +157,7 @@ class AudienceReport(BaseModel):
     groups: list[AudienceGroup]
     minimum_group: int
     limitations: list[str]
+    steam_histories: SteamHistoryReport | None = None
 
 
 class GameAnalyticsOut(BaseModel):

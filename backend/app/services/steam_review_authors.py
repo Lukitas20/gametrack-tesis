@@ -79,25 +79,23 @@ def _review_page(appid: int, cursor: str, *, start: int | None, end: int | None)
     return [row for row in rows if isinstance(row, dict)], next_cursor if isinstance(next_cursor, str) else None
 
 
-def repair_game_authors(db, game, *, max_pages: int = 5, delay: float = 1.0) -> dict:
+def repair_game_authors(db, game, *, max_pages: int = 5, delay: float = 1.0, hydrate: bool = True) -> dict:
     """Reparación acotada/reanudable sin importar ni reanalizar reseñas.
 
     Para muestras antiguas se consulta el intervalo original, si está guardado.
     Ante un fallo no se atribuye la reseña a otro autor ni se borra su nombre.
     El caller controla commit y se ejecuta fuera del camino de lectura de la UI.
     """
-    from app.core.config import settings
-
     report = {"examined": 0, "identities_recovered": 0, "names_recovered": 0, "pages": 0}
-    if not settings.STEAM_API_KEY or not game.steam_app_id:
+    if not game.steam_app_id:
         return report
     rows = list(db.scalars(select(Review).where(
         Review.game_id == game.id, Review.source == "steam",
-        or_(Review.author_name.is_(None), Review.author_name.in_(UNKNOWN_NAMES),
+        or_(Review.steam_author_id.is_(None), Review.author_name.is_(None), Review.author_name.in_(UNKNOWN_NAMES),
             Review.author_name == ""),
     )))
     report["examined"] = len(rows)
-    report["names_recovered"] = hydrate_authors(rows)
+    report["names_recovered"] = hydrate_authors(rows) if hydrate else 0
     pending = {r.steam_review_id: r for r in rows if r.steam_review_id and not r.steam_author_id}
     if not pending:
         return report
@@ -132,5 +130,5 @@ def repair_game_authors(db, game, *, max_pages: int = 5, delay: float = 1.0) -> 
         cursor = next_cursor
         if delay:
             time.sleep(max(1.0, delay))
-    report["names_recovered"] += hydrate_authors(rows)
+    report["names_recovered"] += hydrate_authors(rows) if hydrate else 0
     return report

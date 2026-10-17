@@ -23,7 +23,9 @@ def test_scope_distinct_people_sources_preferences_and_private_lists(db,data):
     assert report["gametrack_users"]==6 and report["steam_reviews"]==7
     assert report["coverage"]["ratings"]==6 and report["coverage"]["public_lists"]==0
     groups={group["key"]:group for group in report["groups"]}
-    assert groups["rating_high"]["size"]==6 and groups["steam_yes"]["size"]==7
+    assert groups["rating_high"]["size"]==6
+    assert not any(key.startswith("steam_") for key in groups)
+    assert report["steam_histories"]["identified_authors"]==0
     assert groups["rating_low"]["size"] is None
     assert any(group["source"]=="Preferencias manuales GameTrack" and group["size"]==6 for group in report["groups"])
     assert not any(user.username in str(report) for user in users)

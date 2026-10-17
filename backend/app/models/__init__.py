@@ -23,8 +23,11 @@ from app.models.steam_catalog_worker import SteamCatalogWorker
 from app.models.user import User, UserPreference
 from app.models.steam_auth import SteamIdentity, SteamAuthFlow
 from app.models.steam_profile import SteamProfileCache, FriendInvite
+from app.models.steam_audience import SteamAudienceHistory, AudienceCollectionState
 
 __all__ = [
+    "SteamAudienceHistory",
+    "AudienceCollectionState",
     "SteamProfileCache",
     "FriendInvite",
     "SteamIdentity",

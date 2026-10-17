@@ -23,6 +23,7 @@ from app.schemas.analytics import (
     ProcessResult,
     StudioAnalyticsOut,
     DeveloperReviewPage,
+    AudienceReport,
 )
 from app.services import steam_service
 from app.services.developer_assistant import explain_developer_report
@@ -32,6 +33,47 @@ from app.services.audience_service import audience_report
 from app.models.enums import Aspect, Sentiment
 
 router = APIRouter(prefix="/analytics", tags=["analitica"])
+
+
+class AudienceCollectionResult(BaseModel):
+    status: Literal["busy", "more", "ready"]
+    profiles_fetched: int
+    audience: AudienceReport
+
+
+def audience_scope(db, game_id, studio, user):
+    if game_id is not None:
+        if studio is not None:
+            raise HTTPException(400, "Elegí un juego o un estudio, no ambos")
+        if db.get(Game, game_id) is None:
+            raise HTTPException(404, "El juego no existe")
+        return {"game_id": game_id}
+    target = (studio or user.studio or "").strip()
+    if not target:
+        raise HTTPException(400, "Elegí un juego o estudio")
+    return {"studio": target}
+
+
+@router.get("/audience", response_model=AudienceReport)
+def get_audience(response: Response, game_id: int | None = Query(default=None, gt=0),
+                 studio: str | None = Query(default=None, max_length=120),
+                 user: User = Depends(require_developer), db: Session = Depends(get_db)):
+    response.headers["Cache-Control"] = "no-store"
+    return audience_report(db, **audience_scope(db, game_id, studio, user))
+
+
+@router.post("/audience/collect", response_model=AudienceCollectionResult)
+def collect_audience(response: Response, game_id: int | None = Query(default=None, gt=0),
+                     studio: str | None = Query(default=None, max_length=120),
+                     user: User = Depends(require_developer), db: Session = Depends(get_db)):
+    from app.services.steam_audience_service import collect_step
+    response.headers["Cache-Control"] = "no-store"
+    scope = audience_scope(db, game_id, studio, user)
+    try:
+        result = collect_step(db, **scope)
+    except ValueError:
+        raise HTTPException(404, "No hay juegos en el alcance seleccionado")
+    return {**result, "audience": audience_report(db, **scope)}
 
 
 @router.get("/review-model")

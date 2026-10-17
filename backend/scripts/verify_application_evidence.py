@@ -46,6 +46,7 @@ def inspect(db):
         result["reviews_sampled"]+=report["trained_ai"]["sampled"]
         result["scopes_using_review_model"]+=int(report["trained_ai"]["used"])
         result["audience_groups_published"]+=sum(not group["suppressed"] for group in report["audience"]["groups"])
+        result["audience_groups_published"]+=len(report["audience"]["steam_histories"]["groups"])
         result["audience_users_by_scope"].append(report["audience"]["gametrack_users"])
     confirm_read_only(db)
     result["result"]="verified" if result["scopes_using_review_model"] and result["affinity"]["result"]=="verified" else "inconclusive"

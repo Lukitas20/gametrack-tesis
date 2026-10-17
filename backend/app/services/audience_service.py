@@ -4,6 +4,7 @@ from sqlalchemy import func, select, union
 from app.db.real_data import real_review_filter, synthetic_user_ids
 from app.models import (Game, GameList, GameListItem, Genre, PlayFeedback, Rating,
                         Review, User, UserPreference, UserRole, game_genres)
+from app.services.steam_audience_service import history_report
 
 MIN_GROUP = 5
 
@@ -65,15 +66,11 @@ def audience_report(db, *, game_id=None, studio=None):
                                unit="usuarios"))
     steam = select(Review.id).where(Review.game_id.in_(games), Review.source == "steam", real_review_filter())
     steam_n = db.scalar(select(func.count()).select_from(steam.subquery())) or 0
-    for value, key, label in ((True, "steam_yes", "Reseñas que recomiendan"), (False, "steam_no", "Reseñas que no recomiendan"),
-                               (None, "steam_unknown", "Reseñas sin voto guardado")):
-        group(key, label, steam.where(Review.is_recommended.is_(value)),
-              "Voto declarado por el autor en las reseñas Steam guardadas, en todos los idiomas disponibles.",
-              steam_n, "Reseñas públicas importadas de Steam", "reseñas")
     return dict(scope={"game_id": game_id, "studio": studio}, games=db.scalar(select(func.count()).select_from(games.subquery())) or 0,
                 gametrack_users=n, steam_reviews=steam_n, coverage=coverage, groups=groups, minimum_group=MIN_GROUP,
+                steam_histories=history_report(db, game_id=game_id, studio=studio),
                 limitations=["Muestra observada de estos juegos; no representa todo el mercado ni predice compradores potenciales.",
-                             "GameTrack cuenta usuarios distintos; Steam cuenta reseñas, no cuentas GameTrack. No se cruzan identidades.",
+                             "Los autores de Steam se cuentan una vez por grupo y se mantienen separados de las cuentas GameTrack. No se cruzan identidades entre plataformas.",
                              "Los grupos pueden superponerse. La cobertura se refiere sólo a usuarios con interacciones en el conjunto analizado.",
-                             "Grupos con menos de cinco observaciones no muestran su tamaño. Se muestran hasta veinte géneros por procedencia.",
-                             "Sin interacciones suficientes no hay segmentación publicable. Las horas indican interés y no se convierten en estrellas."])
+                             "Se publican grupos de al menos cinco personas. Los gustos se describen por recomendaciones explícitas de otros juegos; las horas no se convierten en estrellas.",
+                             "Los historiales pueden estar incompletos. Un juego sin metadatos no se clasifica por su nombre; un perfil inaccesible no se interpreta como desinterés."])

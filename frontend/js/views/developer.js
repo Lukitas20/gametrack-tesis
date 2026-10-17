@@ -130,6 +130,14 @@ function exportReport(report) {
   if(report.audience) {
     rows.push([],["Audiencia observada","Tamaño","Unidad","Denominador","Criterio","Procedencia"]);
     for(const group of report.audience.groups) rows.push([group.label,group.suppressed ? "Menos de 5; oculto" : group.size,group.unit,group.denominator,group.criterion,group.source]);
+    const histories=report.audience.steam_histories;
+    if(histories) {
+      rows.push([],["Historiales públicos Steam",histories.public_histories,"Consultados",histories.checked_authors,"Autores identificados",histories.identified_authors],
+        ["Recomendaciones con metadatos",histories.recommendations_with_metadata,"Recomendaciones observadas",histories.other_recommendations],
+        ["Grupo de autores Steam","Autores","Historiales públicos","Sólo recomiendan","Sólo desaconsejan","Votos distintos entre títulos","Sin voto guardado","Criterio"]);
+      for(const group of histories.groups) rows.push([group.label,group.size,group.denominator,group.reception.recommended,group.reception.not_recommended,group.reception.mixed,group.reception.unknown,group.criterion]);
+      rows.push(["Procedencia",histories.source],["Selección",histories.selection],["Consulta más antigua",histories.oldest_checked_at],["Consulta más reciente",histories.newest_checked_at]);
+    }
     rows.push(...report.audience.limitations.map(text=>["Alcance",text]));
   }
   rows.push([],["Fuente","Reseñas guardadas; clasificación automática local. No es una puntuación de Metacritic."]);
@@ -175,11 +183,11 @@ function receptionChart(report) {
   return chartCard({title:report.juegos ? "Recepción por título" : "Cómo se recibe este juego",subtitle:"Comparación de la muestra guardada y analizada.",chart:games.some(g => g.resenas_analizadas) ? divergingStackedBar(games.map(g => ({label:g.nombre,gameId:g.id,...g.distribucion})),{labelWidth:170,onRowClick:report.juegos ? row => navigate(`/dev/juego/${row.gameId}`) : null}) : emptyState("Todavía no hay reseñas analizadas","Procesá las reseñas pendientes para completar el informe."),legendEntries:sentimentLegend(report.resenas.distribucion),table:tableView(["Juego","Analizadas","Positivas","Neutras","Negativas","Neto"],games.map(g => [report.juegos ? h("a",{href:`#/dev/juego/${g.id}`},g.nombre) : g.nombre,g.resenas_analizadas,g.distribucion.positivo,g.distribucion.neutro,g.distribucion.negativo,g.resenas_analizadas ? signed(g.sentimiento_neto,2) : "—"]))});
 }
 function workspaceFor(report, scope, initial, comparison) {
-  const reviews=developerReviewsPanel(scope,report.juegos),assistant=assistantPanel(scope,report.trained_ai);let workspace;
+  const reviews=developerReviewsPanel(scope,report.juegos),assistant=assistantPanel(scope,report.trained_ai),audience=audiencePanel(report.audience,scope);let workspace;
   const openReviews=aspect=>{reviews.setFilters({aspect,sentiment:"negativo"});workspace.select("reviews");};
   const items=[{key:"overview",label:"Resumen",icon:"chart",content:h("div",{class:"dev-overview"},trainedReviewInsights(report.trained_ai,{onAsk:question=>{workspace.select("assistant");assistant.ask(question);}}),insightCards(report.aspectos),prioritiesPanel(report.aspectos,openReviews),receptionChart(report),h("p",{class:"dev-data-note"},icon("info",15),"El informe describe la muestra guardada. Una clasificación positiva no equivale a la recomendación de Steam ni al Metascore."))}];
   if(report.juegos) items.push({key:"games",label:`Juegos (${report.juegos.length})`,icon:"gamepad",content:gamesPanel(report.juegos)});
-  items.push({key:"audience",label:"Audiencias",icon:"users",content:audiencePanel(report.audience)},
+  items.push({key:"audience",label:"Audiencias",icon:"users",content:audience,onActivate:audience.load},
     {key:"aspects",label:"Aspectos",icon:"list",content:aspectPanel(report.aspectos,comparison)},
     {key:"reviews",label:"Reseñas",icon:"quote",content:reviews,onActivate:reviews.load},
     {key:"evidence",label:"Evidencia",icon:"quote",content:evidencePanel(report.citas_negativas)},{key:"assistant",label:"Asistente",icon:"sparkles",content:assistant});
