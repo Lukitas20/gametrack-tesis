@@ -61,15 +61,22 @@ test("la afinidad conserva el resultado del servidor y presenta una sola acción
   assert.deepEqual(score,{value:71,evidence:"steam",confidence:"low",confidence_message:"Provisional"});
 });
 
-test("Audiencias no repite el criterio en cada tarjeta ni ofrece actualizar una caché completa",async t=>{
+test("Audiencias muestra cinco categorías y reflexión sin los paneles técnicos ni fracciones, y reutiliza la caché completa",async t=>{
   dom(t);
   const evidence=JSON.parse(await readFile(new URL("../../docs/evidence/audience-report-cloud-20261017.json",import.meta.url),"utf8"));
+  const previous=api.collectAudience;let calls=0;api.collectAudience=async()=>{calls++;throw new Error("No debe consultar una caché completa");};
+  t.after(()=>{api.collectAudience=previous;});
   const report=evidence.report,before=JSON.stringify(report),panel=audiencePanel(report,{studio:"CD PROJEKT RED"});
-  assert.match(panel.textContent,/Muestra observada de Steam/);assert.match(panel.textContent,/15 de 60 autores/);
+  const rows=walk(panel).filter(node=>node.tag==="li"&&node.className?.includes("audience-rank"));
+  assert.equal(rows.length,5);assert.equal(rows[0].textContent,"01GéneroAcción33usuarios");assert.match(rows[4].textContent,/Multijugador15usuarios/);
+  assert.match(panel.textContent,/Acción lidera los gustos observados/);assert.match(panel.textContent,/Aventura e Indie/);
   assert.ok(!panel.textContent.includes("0 sin voto guardado"));
-  assert.ok(!walk(panel).some(n=>n.tag==="button"&&/Continuar consulta|Comprobar datos/.test(n.textContent)));
+  assert.ok(!walk(panel).some(n=>n.tag==="details"||n.tag==="button"));
+  assert.doesNotMatch(panel.textContent,/\d+ de \d+|Cobertura|Procedencia y alcance|Usuarios de GameTrack|historiales públicos|autores seleccionados|Consultados \d+/);
   assert.ok(!panel.textContent.includes(report.steam_histories.groups[0].criterion));
-  assert.equal(JSON.stringify(report),before);assert.match(panel.textContent,/no representa todo el mercado/);
+  panel.isConnected=true;panel.load();await new Promise(resolve=>setImmediate(resolve));assert.equal(calls,0);
+  assert.equal(JSON.stringify(report),before);assert.match(panel.textContent,/no representa a todo el mercado/);
+  assert.match(panel.textContent,/Una persona puede aparecer en varias categorías/);
 });
 
 test("el catálogo usa tres selectores y conserva el filtro de característica en la consulta",async t=>{
