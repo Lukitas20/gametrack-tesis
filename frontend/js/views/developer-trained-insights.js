@@ -11,14 +11,6 @@ export function trainedReviewInsights(data, { title = "Temas de las reseñas", o
   const scopeNote = sampled < total
     ? `${count(sampled)} reseñas más recientes de ${count(total)} guardadas.`
     : `${count(sampled)} reseñas guardadas en este informe.`;
-  const method = h("details", { class: "dev-method dev-trained-method" },
-    h("summary", null, "Cómo leer este análisis"),
-    ready && h("p", null, data.model.examples && data.model.games
-      ? `Modelo local entrenado con ${count(data.model.examples)} reseñas reales de Steam de ${count(data.model.games)} juegos.`
-      : "Modelo local entrenado con reseñas reales de Steam."),
-    h("p", null, "Los temas se aprendieron con etiquetas automáticas sobre textos reales. Una mención no indica por sí sola una crítica ni explica por qué alguien no recomienda el juego."),
-    ready && h("p",null,`${count(data.predicted)} textos con al menos una predicción habilitada en esta muestra. Disponibilidad del modelo y aporte a este informe son cosas distintas.`),
-    (data.limitations || []).map(text => h("p", null, text)));
   return h("section", { class: `dev-trained-insights${compact ? " is-compact" : ""}`, "aria-label": title },
     h("div", { class: "dev-trained-heading" },
       h("span", { class: "dev-trained-mark", "aria-hidden": "true" }, icon("sparkles", 19)),
@@ -36,6 +28,6 @@ export function trainedReviewInsights(data, { title = "Temas de las reseñas", o
             h("figcaption", null, example.game, " · ", example.source === "steam" ? "Steam" : "GameTrack",
               example.recommended === true ? " · Recomienda" : example.recommended === false ? " · No recomienda" : ""))))))),
     ready && sampled > 0 && !topics.length && h("p", { class: "dev-caption" }, "No se detectaron temas con evidencia suficiente en esta muestra."),
-    h("div", { class: "dev-trained-footer" }, method,
-      ready && sampled > 0 && onAsk && h("button", { class: "btn btn-sm", type: "button", onClick: () => onAsk("¿Qué temas detecta la IA en estas reseñas?") }, "Consultar al asistente", icon("chevron", 14))));
+    ready && sampled > 0 && onAsk && h("div", { class: "dev-trained-footer" },
+      h("button", { class: "btn btn-sm", type: "button", onClick: () => onAsk("¿Qué temas detecta la IA en estas reseñas?") }, "Consultar al asistente", icon("chevron", 14))));
 }

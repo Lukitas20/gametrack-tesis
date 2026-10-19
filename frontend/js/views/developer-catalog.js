@@ -2,7 +2,7 @@
 import { api } from '../api.js';
 import { cover } from '../components.js';
 import { state, isDeveloper } from '../store.js';
-import { ASPECT_LABEL, h, icon, infoDetails, modalHead, mount, signed, spinnerBlock } from '../ui.js';
+import { ASPECT_LABEL, h, icon, modalHead, mount, signed, spinnerBlock } from '../ui.js';
 import { aspectComparisons, comparisonHighlights, reviewMetrics } from './developer-comparison-data.js';
 import { trainedReviewInsights } from './developer-trained-insights.js';
 
@@ -62,8 +62,8 @@ function openDeveloperGame(game, ownGames, studio) {
       h('label', { class: 'dev-compare-selector' }, 'Comparar con', picker), status), controls, content));
   document.body.append(dialog); dialog.showModal(); window.addEventListener('hashchange', onRoute);
 
-  function section(title, caption, ...children) {
-    return h('section', { class: 'dev-compare-section' }, h('h3', null, title), ...children, infoDetails('Cómo leer estas métricas', h('p', null, caption)));
+  function section(title, ...children) {
+    return h('section', { class: 'dev-compare-section' }, h('h3', null, title), ...children);
   }
   function gameHeader(report, label) {
     const g = report.juego, detail = details.get(g.id) || {}, art = cover({ name: g.nombre, background_image: g.background_image || detail.background_image });
@@ -82,7 +82,7 @@ function openDeveloperGame(game, ownGames, studio) {
   function reception() {
     const left = reviewMetrics(catalog), right = reference && reviewMetrics(reference);
     const delta = (key, suffix = '') => !right || missing(left[key]) || missing(right[key]) ? null : `${signed(right[key] - left[key], key === 'net' ? 2 : 1)}${suffix}`;
-    return section('Recepción de los jugadores', 'Muestra guardada en GameTrack. Los porcentajes se calculan sobre las reseñas analizadas; no representan todo Steam.',
+    return section('Recepción de los jugadores',
       metricTable([
         ['Reseñas analizadas', number(left.analyzed), right && number(right.analyzed), null],
         ['Textos positivos', percent(left.positive), right && percent(right.positive), delta('positive', ' p.p.')],
@@ -95,20 +95,19 @@ function openDeveloperGame(game, ownGames, studio) {
   function aspects() {
     const rows = aspectComparisons(catalog, reference);
     const cell = a => a ? h('div', null, h('strong', null, signed(a.sentimiento_neto, 2)), h('small', null, `${number(a.menciones)} ${a.menciones === 1 ? 'mención' : 'menciones'}${a.menciones < 5 ? ' · muestra pequeña' : ''}`)) : 'Sin menciones';
-    return section('Qué dicen de cada aspecto', 'Balance positivo menos negativo, de −1 a +1. Las menciones pertenecen a cada aspecto, no son jugadores únicos.',
+    return section('Qué dicen de cada aspecto',
       metricTable(rows.map(row => [ASPECT_LABEL[row.key] || row.key, cell(row.catalog), cell(row.own),
         missing(row.delta) ? 'No comparable' : h('span', null, signed(row.delta, 2), !row.comparable && h('small', null, 'Muestra pequeña'))])),
       h('p', { class: 'dev-compare-note' }, 'Sin menciones significa que falta evidencia; no equivale a un balance de cero.'),
       h('div', { class: 'dev-trained-comparison' },
         trainedReviewInsights(catalog.trained_ai, { title: `Temas detectados · ${catalog.juego.nombre}`, compact: true }),
-        reference && trainedReviewInsights(reference.trained_ai, { title: `Temas detectados · ${reference.juego.nombre}`, compact: true })),
-      catalog.trained_ai && h('p', { class: 'dev-compare-note' }, 'Cada título usa su propia muestra reciente. Compará las menciones junto con la cantidad de reseñas; los conteos no son una nota de calidad.'));
+        reference && trainedReviewInsights(reference.trained_ai, { title: `Temas detectados · ${reference.juego.nombre}`, compact: true })));
   }
   function market() {
     const left = details.get(catalog.juego.id), right = reference && details.get(reference.juego.id);
     const rating = report => report.juego.cantidad_ratings_local ? `${decimal(report.juego.rating_local_promedio)} / 5` : 'Sin votos';
     const publicRating = detail => !detail ? 'Sin datos' : detail.ratings_count ? `${decimal(detail.avg_rating)} / 5` : 'Sin votos';
-    return section('Comunidad y crítica', 'Metascore, índice público del catálogo y valoraciones de GameTrack son fuentes distintas del análisis del texto.',
+    return section('Comunidad y crítica',
       metricTable([
         ['Metascore de Metacritic', missing(left?.metacritic) ? 'Sin dato' : `${left.metacritic} / 100`, missing(right?.metacritic) ? 'Sin dato' : `${right.metacritic} / 100`, null],
         ['Nota pública del catálogo', publicRating(left), publicRating(right), null],
@@ -124,12 +123,12 @@ function openDeveloperGame(game, ownGames, studio) {
         h('details', { class: 'dev-compare-evidence' }, h('summary', null, ASPECT_LABEL[key] || key, ` · ${quotes.length} ${quotes.length === 1 ? 'fragmento' : 'fragmentos'}`),
           quotes.slice(0, 3).map(quote => h('blockquote', null, quote)))) : h('p', { class: 'dev-compare-note' }, 'Sin fragmentos negativos guardados.'));
     };
-    return section('Evidencia para revisar', 'Fragmentos de la muestra que el análisis local clasificó como negativos. Revisalos en contexto antes de decidir.',
+    return section('Evidencia para revisar',
       h('div', { class: 'dev-compare-games' }, block(catalog), reference && block(reference)));
   }
   function insights() {
     const highlights = comparisonHighlights(catalog, reference);
-    return section('Qué podés sacar de esta comparación', 'Diferencias descriptivas de las muestras; no explican por sí solas las causas ni predicen ventas.',
+    return section('Qué podés sacar de esta comparación',
       h('ul', { class: 'dev-compare-insights' }, highlights.length ? highlights.map(row => h('li', null,
         `${ASPECT_LABEL[row.key] || row.key}: ${row.delta > 0 ? reference.juego.nombre : catalog.juego.nombre} tiene un balance más positivo (${number(Math.abs(row.delta), 2)} de diferencia). `,
         `El catálogo tiene ${number(row.catalog.menciones)} menciones y tu referencia ${number(row.own.menciones)}.`)) :
