@@ -68,15 +68,17 @@ test("Audiencias muestra cinco categorías y reflexión sin los paneles técnico
   t.after(()=>{api.collectAudience=previous;});
   const report=evidence.report,before=JSON.stringify(report),panel=audiencePanel(report,{studio:"CD PROJEKT RED"});
   const rows=walk(panel).filter(node=>node.tag==="li"&&node.className?.includes("audience-rank"));
-  assert.equal(rows.length,5);assert.equal(rows[0].textContent,"01GéneroAcción33usuarios");assert.match(rows[4].textContent,/Multijugador15usuarios/);
+  assert.equal(rows.length,5);assert.equal(rows[0].textContent,"01GéneroAcción55%de la audiencia");assert.match(rows[4].textContent,/Multijugador25%de la audiencia/);
+  assert.ok(Math.abs(parseFloat(walk(rows[0]).find(node=>node.className==="audience-bar").childNodes[0].style.width)-55)<0.001);
+  assert.doesNotMatch(rows.map(row=>row.textContent).join(""),/33usuarios|15usuarios/);
   assert.match(panel.textContent,/Acción lidera los gustos observados/);assert.match(panel.textContent,/Aventura e Indie/);
   assert.ok(!panel.textContent.includes("0 sin voto guardado"));
   assert.ok(!walk(panel).some(n=>n.tag==="details"||n.tag==="button"));
-  assert.doesNotMatch(panel.textContent,/\d+ de \d+|Cobertura|Procedencia y alcance|Usuarios de GameTrack|historiales públicos|autores seleccionados|Consultados \d+/);
+  assert.doesNotMatch(panel.textContent,/\d+ de \d+|Cobertura|Procedencia y alcance|Usuarios de GameTrack|autores seleccionados|Consultados \d+/);
   assert.ok(!panel.textContent.includes(report.steam_histories.groups[0].criterion));
   panel.isConnected=true;panel.load();await new Promise(resolve=>setImmediate(resolve));assert.equal(calls,0);
   assert.equal(JSON.stringify(report),before);assert.match(panel.textContent,/no representa a todo el mercado/);
-  assert.match(panel.textContent,/Una persona puede aparecer en varias categorías/);
+  assert.match(panel.textContent,/Una persona puede aparecer en varias categorías/);assert.match(panel.textContent,/no tienen que sumar 100%/);
 });
 
 test("el catálogo usa tres selectores y conserva el filtro de característica en la consulta",async t=>{

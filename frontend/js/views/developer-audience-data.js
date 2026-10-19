@@ -49,6 +49,9 @@ export function buildAudienceRanking(report) {
     position:index + 1,
     rank:groups.findIndex(candidate => candidate.size === group.size) + 1,
     relativeSize:group.size / groups[0].size,
+    audienceShare:Number.isInteger(group.denominator) && group.denominator > 0 && group.denominator >= group.size
+      ? group.size / group.denominator
+      : null,
   }));
   return {categories, reflection:reflectionFor(groups, minimum)};
 }

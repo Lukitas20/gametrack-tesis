@@ -2,7 +2,7 @@ import { h, mount } from "../ui.js";
 import { api } from "../api.js";
 import { buildAudienceRanking } from "./developer-audience-data.js";
 
-const number = value => Number(value || 0).toLocaleString("es-AR");
+const percentage = share => new Intl.NumberFormat("es-AR", { maximumFractionDigits: 1 }).format(share * 100) + "%";
 const pending = data => Number(data?.steam_histories?.pending_authors || 0) > 0
   || Number(data?.steam_histories?.identity_games_pending || 0) > 0;
 
@@ -41,9 +41,11 @@ export function audiencePanel(initial, scope) {
           h("div", { class: "audience-category" },
             h("span", { class: "audience-kind" }, group.kind === "genre" ? "Género" : "Rasgo"),
             h("h3", null, group.label)),
-          h("div", { class: "audience-count" }, h("strong", null, number(group.size)), h("span", null, "usuarios")),
-          h("div", { class: "audience-bar", "aria-hidden": "true" },
-            h("span", { style: { width: `${group.relativeSize * 100}%` } })))))
+          h("div", { class: "audience-count" },
+            h("strong", null, group.audienceShare === null ? "—" : percentage(group.audienceShare)),
+            h("span", null, group.audienceShare === null ? "Sin base suficiente" : "de la audiencia")),
+          group.audienceShare !== null && h("div", { class: "audience-bar", "aria-hidden": "true" },
+            h("span", { style: { width: `${group.audienceShare * 100}%` } })))))
         : h("div", { class: "audience-state" }, h("h3", null, "Todavía no hay grupos suficientes"),
           h("p", null, "Faltan datos para identificar gustos compartidos. El ranking aparecerá cuando haya categorías con al menos cinco usuarios.")),
       reflection && h("article", { class: "audience-reflection" },
@@ -52,7 +54,7 @@ export function audiencePanel(initial, scope) {
         reflection.example && h("p", { class: "audience-example" }, `Una referencia entre quienes prefieren ${reflection.example.category}: `,
           h("a", { href: `#/juego/${reflection.example.game_id}` }, reflection.example.name), ".")),
       categories.length > 0 && h("p", { class: "audience-footnote" },
-        "Basado en recomendaciones públicas de Steam. Una persona puede aparecer en varias categorías; esta muestra no representa a todo el mercado."));
+        "Porcentajes sobre los historiales públicos consultados de Steam. Una persona puede aparecer en varias categorías; no tienen que sumar 100%. Esta muestra no representa a todo el mercado."));
   }
 
   async function collect() {

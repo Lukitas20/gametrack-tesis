@@ -15,6 +15,7 @@ test("el top cinco usa los grupos reales de Steam y conserva el informe", async 
     ["Acción", 33], ["Aventura", 27], ["Indie", 18], ["Rol", 17], ["Multijugador", 15],
   ]);
   assert.deepEqual(categories.map(category => category.rank), [1, 2, 3, 4, 5]);
+  assert.deepEqual(categories.map(category => category.audienceShare), [33 / 60, 27 / 60, 18 / 60, 17 / 60, 15 / 60]);
   assert.equal(reflection.title, "Acción lidera los gustos observados");
   assert.match(reflection.text, /Aventura e Indie/);
   assert.equal(reflection.example.name, "Resident Evil 2");
@@ -70,4 +71,28 @@ test("los empates que exceden el top cinco no producen un falso líder único", 
   assert.equal(categories.length, 5);
   assert.ok(categories.every(category => category.rank === 1));
   assert.equal(reflection.title, "Varios gustos comparten el primer puesto");
+});
+
+test("calcula cada porcentaje con su base real y permite categorías superpuestas", () => {
+  const input = report([
+    group("Acción", 18, {denominator:20}),
+    group("Aventura", 16, {denominator:20}),
+    group("Rol", 10, {denominator:20}),
+    group("Cooperativos", 8, {denominator:10}),
+    group("Indie", 6, {denominator:20}),
+    group("Fuera del top", 5, {denominator:20}),
+  ]);
+  const before = JSON.stringify(input);
+  const {categories} = buildAudienceRanking(input);
+  assert.deepEqual(categories.map(category => category.audienceShare), [0.9, 0.8, 0.5, 0.8, 0.3]);
+  assert.ok(categories.reduce((sum, category) => sum + category.audienceShare, 0) > 1);
+  assert.equal(JSON.stringify(input), before);
+});
+
+test("una base ausente o inválida no inventa porcentajes", () => {
+  for (const denominator of [undefined, null, 0, -1, 4, 10.5, "20", Infinity, NaN]) {
+    const {categories} = buildAudienceRanking(report([group("Acción", 5, {denominator})]));
+    assert.equal(categories[0].audienceShare, null, `Base inválida: ${denominator}`);
+  }
+  assert.equal(buildAudienceRanking(report([group("Acción", 5, {denominator:5})])).categories[0].audienceShare, 1);
 });
