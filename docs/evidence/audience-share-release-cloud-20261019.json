@@ -1,0 +1,41 @@
+{
+  "source_commit": "1ec0a250a6edf977ad600e662daa7867d5cf9683",
+  "assets": [
+    {
+      "path": "frontend/index.html",
+      "sha256": "e195089c5a05a1f5ee60d9afe8793de1607df8a38566319a4e35c339aecdefe0",
+      "cache_control": "no-cache"
+    },
+    {
+      "path": "frontend/js/views/developer-audience-data.js",
+      "sha256": "0270443b9535c2d272eea6d6aeed33420cceae9f6a553350f0ece849570d7f10",
+      "cache_control": "no-cache"
+    },
+    {
+      "path": "frontend/js/views/developer-audience.js",
+      "sha256": "09364be3dac95b16d67d255eb9cab5e47ef3cf416425460bd5087d8ca149b660",
+      "cache_control": "no-cache"
+    }
+  ],
+  "checks": {
+    "health": 200,
+    "catalog": 200,
+    "anonymous_audience_access": 401,
+    "anonymous_audience_collection": 401,
+    "anonymous_private_access": 401,
+    "steam_https_redirect": true
+  },
+  "revision": "gametrack-00029-dbt",
+  "traffic": 100,
+  "build": "e48ec319-c45d-4121-8259-f63f1af576a2",
+  "image_digest": "sha256:d7f05c733805e62858637fe8f9d80f20b02906af5fc80ad5872fa209f6ae4164",
+  "source_upload": {
+    "files": 286,
+    "approved_model_artifacts": 3,
+    "private_paths": 0
+  },
+  "frontend_tests_passed": 42,
+  "migrations": 0,
+  "jobs_executed": 0,
+  "visual_review": "Local component with the saved real aggregate Cloud report. Authenticated production developer flow was not exercised."
+}

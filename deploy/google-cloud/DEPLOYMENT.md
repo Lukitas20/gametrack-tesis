@@ -608,3 +608,23 @@ sesión autenticada de desarrollador en producción.
 
 Evidencia: `docs/evidence/audience-ranking-release-cloud-20261019.json`.
 Detalle de comportamiento: `docs/AUDIENCIAS_RANKING_20261019.md`.
+
+
+## Porcentajes en Audiencias — 19 de octubre de 2026
+
+Fuente `1ec0a250a6edf977ad600e662daa7867d5cf9683`, build `e48ec319-c45d-4121-8259-f63f1af576a2`.
+Digest `sha256:d7f05c733805e62858637fe8f9d80f20b02906af5fc80ad5872fa209f6ae4164`. Revisión `gametrack-00029-dbt`, 100 % del tráfico.
+
+Se reemplazan los tamaños absolutos visibles por porcentajes de la audiencia
+consultada. Las barras representan la misma proporción. La base es el denominador
+real del informe; no se normalizan los cinco grupos para forzar una suma de 100 %.
+Los datos, el mínimo de privacidad, el orden del ranking y la reflexión permanecen.
+
+Pasaron 42 pruebas del frontend y la sintaxis de ambos módulos. La auditoría
+aprobó 286 archivos, tres artefactos permitidos y cero rutas privadas.
+Los tres recursos públicos modificados coinciden con las fuentes probadas y
+responden con no-cache. Aprobaron salud, catálogo, Steam HTTPS y protección
+privada 401. Sólo se actualizó la imagen web y sus metadatos de cliente;
+no se ejecutaron migraciones ni jobs. La revisión visual usó el informe real
+agregado guardado; no se recorrió una sesión autenticada de desarrollador.
+Evidencia: `docs/evidence/audience-share-release-cloud-20261019.json`.
