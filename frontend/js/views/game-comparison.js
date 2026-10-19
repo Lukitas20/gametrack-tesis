@@ -38,8 +38,7 @@ export function gameComparePanel(gameId, gameName) {
       const data = await api.compareGames([gameId,game.id]);
       if (!current(version)) return;
       mount(output,h("p",{class:"game-compare-conclusion"},icon("info",16),data.conclusion),
-        h("div",{class:"game-compare-grid"},data.items.map(item=>comparisonCard(item,data.preferred_game_id))),
-        h("details",{class:"game-compare-differences"},h("summary",null,"Comparar los datos"),h("ul",null,data.differences.map(text=>h("li",null,text)))));
+        h("div",{class:"game-compare-grid"},data.items.map(item=>comparisonCard(item,data.preferred_game_id))));
     } catch(error) {
       if(current(version)) mount(output,h("p",{role:"alert"},error.message||"No pudimos comparar los juegos."),h("button",{class:"btn btn-sm",onClick:()=>compare(game)},"Reintentar"));
     }

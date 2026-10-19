@@ -1,7 +1,7 @@
 import { api } from "../api.js";
 import { gameCard, saveToListButton } from "../components.js";
 import { isLoggedIn, isDeveloper, state } from "../store.js";
-import { h, icon, infoDetails } from "../ui.js";
+import { h, icon } from "../ui.js";
 import { gameAnalysisButton } from "./game-insights.js";
 import {playFeedbackButton} from "./play-feedback.js";
 
@@ -47,7 +47,6 @@ export function discoverySection() {
   const modes = [["affinity", "Para vos", "heart"], ["critics", "Afinidad + crítica", "star"], ["friends", "Con un amigo", "user"]];
   const tabs = h("div", { class: "gts-tabs", role: "group", "aria-label": "Cómo descubrir juegos" });
   const body = h("div", { class: "gts-results" });
-  const note = h("p", { class: "gts-note" });
   const selector = h("select", { id: "gts-friend", "aria-label": "Con quién querés jugar", onChange: () => load() },
     h("option", { value: "" }, "Elegí un amigo"));
   const friendHint = h("p", null, "Elegí a alguien con quien solés jugar.");
@@ -55,7 +54,7 @@ export function discoverySection() {
     h("label", { for: "gts-friend" }, "Tu compañero"), selector, friendHint);
   root.append(h("div", { class: "gts-heading" },
     h("div", null, h("h2", null, "Para vos"))),
-    tabs, friendRow, body, infoDetails("Cómo se elige esta selección", note));
+    tabs, friendRow, body);
   function renderTabs() {
     tabs.replaceChildren(...modes.map(([key, label, symbol]) => h("button", {
       class: "gts-tab", "aria-pressed": String(mode === key), onClick: () => { mode = key; renderTabs(); load(); },
@@ -70,7 +69,7 @@ export function discoverySection() {
   }
   async function load() {
     const request = ++revision, owner = state.user?.id, currentMode = mode;
-    friendRow.hidden = mode !== "friends"; note.textContent = "";
+    friendRow.hidden = mode !== "friends";
     if (mode === "friends" && !friendsLoaded) {
       body.replaceChildren(h("p", { role: "status" }, "Buscando tus amigos…"));
       try {
@@ -93,8 +92,6 @@ export function discoverySection() {
     try {
       const data = await api.discovery(currentMode, currentMode === "friends" ? Number(selector.value) : null);
       if (request !== revision || owner !== state.user?.id) return;
-      note.replaceChildren(data.note);
-      if (!data.personal_data) note.append(h("a", { href: "#/perfil", style: { marginLeft: "8px" } }, "Completar mis gustos"));
       body.replaceChildren(data.items.length ? h("div", { class: "gts-grid" }, data.items.map(item =>
         h("article", { class: "gts-card" }, gameCard(item.game),
           h("div", { class: "gts-card-info" }, scoreBadge(item.gametrack_score),

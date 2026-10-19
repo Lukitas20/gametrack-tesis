@@ -3,7 +3,7 @@
 import { api } from "../api.js";
 import { gameGrid } from "../components.js";
 import { isDeveloper, loadCatalog, state } from "../store.js";
-import { emptyState, h, infoDetails, magicLoader } from "../ui.js";
+import { emptyState, h, magicLoader } from "../ui.js";
 import { createDeveloperCatalog } from "./developer-catalog.js";
 
 const PAGE_SIZE = 24;
@@ -30,60 +30,6 @@ export async function catalogView({ query }) {
   const count = h("p", { class: "muted", style: { fontSize: "var(--fs-sm)" } });
   let loading = false;
   let total = 0;
-
-  const syncSummary = h("p", { class: "muted", role: "status" }, "Consultando el catálogo guardado…");
-  const syncDetail = h("p", { class: "discovery-control-note" });
-  const syncTitle = h("strong", null, "Estado del catálogo");
-  const syncNotice = h("section", { class: "catalog-sync-notice" },
-    h("div", null, syncTitle, syncSummary, syncDetail),
-    h("button", { class: "btn btn-sm", onClick: () => { loadSyncStatus(); reload(); } }, "Actualizar vista"));
-
-  async function loadSyncStatus() {
-    try {
-      const status = await api.steamCatalogStatus();
-      const scheduled = status.worker_mode === "scheduled";
-      const shared = scheduled || status.worker_mode === "external";
-      syncTitle.textContent = shared ? "Catálogo compartido" : "Catálogo en esta PC";
-      const entries = status.entry_counts || {};
-      const pending = (entries.pending || 0) + (entries.unavailable || 0);
-      syncSummary.textContent = `${status.total_games.toLocaleString("es-AR")} juegos guardados · ${(entries.ready || 0).toLocaleString("es-AR")} fichas de Steam verificadas · ${pending.toLocaleString("es-AR")} pendientes o en reintento`;
-      if (!status.worker_enabled) {
-        syncDetail.textContent = "La actualización automática está desactivada. Se conservan los juegos ya guardados.";
-      } else if (shared && !scheduled && !status.worker_running) {
-        syncDetail.textContent = "El servidor no está informando actividad de sincronización. Los juegos guardados siguen disponibles.";
-      } else if (!status.key_configured) {
-        syncDetail.textContent = shared
-          ? "La conexión con Steam está pendiente de configuración en el servidor. Podés consultar el catálogo guardado."
-          : "La conexión del índice de Steam está pendiente de configuración. Podés seguir usando el catálogo local.";
-      } else if (status.status === "error" || status.worker_error) {
-        syncDetail.textContent = status.worker_error || "No se pudo completar la actualización. Se reintentará conservando los datos y el progreso guardado.";
-      } else if (scheduled && !status.worker_running) {
-        const lastRun = status.worker_finished_at
-          ? ` Última tanda: ${new Date(status.worker_finished_at).toLocaleString("es-AR")}.`
-          : "";
-        syncDetail.textContent = `Actualizaciones programadas cada ${status.interval_minutes / 60} horas.${lastRun} Las fichas solicitadas se completan en las próximas tandas, aunque tu PC esté apagada.`;
-      } else if (status.partial) {
-        syncDetail.textContent = `Actualizando el índice: ${status.processed.toLocaleString("es-AR")} entradas procesadas en esta pasada. Los juegos aparecen a medida que se guardan.`;
-      } else if (status.completed_at) {
-        syncDetail.textContent = `Índice actualizado: ${new Date(status.completed_at).toLocaleString("es-AR")}. ${shared
-          ? "Las fichas se completan en el servidor, aunque cierres la app."
-          : "Las fichas se completan por tandas mientras la app está abierta."}`;
-      } else {
-        syncDetail.textContent = "La primera actualización del índice está pendiente. Podés consultar los juegos guardados.";
-      }
-    } catch {
-      syncSummary.textContent = "El catálogo local sigue disponible.";
-      syncDetail.textContent = "No pudimos consultar el estado de la sincronización.";
-    }
-  }
-
-  loadSyncStatus();
-  // El temporizador deja de programarse al salir de esta vista.
-  setTimeout(async function pollSync() {
-    if (!syncNotice.isConnected) return;
-    await loadSyncStatus();
-    if (syncNotice.isConnected) setTimeout(pollSync, 15000);
-  }, 15000);
 
   const genreSelect = h(
     "select",
@@ -220,6 +166,5 @@ export async function catalogView({ query }) {
       sortSelect,
     ),
     results,
-    infoDetails("Estado y actualización del catálogo", syncNotice),
   );
 }

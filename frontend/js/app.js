@@ -229,19 +229,6 @@ function accountMenu() {
 function renderActions() {
   clear(actionsSlot);
 
-  const motionButton = h("button", {
-    class: "btn btn-icon btn-ghost motion-toggle",
-    "aria-label": motionPaused ? "Activar animaciones" : "Pausar animaciones",
-    title: motionPaused ? "Activar animaciones" : "Pausar animaciones",
-    "aria-pressed": String(!motionPaused),
-    onClick: () => {
-      motionPaused = !motionPaused;
-      localStorage.setItem(MOTION_KEY, motionPaused ? "paused" : "on");
-      document.body.classList.toggle("motion-paused", motionPaused);
-      renderActions();
-    },
-  }, icon("sparkles", 16));
-
   const themeButton = h(
     "button",
     {
@@ -289,7 +276,7 @@ function renderActions() {
   );
   accountWrap.appendChild(accountButton);
 
-  actionsSlot.append(motionButton, themeButton, accountWrap);
+  actionsSlot.append(themeButton, accountWrap);
 }
 
 /* ------------------------------------------------------------------ *

@@ -3,63 +3,18 @@ import { gameComparePanel } from "./game-comparison.js";
 import { state, isLoggedIn, isDeveloper } from "../store.js";
 import { h, icon, infoDetails, mount, openModal, modalHead } from "../ui.js";
 
-/** Sólo el cálculo del servidor puede confirmar si el modelo aportó al puntaje. */
-export function affinityLearningNote(learning) {
-  if (!learning || typeof learning !== "object") return null;
-  const weight = Number(learning.weight);
-  const used = learning.used === true && Number.isFinite(weight) && weight > 0 && weight <= 1;
-  const percent = used ? new Intl.NumberFormat("es-AR", { maximumFractionDigits: 1 }).format(weight * 100) : null;
-  const trainingCount = Number(learning.training_observations);
-  const trainingExamples = Number(learning.training_examples);
-  const historyCount = Number(learning.history_examples);
-  const details = [];
-  if (learning.source === "steam_public_review_api" && Number.isFinite(trainingCount) && trainingCount > 0) {
-    details.push(`Corpus de ${new Intl.NumberFormat("es-AR").format(trainingCount)} opiniones reales de Steam; sólo se entrenan casos con historial anterior comparable.`);
-    if (Number.isFinite(trainingExamples) && trainingExamples > 0) {
-      details.push(`${new Intl.NumberFormat("es-AR").format(trainingExamples)} casos utilizados para entrenar.`);
-    }
-  }
-  if (Number.isFinite(historyCount) && historyCount > 0) {
-    details.push(`${new Intl.NumberFormat("es-AR").format(historyCount)} señales personales reconocidas para esta estimación.`);
-  }
-  return h("details", { class: "affinity-learning", dataset: { used: String(used) } },
-    h("summary", null, icon("sparkles", 13), used ? `IA de afinidad · aporte del ${percent}%` : "IA de afinidad · sin aporte a este puntaje"),
-    h("p", null, learning.message || (used
-      ? "El aprendizaje con opiniones reales complementa al motor según tu historial."
-      : "Este puntaje se calcula con el motor y los datos disponibles; el modelo no aporta una predicción personal.")),
-    used && h("p", null, `El ${percent}% corresponde al índice base del GameTrackScore. No es una probabilidad de que te guste.`),
-    details.length ? h("p", { class: "affinity-learning-source" }, details.join(" ")) : null,
-    h("p", { class: "affinity-learning-source" }, "Modelo de recomendación distinto del que analiza reseñas en el panel de desarrollador. Las horas indican interés; no se convierten en opiniones positivas."));
-}
-
-function scoreExplanation(score) {
-  const labels = { affinity: "Afinidad con tus gustos", local_model: "IA de afinidad", steam_affinity: "IA de afinidad", metacritic: "Metacritic", community: "Reseñas de Steam", reach: "Respaldo público", own_rating: "Tu valoración" };
-  const compatibility = score.calibration === "compatibility" && Number.isFinite(score.base_value) && Number.isFinite(score.value);
-  const breakdown = Object.entries(score.weights || {}).map(([key, weight]) => {
-    const value = Math.round((score.components?.[key] ?? 0) * 100);
-    return h("div", { class: "gts-component" },
-      h("div", null, h("span", null, labels[key] || key), h("span", null, `${value}/100 · peso ${Math.round(weight * 100)}%`)),
-      h("div", { class: "gts-component-track", "aria-hidden": "true" }, h("span", { style: { width: `${value}%` } })));
-  });
-  return infoDetails("Desglose del puntaje",
-    h("p", null, score.explanation),
-    compatibility && h("p", null, `Índice base ${score.base_value.toLocaleString("es-AR", { maximumFractionDigits: 1 })}/100 → GameTrackScore ${score.value}/100. Es una escala de compatibilidad, no una probabilidad.`),
-    breakdown.length ? h("div", { class: "gts-breakdown" }, breakdown) : null,
-    h("ul", null, (score.reasons || []).map(reason => h("li", null, reason))));
-}
-
-function referenceLink(ref, compact = false) {
+function referenceLink(ref) {
   const external = ref.url.startsWith("https://");
   return h("a", { href: ref.url, target: external ? "_blank" : null,
-    rel: external ? "noopener noreferrer" : null, class: compact ? "insight-citation" : "insight-source",
-    title: ref.detail }, compact ? ref.title : [h("strong", null, ref.title), h("span", null, ref.detail)],
+    rel: external ? "noopener noreferrer" : null, class: "insight-citation",
+    title: ref.detail }, ref.title,
     icon("chevron", 12));
 }
 
 function evidencePoint(point, references) {
   return h("li", null, h("p", null, point.text),
     h("div", { class: "insight-citations" }, point.reference_ids.map(id => references.find(ref => ref.id === id))
-      .filter(Boolean).map(ref => referenceLink(ref, true))));
+      .filter(Boolean).map(ref => referenceLink(ref))));
 }
 
 function analysisContent(gameId, close, upcoming = false) {
@@ -142,16 +97,12 @@ function analysisContent(gameId, close, upcoming = false) {
       h("div", { class: "insight-overview" }, h("div", { class: "insight-score", "aria-label": `GameTrackScore ${data.score.value ?? 'sin datos'}` },
         h("strong", null, data.score.value ?? "—"), h("span", null, "GameTrackScore")),
         h("div", null, h("p", { class: "insight-local" }, icon("sparkles", 13), "TU AFINIDAD, EXPLICADA"), h("h3", null, data.game_name), h("p", null, data.summary))),
-      affinityLearningNote(data.score.learning),
       h("div", { class: "insight-columns" }, column("Podría gustarte", data.positives, "heart", "insight-fit"),
         column("Para tener en cuenta", data.cautions, "info", "insight-caution")),
       h("p",{class:"insight-confidence",dataset:{confidence:data.score.confidence||"low"}},icon("info",14),data.score.confidence_message||"Estimación provisional con los datos disponibles."),
-      scoreExplanation(data.score),
       !upcoming && gameComparePanel(gameId,data.game_name),
       h("section", { class: "insight-consult" }, h("h3", null, "Más preguntas"),
-        infoDetails("Preguntas sugeridas", suggestions), thread, form),
-      h("details", { class: "insight-references" }, h("summary", null, "Fuentes y referencias"),
-        h("div", null, data.references.map(ref => referenceLink(ref))), h("p", { class: "insight-method" }, data.method)));
+        infoDetails("Preguntas sugeridas", suggestions), thread, form));
   }
   load();
   return root;

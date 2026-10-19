@@ -2,7 +2,7 @@
 import { api } from "../api.js";
 import { requiresLogin } from "../components.js";
 import { isLoggedIn, isDeveloper, state } from "../store.js";
-import { h, icon, infoDetails, initials, emptyState, spinnerBlock, toast, openModal, modalHead } from "../ui.js";
+import { h, icon, initials, emptyState, spinnerBlock, toast, openModal, modalHead } from "../ui.js";
 import { steamFriendsSection } from "./steam-friends.js";
 import { startNewQuiz } from "./quiz.js";
 import { openInviteDialog } from "./invite.js";
@@ -89,7 +89,6 @@ export async function friendsView() {
         catch (error) { toast(error.message, "error"); }
         finally { send.disabled = false; }
       } }, h("label", { for: "friend-username" }, "Agregar un amigo"),
-      h("div", { class: "discovery-actions" }, username, send)),
-      infoDetails("Qué compartís al aceptar",h("p",null,"Tus amigos pueden incluir tus gustos en recomendaciones del grupo; no ven tu historial completo."))),
+      h("div", { class: "discovery-actions" }, username, send))),
     content, steam?.element);
 }

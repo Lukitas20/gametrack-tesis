@@ -62,22 +62,18 @@ export function steamFriendsSection(user, { onChange, showInvite = true } = {}) 
   const element = h("section", { class: "friends-steam-section", "aria-label": "Amigos de Steam" }, body);
   const owner = user.id;
   let revision = 0, data = null;
-  const refreshButton = h("button", { class: "btn btn-sm", onClick: () => refresh(true) }, icon("refresh", 14), "Sincronizar Steam");
-  async function refresh(force = false) {
+  async function refresh() {
     const current = ++revision;
-    refreshButton.disabled = true;
     if (!data) mount(body, spinnerBlock("Cargando amigos de Steam…"));
     try {
-      data = await (force ? api.syncSteamProfile() : api.steamProfile());
+      data = await api.steamProfile();
       if (current !== revision || state.user?.id !== owner) return;
       mount(body, steamFriendsList(data, { onChange: onChange || (() => refresh()), showInvite }));
     } catch (error) {
       if (current !== revision || state.user?.id !== owner) return;
       mount(body, emptyState("No pudimos cargar los amigos de Steam", error.message,
         h("button", { class: "btn", onClick: () => refresh() }, "Reintentar")));
-    } finally { if (current === revision) refreshButton.disabled = false; }
+    }
   }
-  element.append(h("div", { class: "steam-friends-footer" }, refreshButton,
-    h("span", { class: "muted" }, "Las solicitudes se aceptan en GameTrack.")));
   return { element, refresh };
 }

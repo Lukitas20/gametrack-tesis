@@ -1,7 +1,7 @@
 import { api } from "../api.js";
 import { state, isLoggedIn, isDeveloper } from "../store.js";
 import { cover } from "../components.js";
-import { h, icon, mount, emptyState, openModal, modalHead, toast } from "../ui.js";
+import { h, icon, mount, emptyState, openModal, modalHead } from "../ui.js";
 import { openGameAnalysis } from "./game-insights.js";
 import { steamAchievementPanel } from "./steam-achievements.js";
 import { openPlayFeedback, enjoymentLabel, reasonLabel } from "./play-feedback.js";
@@ -125,60 +125,35 @@ export function backlogView({ hub = false } = {}) {
   const blocked = guard(); if (blocked) return blocked;
   const owner = state.user.id, root = h("div", { class: "play-hub" });
   const spotlight = h("div", { class: "play-rescue-stage", "aria-live": "polite" });
-  const more = h("div"), meta = h("div", { class: "play-library-meta" }), context = h("div", { class: "play-library-context" });
+  const more = h("div");
   let mode = "light", revision = 0;
   const current = request => request === revision && owner === state.user?.id;
   const filter = h("select", { id: "play-backlog-filter", "aria-label": "Filtrar juegos pendientes", onChange: () => { mode = filter.value; load(); } },
     h("option", { value: "light" }, "Todos mis pendientes"), h("option", { value: "unplayed" }, "Sin jugar en Steam"), h("option", { value: "pending" }, "Sólo mi lista Pendientes"));
-  const reload = h("button", { class: "btn btn-ghost btn-sm", onClick: async () => {
-    reload.disabled = true;
-    try { if(state.user.steam_verified) await api.syncSteamProfile(); if (owner === state.user?.id) await load(); }
-    catch (error) { if (owner === state.user?.id) toast(error.message, "error"); }
-    finally { reload.disabled = false; }
-  } }, icon("refresh", 14), "Actualizar");
   const controls = h("div", { class: "play-backlog-controls" },
     h("div", { class: "play-library-heading" }, icon("list", 18), h("h2", null, "Volvé a tus pendientes")),
-    h("div", { class: "play-library-filters" }, h("label", { for: "play-backlog-filter" }, "Mostrar:"), filter, reload));
+    h("div", { class: "play-library-filters" }, h("label", { for: "play-backlog-filter" }, "Mostrar:"), filter));
   root.append(intro("ELEGÍ TU PRÓXIMA PARTIDA", hub ? "¿Qué jugamos hoy?" : "Mis pendientes",
     null),
-    controls, context, spotlight, more, meta);
+    controls, spotlight, more);
 
   async function load() {
-    const request = ++revision; reload.disabled = true; spotlight.setAttribute("aria-busy", "true");
+    const request = ++revision; spotlight.setAttribute("aria-busy", "true");
     mount(spotlight, h("div", { class: "play-rescue-loading", role: "status" },
       h("span", { class: "play-loading-orb", "aria-hidden": "true" }, icon("sparkles", 26)), "Buscando juegos entre tus pendientes…"), companionTiles());
-    mount(more); mount(meta); mount(context);
+    mount(more);
     try {
       const data = await api.playBacklog(mode); if (!current(request)) return;
       const [featured, ...rest] = data.items;
       mount(spotlight, featured ? rescueSpotlight(featured, load) : emptyRescue(mode, () => { mode = "light"; filter.value = mode; load(); }), companionTiles());
-      const fromSteam = data.library_status === "ok";
-      mount(context, h("p", null, mode === "unplayed" ? "Mostramos juegos de Steam con 0 minutos registrados." :
-        mode === "pending" ? "Mostramos sólo tu lista Pendientes." : fromSteam ? "Tu lista Pendientes + juegos de Steam con hasta 2 horas jugadas." : "Por ahora mostramos tu lista Pendientes."),
-        data.library_status === "not_linked" ? h("a", { href: "#/perfil" }, "Conectar Steam", icon("chevron", 12)) : null);
       if (rest.length) mount(more,
         h("div", { class: "play-more-heading" }, h("h2", null, "Otros pendientes para revisar"), h("span", null, `${rest.length} juegos en esta selección`)),
         h("div", { class: "play-backlog-grid" }, rest.map(item => backlogCard(item, load))));
-      const status = {
-        not_linked: null,
-        private: "Steam no permite consultar tu biblioteca por privacidad. Mostramos tus Pendientes.",
-        unavailable: "No hay una biblioteca de Steam disponible en la última sincronización.",
-        not_configured: "La sincronización de Steam no está configurada.",
-      };
-      mount(meta, h("div", { class: "play-library-status" },
-        h("span", null, icon("list", 13), `${data.eligible_count} ${data.eligible_count === 1 ? "juego con este filtro" : "juegos con este filtro"}`),
-        h("a", { href: "#/listas" }, "Mis listas", icon("chevron", 12))),
-        status[data.library_status] ? h("p", null, status[data.library_status]) : null,
-        h("details", { class: "play-backlog-note" }, h("summary", null, "Cómo elegimos estos juegos", icon("chevronDown", 13)),
-          h("p", null, "GameTrackScore va de 0 a 100 y combina tus gustos con la recepción del juego. No es una probabilidad de que te guste. Los juegos guardados en Pendientes pueden ser títulos que todavía no compraste."),
-          h("p", null, data.note), featured ? h("p", null, featured.reason) : null,
-          data.checked_at ? h("p", null, `Última sincronización: ${new Date(data.checked_at * 1000).toLocaleString("es-AR")}.`) : null,
-          data.unmapped_games > 0 ? h("p", null, `${data.unmapped_games} juegos de Steam todavía no tienen una ficha utilizable en el catálogo.`) : null));
     } catch (error) {
       if (current(request)) mount(spotlight, h("div", { class: "play-rescue-empty" }, h("h2", null, "Tu biblioteca, en un momento"),
         h("p", { role: "alert" }, error.message), h("button", { class: "btn btn-primary", onClick: load }, "Reintentar")), companionTiles());
     } finally {
-      if (current(request)) { reload.disabled = false; spotlight.removeAttribute("aria-busy"); }
+      if (current(request)) spotlight.removeAttribute("aria-busy");
     }
   }
   load(); return root;
@@ -197,8 +172,7 @@ export function experienceView() {
           h("p", null, feedback.played ? enjoymentLabel[feedback.enjoyment] : "No llegué a jugar", " · ", reasonLabel[feedback.reason]),
           h("small", null, `${new Date(feedback.updated_at).toLocaleDateString("es-AR")}${feedback.minutes != null ? ` · ${feedback.minutes} min declarados` : ""}${feedback.replay != null ? ` · ${feedback.replay ? "Volvería a jugarlo" : "No volvería a jugarlo"}` : ""}`),
           feedback.note ? h("p", { class: "play-experience-note" }, feedback.note) : null), feedbackAction(game, load, "Editar mi respuesta")))) :
-        emptyState("Todavía no registraste experiencias", "Podés hacerlo desde la ficha de un juego o desde tus pendientes."),
-        h("p", { class: "play-experience-help" }, "Tus últimas 40 devoluciones. Las interrupciones se guardan como contexto; tus estrellas no se modifican."));
+        emptyState("Todavía no registraste experiencias", "Podés hacerlo desde la ficha de un juego o desde tus pendientes."));
     } catch (error) {
       if (request === revision && owner === state.user?.id) mount(body, h("p", { role: "alert" }, error.message), h("button", { class: "btn", onClick: load }, "Reintentar"));
     }

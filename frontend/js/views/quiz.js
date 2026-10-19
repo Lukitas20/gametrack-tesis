@@ -342,8 +342,7 @@ async function guidedQuizView() {
         } }, icon(question.symbol, 14), given[question.key].title, icon("chevronDown", 11)))),
       response.group ? h("section", { class: "group-summary card" },
         h("h2", null, "Una partida para todos"),
-        h("p", null, response.group.members.map(memberName).join(" + ")),
-        h("details", { class: "play-group-details" }, h("summary", null, "Cómo elegimos para el grupo"), h("p", { class: "discovery-control-note" }, response.group.notice))) : null,
+        h("p", null, response.group.members.map(memberName).join(" + "))) : null,
       isLoggedIn() && !isDeveloper() && given.compania.company !== "solo" ?
         h("button", { class: "btn btn-sm", onClick: () => renderGroupPicker(() => { excluded = []; renderResults(); }, true) },
           icon("user", 14), friendIds.length ? "Cambiar el grupo" : "Incluir amigos en la recomendación") : null,

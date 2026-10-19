@@ -1,7 +1,7 @@
 /* Panel privado: datos Steam y valoraciones GameTrack tienen fuentes distintas. */
 import { api } from "../api.js";
 import { state } from "../store.js";
-import { h, icon, initials, spinnerBlock, emptyState, toast } from "../ui.js";
+import { h, icon, initials, spinnerBlock, emptyState } from "../ui.js";
 import { steamFriendsList } from "./steam-friends.js";
 import { achievementProgress, steamAchievementPanel } from "./steam-achievements.js";
 import { steamReviewsList as renderSteamReviews } from "./steam-reviews.js";
@@ -40,7 +40,6 @@ export function steamDashboard(user) {
   let selectedAchievement = null, achievementSearch = "";
   let loading = false, revision = 0;
   const owner = user.id;
-  const refresh = h("button", { class: "btn btn-sm", onClick: () => load(true) }, icon("refresh", 14), "Sincronizar Steam");
   const tabButtons = [];
   for (const [key, label, symbol] of [["library", "Biblioteca", "gamepad"], ["achievements", "Logros y progreso", "trophy"], ["ratings", "Valoraciones", "star"], ["friends", "Amigos", "user"]]) {
     const button = h("button", { type: "button", "aria-pressed": String(active === key), onClick: () => {
@@ -193,13 +192,12 @@ export function steamDashboard(user) {
   }
 
   function renderBody() { body.replaceChildren(active === "library" ? libraryTab() : active === "achievements" ? achievementsTab() : active === "ratings" ? ratingsTab() : friendsTab()); }
-  async function load(force = false) {
+  async function load() {
     if (loading) return;
-    if (force && data?.next_refresh_at > Date.now() / 1000) { toast(`Podés volver a sincronizar en ${Math.ceil(data.next_refresh_at - Date.now() / 1000)} segundos.`); return; }
-    const current = ++revision; loading = true; reviewsLoading = false; refresh.disabled = true; refresh.textContent = "Sincronizando…";
+    const current = ++revision; loading = true; reviewsLoading = false;
     updateNote.textContent = "Consultando la información que Steam comparte…";
     renderBody();
-    const results = await Promise.allSettled([force ? api.syncSteamProfile() : api.steamProfile(), api.myRatings(), force ? api.syncSteamReviews() : api.steamReviews()]);
+    const results = await Promise.allSettled([api.steamProfile(), api.myRatings(), api.steamReviews()]);
     if (current !== revision || state.user?.id !== owner) return;
     if (results[0].status === "fulfilled") { data = results[0].value; steamError = null; }
     else steamError = results[0].reason.message;
@@ -207,11 +205,11 @@ export function steamDashboard(user) {
     else ratingsError = results[1].reason.message;
     if (results[2].status === "fulfilled") { reviews = results[2].value; reviewsError = null; }
     else reviewsError = results[2].reason.message;
-    loading = false; refresh.disabled = false; refresh.replaceChildren(icon("refresh", 14), "Sincronizar Steam");
+    loading = false;
     updateNote.textContent = steamError || (data ? `Última consulta · ${new Date(data.checked_at * 1000).toLocaleString("es-AR")} · Datos privados de tu perfil` : "");
     metrics(); renderBody();if (data) root.onData?.(data);
   }
-  root.append(h("div", { class: "steam-sync-bar" }, h("div", null, h("p", { class: "eyebrow" }, "TU ACTIVIDAD"), h("h2", null, "Mi espacio de juego")), refresh), updateNote, summary, tabs, body);
+  root.append(h("div", { class: "steam-sync-bar" }, h("div", null, h("p", { class: "eyebrow" }, "TU ACTIVIDAD"), h("h2", null, "Mi espacio de juego"))), updateNote, summary, tabs, body);
   metrics(); load();
   return root;
 }

@@ -93,7 +93,6 @@ export function accountsView({ query = new URLSearchParams(), role } = {}) {
         h("p", { class: "auth-kicker" }, player ? "ACCESO DE JUGADORES" : "ACCESO DE DESARROLLADORES / ESTUDIOS"),
         h("h2", { id: "auth-title", tabindex: "-1" }, creating ? player ? "Creá tu cuenta de jugador" : "Creá tu cuenta de estudio" : player ? "Ingresá como jugador" : "Ingresá a tu estudio"),
         ),
-      h("p", { class: "auth-plan-summary" }, selectedPlan.name, selectedPlan.id !== "gratis" && " · Propuesta de plan, sin cobros"),
       creating && h("p", { class: "auth-account-kind" }, "El tipo de cuenta no se puede cambiar después."),
       player && h("a", { class: "auth-steam", href: "/api/v1/auth/steam/start", onClick: e => {
         if (busy) { e.preventDefault(); return; }
@@ -104,8 +103,7 @@ export function accountsView({ query = new URLSearchParams(), role } = {}) {
       player && h("div", { class: "auth-divider" }, h("span", null, "o con tu usuario")),
       error, form,
       h("nav", { class: "auth-other-access", "aria-label": "Otros accesos" },
-        h("a", { href: "#/cuentas" }, icon("arrowLeft", 14), "Volver a los planes"),
-        h("a", { href: `#${accessPath(player ? "desarrollador" : "jugador")}` }, player ? "Soy desarrollador / estudio" : "Soy jugador")));
+        h("a", { href: "#/cuentas" }, icon("arrowLeft", 14), "Volver a los planes")));
 
   }
   renderForm();

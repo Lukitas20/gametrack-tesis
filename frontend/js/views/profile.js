@@ -1,80 +1,13 @@
-/* Perfil: datos personales, géneros preferidos y cuenta de Steam vinculada. */
+/* Perfil: géneros preferidos y actividad de la cuenta de Steam vinculada. */
 
 import { api } from "../api.js";
 import { openOnboarding } from "./onboarding.js";
 import { isLoggedIn, refreshUser, state, displayName, updateSteamPreferences } from "../store.js";
 import { steamDashboard } from "./steam-profile.js";
-import { expandableText, h, icon, infoDetails, initials, mount, toast } from "../ui.js";
+import { expandableText, h, icon, initials, mount, toast } from "../ui.js";
 import { requiresLogin } from "../components.js";
 
-function field(label, input) {
-  return h(
-    "label",
-    { class: "field", style: { display: "block", marginBottom: "var(--s-4)" } },
-    h("span", { class: "muted", style: { display: "block", marginBottom: "var(--s-2)", fontSize: "var(--fs-sm)" } }, label),
-    input,
-  );
-}
-
-function experienceSection(user) {
-  const developer = user.role === "desarrollador";
-  return h("section", { class: "card profile-experience" },
-    h("h2", null, developer ? "Cuenta de desarrollador / estudio" : "Cuenta de jugador"),
-    developer && h("p", { class: "muted" }, user.studio || "Tu estudio"),
-    developer && h("a", { class: "btn", href: "#/bienvenida" }, "Configurar estudio y juego inicial"));
-}
-
-function dataSection(user) {
-  const fullName = h("input", { class: "input", value: user.full_name || "" });
-  const email = h("input", { class: "input", type: "email", value: user.email || "" });
-
-  return h(
-    "section",
-    { class: "card", style: { marginTop: "var(--s-6)" } },
-    h("h2", { style: { marginBottom: "var(--s-4)" } }, "Tus datos"),
-    field("Nombre visible", fullName),
-    field("Email", email),
-    h(
-      "button",
-      {
-        class: "btn btn-primary",
-        onClick: async () => {
-          try {
-            await api.updateProfile({
-              full_name: fullName.value.trim() || null,
-              email: email.value.trim() || null,
-            });
-            await refreshUser();
-            await renderAgain();
-            toast("Datos actualizados");
-          } catch (error) {
-            toast(error.message, "error");
-          }
-        },
-      },
-      "Guardar",
-    ),
-  );
-}
-
 function genresSection(user) {
-  const fromSteam = user.preferences_source === "steam";
-  const useSteam = user.steam_verified && h("button", {
-    class: "btn btn-sm btn-ghost",
-    onClick: async event => {
-      const button = event.currentTarget;
-      button.disabled = true;
-      try {
-        await api.suggestSteamPreferences();
-        await refreshUser();
-        await renderAgain();
-        toast("Gustos actualizados según tus juegos más jugados en Steam");
-      } catch (error) {
-        toast(error.message, "error");
-        button.disabled = false;
-      }
-    },
-  }, icon("refresh", 13), fromSteam ? "Actualizar desde Steam" : "Usar mis juegos de Steam");
   return h(
     "section",
     { class: "profile-genres" },
@@ -82,14 +15,13 @@ function genresSection(user) {
       "div",
       { class: "row", style: { justifyContent: "space-between", alignItems: "center", marginBottom: "var(--s-3)" } },
       h("h2", null, "Mis gustos"),
-      h("div", { class: "row", style: { gap: "var(--s-2)", flexWrap: "wrap" } }, useSteam, h(
+      h(
         "button",
         { class: "btn btn-sm", onClick: () => openOnboarding({ onDone: renderAgain }) },
         icon("sparkles", 13),
         "Modificar",
-      )),
+      ),
     ),
-    fromSteam && h("p", { class: "steam-caption" }, "Intereses inferidos de tu tiempo en Steam."),
     user.genres.length
       ? h(
           "div",
@@ -208,8 +140,6 @@ async function buildBody() {
     dashboard || (user.role === "jugador" ? profileActivity(user,heroMedia) : null),
     user.role === "jugador" ? myReviewsSection(user) : null,
     user.role === "jugador" && !user.steam_verified ? steamSection(user) : null,
-    h("details",{class:"profile-settings-fold"},h("summary",null,icon("user",16),"Ajustes del perfil",icon("chevronDown",14)),h("div",{class:"profile-settings"},experienceSection(user),
-      user.role === "desarrollador" && infoDetails("Plan de estudio",h("p",null,"Es una propuesta comercial del prototipo, sin suscripción ni cobros.")),dataSection(user))),
   );
   return wrap;
 }

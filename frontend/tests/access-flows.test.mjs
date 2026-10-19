@@ -38,8 +38,11 @@ test("el acceso de estudios no ofrece Steam ni un selector de tipo; jugadores sÃ
     assert.equal(links(player).includes("/api/v1/auth/steam/start"), true);
     assert.equal(nodes(studio).some(node => node.attributes.type === "radio"), false);
     assert.equal(nodes(player).some(node => node.attributes.type === "radio"), false);
-    assert.ok(studio.textContent.includes("Plan Estudio"));
-    assert.ok(player.textContent.includes("Jugador gratuito"));
+    for (const view of [studio, player]) {
+      assert.equal(nodes(view).some(node => node.className === "auth-plan-summary"), false);
+      assert.equal(nodes(view).some(node => node.tag === "a" && node.textContent === "Soy desarrollador / estudio"), false);
+      assert.ok(links(view).includes("#/cuentas"), "se conserva el regreso a los accesos");
+    }
   }
   const overview = plansView();
   assert.equal(nodes(overview).filter(node => node.tag === "article").length, 3);
