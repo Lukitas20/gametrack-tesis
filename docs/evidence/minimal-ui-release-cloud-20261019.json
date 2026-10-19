@@ -1,0 +1,97 @@
+{
+  "source_commit": "697f714fca91b0aaa0df99dc9d8e1b31885cbda3",
+  "assets": [
+    {
+      "path": "frontend/index.html",
+      "sha256": "079bd2ff422544c7b7c250ebc55aeacc6eff34e19b76200e4dee92527a303e1d",
+      "cache_control": "no-cache"
+    },
+    {
+      "path": "frontend/js/app.js",
+      "sha256": "972604b0bff8567960d6650c0d1610534b98438bca417ed824d9d0f6112d4d00",
+      "cache_control": "no-cache"
+    },
+    {
+      "path": "frontend/js/views/auth.js",
+      "sha256": "d83f5f1ad6c5d7b225b5934262ddc1551fced8973cd478997e65bcf8d504f009",
+      "cache_control": "no-cache"
+    },
+    {
+      "path": "frontend/js/views/catalog.js",
+      "sha256": "7e37849a40bad0c02f5438f8f7d2ac071fdd1273e9353517e291b22e0b056ab8",
+      "cache_control": "no-cache"
+    },
+    {
+      "path": "frontend/js/views/friends.js",
+      "sha256": "faf8b2098210375c968215eb5486332860089649809287b2bfbb5c469a5718c5",
+      "cache_control": "no-cache"
+    },
+    {
+      "path": "frontend/js/views/game-comparison.js",
+      "sha256": "b01ca76eb786c34b5a7d22a5ee77cd699b0c77910314ff4e2677a5dd95294ecb",
+      "cache_control": "no-cache"
+    },
+    {
+      "path": "frontend/js/views/game-insights.js",
+      "sha256": "1e27ecce4f0817823bf9199af7ac5ee887d7a1371b7fbb0710fc846fe725a98b",
+      "cache_control": "no-cache"
+    },
+    {
+      "path": "frontend/js/views/gametrack-score.js",
+      "sha256": "05801a615950c9fc144f0241126e56f56ca65e6232db3c91a22b9f691ef26ea2",
+      "cache_control": "no-cache"
+    },
+    {
+      "path": "frontend/js/views/play-hub.js",
+      "sha256": "8d0f46400efe567dcef14c568b24165b62623c68f34aa80dd22dc5323a29e387",
+      "cache_control": "no-cache"
+    },
+    {
+      "path": "frontend/js/views/profile.js",
+      "sha256": "dc6cc16ea7072155721cd446f5fcd5ac8da89dfc79efff77aeee04696de20849",
+      "cache_control": "no-cache"
+    },
+    {
+      "path": "frontend/js/views/quiz.js",
+      "sha256": "819997943c35cde89edd38ef02aab20c053e9a979a0ee7f7d35d3b12cbbfb84e",
+      "cache_control": "no-cache"
+    },
+    {
+      "path": "frontend/js/views/recommendations.js",
+      "sha256": "5e5f85afce7e334a5d61f9ffed05053544d36e5b9506a615c7dc7245d8f163d7",
+      "cache_control": "no-cache"
+    },
+    {
+      "path": "frontend/js/views/steam-friends.js",
+      "sha256": "a8f2bf4ac65379fba7f7191a81801e96b33ae528f67e35ba69c855fed4fefee9",
+      "cache_control": "no-cache"
+    },
+    {
+      "path": "frontend/js/views/steam-profile.js",
+      "sha256": "4b1e183b6ccbefcad94ae18239c9e33f6c2137d7113911089c6a8ea872d3f911",
+      "cache_control": "no-cache"
+    }
+  ],
+  "checks": {
+    "health": 200,
+    "catalog": 200,
+    "anonymous_private_access": 401,
+    "steam_https_redirect": true
+  },
+  "deployment": {
+    "revision": "gametrack-00027-mtt",
+    "traffic_percent": 100,
+    "build": "3f791007-0447-4602-b3cb-16ab2b77b200",
+    "image_digest": "sha256:12b425cfed9f1ffffd8e9a9becd4dda471cdf6311599c4b138aabb216b1f375e",
+    "migrations_executed": 0,
+    "jobs_executed": 0
+  },
+  "browser_checks": {
+    "player_access_without_plan_summary": true,
+    "player_access_without_studio_shortcut": true,
+    "catalog_loaded_with_real_games": true,
+    "catalog_without_status_panel": true,
+    "header_without_motion_button": true,
+    "authenticated_screens_reviewed": false
+  }
+}

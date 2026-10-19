@@ -551,3 +551,29 @@ accesos separados y audiencias usando el informe agregado real de Cloud.
 Alcance, capturas, procedimiento y límites de la revisión visual:
 `docs/CLARIDAD_INTERFAZ_20261017.md`. No se hicieron pruebas con participantes
 ni se atribuyeron mejoras medidas de satisfacción o relevancia.
+
+## Retiro de elementos de interfaz — 19 de octubre de 2026
+
+Fuente `697f714fca91b0aaa0df99dc9d8e1b31885cbda3`, build
+`3f791007-0447-4602-b3cb-16ab2b77b200`, digest
+`sha256:12b425cfed9f1ffffd8e9a9becd4dda471cdf6311599c4b138aabb216b1f375e`.
+Revisión `gametrack-00027-mtt`, con 100 % del tráfico.
+
+Se retiraron los bloques marcados en las 19 capturas: resumen de plan y atajo
+de rol dentro del acceso, ajustes del perfil, botones manuales de Steam,
+información técnica del catálogo, explicaciones extensas de selección y
+desglose del GameTrackScore, sección de fuentes y botón de pausa del encabezado.
+Permanecen los accesos separados, filtros, puntajes, consultas de afinidad y
+comparación principal. No se cambiaron datos, modelos, roles ni backend.
+
+Pasaron las 30 pruebas del frontend y la comprobación de sintaxis. La auditoría
+aprobó 282 archivos, los tres artefactos permitidos y cero rutas privadas.
+Los 14 recursos públicos modificados coinciden con las fuentes probadas y
+envían `no-cache`. Aprobaron salud, catálogo, protección privada 401 y la
+redirección HTTPS de Steam. Evidencia agregada:
+`docs/evidence/minimal-ui-release-cloud-20261019.json`.
+
+Terraform actualizó únicamente la imagen del servicio web y sus metadatos de
+cliente. No se ejecutaron migraciones ni jobs; las tareas programadas conservan
+sus imágenes anteriores. Se verificaron visualmente el acceso de jugador y
+el catálogo publicados. No se recorrieron pantallas con una sesión autenticada.
