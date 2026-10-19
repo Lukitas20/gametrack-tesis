@@ -1,0 +1,46 @@
+{
+  "source_commit": "9049dd718d3f244ad15562c1068feddc6bd89f9b",
+  "assets": [
+    {
+      "path": "frontend/css/developer.css",
+      "sha256": "6485c0f168afc4e81585d29b529ff70fd3e8ccb63f1aa0c637d2611330a2b5ce",
+      "cache_control": "no-cache"
+    },
+    {
+      "path": "frontend/index.html",
+      "sha256": "a74859008155550cd14de345a0c3c2c4dd4390257f673e5476090e27789c45e4",
+      "cache_control": "no-cache"
+    },
+    {
+      "path": "frontend/js/views/developer-audience-data.js",
+      "sha256": "63ee149c91ce232662dc6b367c4ac637c5c27e2534124ea64986a0effd4970be",
+      "cache_control": "no-cache"
+    },
+    {
+      "path": "frontend/js/views/developer-audience.js",
+      "sha256": "3fa127f67158c5303ec44922852dc398695c41341511ed3e20cf689ca02723db",
+      "cache_control": "no-cache"
+    }
+  ],
+  "checks": {
+    "health": 200,
+    "catalog": 200,
+    "anonymous_audience_access": 401,
+    "anonymous_audience_collection": 401,
+    "anonymous_private_access": 401,
+    "steam_https_redirect": true
+  },
+  "revision": "gametrack-00028-78z",
+  "traffic": 100,
+  "build": "5169a16e-4255-4d3a-be2a-85dcefe3d504",
+  "image_digest": "sha256:ecaf62a4aad37aaf6926e9095dc90497a6764588071229a110136a2db2d0f4ed",
+  "source_upload": {
+    "files": 285,
+    "approved_model_artifacts": 3,
+    "private_paths": 0
+  },
+  "frontend_tests_passed": 40,
+  "migrations": 0,
+  "jobs_executed": 0,
+  "visual_review": "Local component with the saved real aggregate Cloud report; desktop and 375px iframe. Authenticated production developer flow was not exercised."
+}

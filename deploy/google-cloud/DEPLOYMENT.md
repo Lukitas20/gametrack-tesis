@@ -577,3 +577,34 @@ Terraform actualizó únicamente la imagen del servicio web y sus metadatos de
 cliente. No se ejecutaron migraciones ni jobs; las tareas programadas conservan
 sus imágenes anteriores. Se verificaron visualmente el acceso de jugador y
 el catálogo publicados. No se recorrieron pantallas con una sesión autenticada.
+
+
+## Ranking integrado de Audiencias — 19 de octubre de 2026
+
+Fuente `9049dd718d3f244ad15562c1068feddc6bd89f9b`, build
+`5169a16e-4255-4d3a-be2a-85dcefe3d504`, digest
+`sha256:ecaf62a4aad37aaf6926e9095dc90497a6764588071229a110136a2db2d0f4ed`.
+Revisión `gametrack-00028-78z`, con 100 % del tráfico.
+
+Audiencias reúne hasta cinco categorías reales de Steam en un ranking único,
+con primer puesto destacado, conteos simples de usuarios y reflexión descriptiva.
+Se eliminan Cobertura, Usuarios de GameTrack y Procedencia y alcance de la vista.
+El ranking se publica junto, después de completar la colección; ante errores
+permite reanudar sin presentar lotes parciales como resultados finales. No se
+modifican el muestreo, los modelos, las fuentes ni los datos operativos.
+
+Pasaron 40 pruebas del frontend, sintaxis de los dos módulos, versiones de
+importación y `git diff --check`. La auditoría aprobó 285 archivos, tres
+artefactos permitidos y cero rutas privadas. Los cuatro archivos públicos
+modificados coinciden con las fuentes probadas y envían `no-cache`.
+Aprobaron salud, catálogo, callback HTTPS de Steam y 401 en consulta/colección
+anónimas de Audiencias y en el modelo de afinidad privado.
+
+Terraform actualizó solamente la imagen web y sus metadatos de cliente.
+No se ejecutaron migraciones ni jobs; las tareas conservan sus imágenes y
+argumentos anteriores. Se revisó visualmente el componente con el informe real
+agregado guardado, en escritorio y en un iframe de 375 px. No se recorrió una
+sesión autenticada de desarrollador en producción.
+
+Evidencia: `docs/evidence/audience-ranking-release-cloud-20261019.json`.
+Detalle de comportamiento: `docs/AUDIENCIAS_RANKING_20261019.md`.
