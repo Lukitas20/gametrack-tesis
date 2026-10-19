@@ -1,0 +1,46 @@
+{
+  "source_commit": "f16acfa37ff1047d81fadbf9be8451d8bc7547d4",
+  "assets": [
+    {
+      "path": "frontend/index.html",
+      "sha256": "df46158d4e1409f7a198976720a8e51563bd03d6c6702beee887f85b5a87ac68",
+      "cache_control": "no-cache"
+    },
+    {
+      "path": "frontend/js/views/developer-catalog.js",
+      "sha256": "85e4c93cc509d7b3b4353303f7f91acfecab900a5bc9f900522a7d6a865b9248",
+      "cache_control": "no-cache"
+    },
+    {
+      "path": "frontend/js/views/developer-trained-insights.js",
+      "sha256": "7d19f4671280b1c5d1d9096c4697294e3f9671413fcf0d77fe12f96e7d874e87",
+      "cache_control": "no-cache"
+    },
+    {
+      "path": "frontend/js/views/developer.js",
+      "sha256": "527339f993ec5ed2df433a0d8bb3b37d99ba014da9487cb5d3e2e5601056f9ba",
+      "cache_control": "no-cache"
+    }
+  ],
+  "checks": {
+    "health": 200,
+    "catalog": 200,
+    "anonymous_audience_access": 401,
+    "anonymous_audience_collection": 401,
+    "anonymous_private_access": 401,
+    "steam_https_redirect": true
+  },
+  "revision": "gametrack-00030-pqf",
+  "traffic": 100,
+  "build": "eb72f925-e38c-4593-9218-ac077d451074",
+  "image_digest": "sha256:56ac88eb0abb0917149729e07603e7e6356be5171e6be32403fd47ab6be3804b",
+  "source_upload": {
+    "files": 287,
+    "approved_model_artifacts": 3,
+    "private_paths": 0
+  },
+  "frontend_tests_passed": 42,
+  "migrations": 0,
+  "jobs_executed": 0,
+  "visual_review": "Local trained-review component using real Steam reviews from the local read-only database. Authenticated production developer flow was not exercised."
+}

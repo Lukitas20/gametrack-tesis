@@ -628,3 +628,33 @@ privada 401. Sólo se actualizó la imagen web y sus metadatos de cliente;
 no se ejecutaron migraciones ni jobs. La revisión visual usó el informe real
 agregado guardado; no se recorrió una sesión autenticada de desarrollador.
 Evidencia: `docs/evidence/audience-share-release-cloud-20261019.json`.
+
+
+## Retiro de ayudas del desarrollador — 19 de octubre de 2026
+
+Fuente `f16acfa37ff1047d81fadbf9be8451d8bc7547d4`, build `eb72f925-e38c-4593-9218-ac077d451074`.
+Digest `sha256:56ac88eb0abb0917149729e07603e7e6356be5171e6be32403fd47ab6be3804b`. Revisión `gametrack-00030-pqf`, 100 % del tráfico.
+
+Se eliminan los desplegables Cómo leer este análisis y Cómo leer estas métricas,
+la nota Cada título usa su propia muestra reciente y el indicador Modelo
+disponible del encabezado del asistente. Se evita un pie vacío en las tarjetas
+de temas. Se conservan las métricas, los fragmentos reales, la comparación y
+el acceso al asistente; los modelos y el backend no cambian.
+
+Pasaron las 42 pruebas existentes del frontend y la sintaxis de los tres módulos.
+La auditoría aprobó 287 archivos, tres artefactos permitidos y cero rutas
+privadas. Los cuatro recursos públicos modificados coinciden con las fuentes
+probadas y sirven no-cache; los textos marcados están ausentes. Aprobaron
+salud, catálogo, callback HTTPS de Steam y protección privada 401.
+Sólo cambió la imagen web y sus metadatos de cliente; no se ejecutaron
+migraciones ni jobs. No se recorrió una sesión autenticada de desarrollador
+en producción.
+
+Evidencia: `docs/evidence/developer-cleanup-release-cloud-20261019.json`.
+
+El primer plan se detuvo por una falla de conexión saliente (dirección IPv6 no
+asignable). La prueba de TCP por IPv4 respondió correctamente. Se reintentó
+únicamente plan/apply con paralelismo 2 y la misma imagen ya construida;
+se repitieron las guardas de fuente/configuración y la auditoría del plan.
+No se alteraron DNS, rutas, TLS, credenciales ni permisos, y no se reconstruyó
+la imagen para resolver el incidente. El reintento publicó correctamente.
