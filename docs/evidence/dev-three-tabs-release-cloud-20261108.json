@@ -1,0 +1,66 @@
+{
+  "source_commit": "18cd1886fd8d8ee08f4239d788e658ef11857b8d",
+  "revision": "gametrack-00031-4bq",
+  "traffic": 100,
+  "build": "c81e7e1b-02b3-451c-ab09-340efbeea8ad",
+  "image_digest": "sha256:dd801a93c5b42a918733ab63ea30263db41accf0fe4ec5f0de7aec6a4a211daa",
+  "assets": [
+    {
+      "path": "frontend/index.html",
+      "sha256": "fcd84900914c4e7631415a003cf7d710819f44bdc9eb7b57d2824024627442f9",
+      "cache_control": "no-cache"
+    },
+    {
+      "path": "frontend/css/developer.css",
+      "sha256": "b30d3247399defca90ae1942850487a501758e8ac10c0bc59c4061386fc5c3d3",
+      "cache_control": "no-cache"
+    },
+    {
+      "path": "frontend/js/components.js",
+      "sha256": "e6e96dc6393f1c8dcfe7caad68cf18794ebbf80776ff2e70efea14ff6ddd8a6b",
+      "cache_control": "no-cache"
+    },
+    {
+      "path": "frontend/js/views/developer.js",
+      "sha256": "165639d8c69ec2ff259f54f599f294a0a262d65e2bd32265abf7a0199452f9ca",
+      "cache_control": "no-cache"
+    },
+    {
+      "path": "frontend/js/views/developer-reviews.js",
+      "sha256": "fde8dd66a4deca2a62d8f25a8b149320a5e9f2ba47049218bd75169cd29e68bb",
+      "cache_control": "no-cache"
+    }
+  ],
+  "checks": {
+    "health": 200,
+    "anonymous_exact_review": 401,
+    "authenticated_login": 200,
+    "game_report": 200,
+    "studio_report": 200,
+    "assistant_in_game_scope": 200,
+    "exact_reviews_verified": 2,
+    "catalog_games_in_studio": 7,
+    "steam_reviews_in_game": 100,
+    "steam_reviews_in_studio": 436
+  },
+  "source_upload": {
+    "private_paths": 0,
+    "files": 288,
+    "approved_model_artifacts": 3
+  },
+  "frontend_tests_passed": 43,
+  "backend_tests_passed": 40,
+  "migrations": 0,
+  "jobs_executed": 0,
+  "browser": {
+    "assistant_disclosure": true,
+    "tabs": [
+      "Resumen",
+      "Reseñas",
+      "Audiencias"
+    ],
+    "exact_review_expanded": true,
+    "studio_to_game": true,
+    "game_to_studio_keeps_reviews_tab": true
+  }
+}

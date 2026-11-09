@@ -658,3 +658,27 @@ asignable). La prueba de TCP por IPv4 respondió correctamente. Se reintentó
 se repitieron las guardas de fuente/configuración y la auditoría del plan.
 No se alteraron DNS, rutas, TLS, credenciales ni permisos, y no se reconstruyó
 la imagen para resolver el incidente. El reintento publicó correctamente.
+
+## Informe de desarrollador en tres pestañas — 8 de noviembre de 2026
+
+Fuente `18cd1886fd8d8ee08f4239d788e658ef11857b8d`, build
+`c81e7e1b-02b3-451c-ab09-340efbeea8ad`, digest
+`sha256:dd801a93c5b42a918733ab63ea30263db41accf0fe4ec5f0de7aec6a4a211daa`.
+Revisión `gametrack-00031-4bq`, con el 100 % del tráfico.
+
+Resumen integra el desglose por aspecto y el asistente desplegable. Reseñas
+integra los fragmentos y abre la reseña original por ID dentro del mismo
+alcance. El selector Informe conserva la pestaña activa y permite pasar de
+todo el estudio a cualquiera de sus títulos y viceversa. Audiencias conserva
+su comportamiento. Se mantienen las citas de texto del esquema anterior.
+
+Pasaron 43 pruebas de interfaz y 40 de la API. La auditoría aprobó 288 archivos,
+tres artefactos de modelos permitidos y cero rutas privadas. El plan auditado
+actualizó sólo la imagen web, sin migraciones ni ejecuciones de tareas.
+Se verificaron en Cloud los cinco archivos modificados y la cuenta de prueba:
+Cyberpunk 2077 (100 reseñas reales de Steam), CD PROJEKT RED (siete fichas y 436
+reseñas reales), una reseña original enlazada por cada alcance y una consulta
+al asistente. El navegador confirmó las tres pestañas, el asistente desplegable,
+la reseña completa y el cambio de alcance en ambas direcciones.
+
+Evidencia: `docs/evidence/dev-three-tabs-release-cloud-20261108.json`.
