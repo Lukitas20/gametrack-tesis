@@ -89,6 +89,7 @@ def get_review_model_status(response: Response, _: User = Depends(require_develo
 def get_reviews(response: Response,
                 studio: str | None = Query(default=None, max_length=120),
                 game_id: int | None = Query(default=None, gt=0),
+                review_id: int | None = Query(default=None, gt=0),
                 search: str = Query(default="", max_length=300),
                 aspect: Aspect | None = None, sentiment: Sentiment | None = None,
                 source: Literal["steam", "user"] | None = None,
@@ -97,7 +98,7 @@ def get_reviews(response: Response,
                 limit: int = Query(default=20, ge=1, le=100), offset: int = Query(default=0, ge=0),
                 user: User = Depends(require_developer), db: Session = Depends(get_db)):
     response.headers["Cache-Control"] = "no-store"
-    return explore_reviews(db, user, studio=studio, game_id=game_id, search=search,
+    return explore_reviews(db, user, studio=studio, game_id=game_id, review_id=review_id, search=search,
                            aspect=aspect, sentiment=sentiment, source=source,
                            date_from=date_from, date_to=date_to, sort=sort, limit=limit, offset=offset)
 
@@ -192,6 +193,11 @@ def get_game_analytics(
     if not steam_service.maybe_refresh(db, game):
         raise HTTPException(status_code=404, detail="El juego no existe")
     report = game_analytics(db, game)
+    if studio := (game.developer or "").strip():
+        titles = select(Game.id, Game.name.label("nombre"), Game.steam_app_id).where(
+            func.lower(func.trim(Game.developer)) == studio.lower()
+        ).order_by(Game.name, Game.id)
+        report["juegos_del_estudio"] = [dict(row) for row in db.execute(titles).mappings()]
     report["trained_ai"] = review_model_report(db, game_id=game.id)
     report["audience"] = audience_report(db, game_id=game.id)
     return report

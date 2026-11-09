@@ -12,7 +12,7 @@ def review_publication_date(review):
     return review.published_at if review.source == "steam" else review.created_at
 
 
-def explore_reviews(db, user, *, studio=None, game_id=None, search="", aspect=None,
+def explore_reviews(db, user, *, studio=None, game_id=None, review_id=None, search="", aspect=None,
                     sentiment=None, source=None, date_from=None, date_to=None,
                     sort="newest", limit=20, offset=0):
     if date_from and date_to and date_from > date_to:
@@ -30,6 +30,8 @@ def explore_reviews(db, user, *, studio=None, game_id=None, search="", aspect=No
         query = query.where(func.lower(func.trim(Game.developer)) == target.lower())
     elif game_id is None:
         raise HTTPException(400, "Elegí un juego o un estudio para explorar las reseñas")
+    if review_id is not None:
+        query = query.where(Review.id == review_id)
     if search.strip():
         query = query.where(Review.content.icontains(search.strip(), autoescape=True))
     if source:

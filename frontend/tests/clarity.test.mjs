@@ -8,9 +8,10 @@ import { state } from "../js/store.js";
 import { personalScorePanel } from "../js/views/gametrack-score.js";
 import { audiencePanel } from "../js/views/developer-audience.js";
 import { catalogView } from "../js/views/catalog.js";
+import { developerGameView, developerView } from "../js/views/developer.js";
 
 class Element {
-  constructor(tag,text="") {this.tag=tag;this.text=text;this.childNodes=[];this.attributes={};this.events={};this.style={};this.dataset={};this.isConnected=false;}
+  constructor(tag,text="") {this.tag=tag;this.text=text;this.childNodes=[];this.attributes={};this.events={};this.style={};this.dataset={};this.isConnected=false;this.value="";}
   setAttribute(key,value) {this.attributes[key]=String(value);}
   getAttribute(key) {return this.attributes[key]??null;}
   get id() {return this.attributes.id;}
@@ -19,6 +20,9 @@ class Element {
   append(...children) {this.childNodes.push(...children);}
   replaceChildren(...children) {this.childNodes=children;}
   get children() {return this.childNodes.filter(n=>n.tag!=="#text");}
+  focus() {}
+  removeAttribute(key) {delete this.attributes[key];}
+  querySelectorAll(tag) {return walk(this).filter(n=>n.tag===tag);}
   get classList() {return {toggle:(name)=>{const classes=new Set((this.className||"").split(/\s+/));const enabled=!classes.has(name);if(enabled)classes.add(name);else classes.delete(name);this.className=[...classes].join(" ");return enabled;},add:()=>{},remove:()=>{}};}
   querySelector(selector) {return walk(this).find(n=>selector.startsWith(".")?(n.className||"").split(/\s+/).includes(selector.slice(1)):selector==="[data-more]"?n.dataset.more!==undefined:false)||null;}
   get textContent() {return this.text+this.childNodes.map(n=>n.textContent??"").join("");}
@@ -95,4 +99,66 @@ test("el catálogo usa tres selectores y conserva el filtro de característica e
   assert.equal(filter.children.find(n=>n.getAttribute("value")==="coop").getAttribute("selected"),"");
   await new Promise(resolve=>timer(resolve,580));assert.equal(calls[0].tag,"coop");
   filter.events.change({target:{value:""}});await new Promise(resolve=>timer(resolve,580));assert.equal(calls.at(-1).tag,"");
+});
+
+test("el panel conserva sus tres pestañas y el contexto al cambiar entre juego y estudio",async t=>{
+  dom(t);
+  const oldUser=state.user,oldFrame=globalThis.requestAnimationFrame;
+  const oldApi={gameAnalytics:api.gameAnalytics,studioAnalytics:api.studioAnalytics,overview:api.overview,
+    developerReviews:api.developerReviews,developerAssistant:api.developerAssistant};
+  t.after(()=>{state.user=oldUser;globalThis.requestAnimationFrame=oldFrame;Object.assign(api,oldApi);});
+  state.user={id:1,role:"desarrollador"};
+  globalThis.requestAnimationFrame=()=>{};
+  const studio="Estudio & títulos";
+  const game={id:83,nombre:"Juego A",desarrollador:studio,steam_app_id:32};
+  const games=[game,{id:84,nombre:"Juego B"}];
+  const counts={positivo:0,neutro:0,negativo:1};
+  const reference={cita:"Fragmento original",review_id:513};
+  const base={resenas:{analizadas:1,pendientes:0,distribucion:counts,sentimiento_neto:-1},
+    aspectos:[{aspecto:"optimizacion",menciones:1,distribucion:counts,sentimiento_neto:-1}],
+    referencias_negativas:{optimizacion:[reference]}};
+  api.gameAnalytics=async()=>({...base,juego:game,juegos_del_estudio:games});
+  api.studioAnalytics=async name=>{assert.equal(name,studio);return {...base,estudio:studio,
+    juegos:games.map(game=>({...game,resenas_analizadas:1,distribucion:counts,sentimiento_neto:-1}))};};
+  api.overview=async()=>null;
+  const reviews=[];
+  api.developerReviews=async query=>{
+    reviews.push(query);
+    return {total:1,undated:0,items:[{id:513,game_id:83,game_name:game.nombre,source:"steam",aspects:[],
+      content:"Texto completo. ".repeat(24)}]};
+  };
+  const questions=[];
+  api.developerAssistant=async query=>{
+    questions.push(query);return {title:"Respuesta",answer:"Consulta del estudio",actions:[],evidence:[]};
+  };
+  const checkTabs=root=>{
+    const tabs=walk(root).filter(n=>n.getAttribute("role")==="tab");
+    assert.deepEqual(tabs.map(n=>n.textContent),["Resumen","Reseñas","Audiencias"],root.textContent);return tabs;
+  };
+  const selector=root=>walk(root).find(n=>n.className==="dev-report-scope").children[1];
+  const gameView=await developerGameView({params:{id:83}});
+  const gameTabs=checkTabs(gameView);
+  assert.equal(selector(gameView).value,"83");
+  walk(gameView).find(n=>n.getAttribute("aria-label")==="Ver reseñas sobre Optimización").events.click();
+  assert.equal(reviews.at(-1).aspect,"optimizacion");
+  assert.equal(gameTabs[1].getAttribute("aria-selected"),"true");
+  walk(gameView).find(n=>n.tag==="button"&&n.textContent==="Ver reseña completa").events.click();
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(reviews.at(-1).game_id,83);
+  assert.equal(reviews.at(-1).review_id,513);
+  assert.equal(walk(gameView).find(n=>n.className==="review-read-more").getAttribute("aria-expanded"),"true");
+  selector(gameView).events.change({target:{value:"studio"}});
+  assert.equal(window.location.hash,"/dev?estudio=Estudio+%26+t%C3%ADtulos&seccion=resenas");
+  const studioView=await developerView({query:new URLSearchParams(window.location.hash.split("?")[1])});
+  const studioTabs=checkTabs(studioView);
+  assert.equal(studioTabs[1].getAttribute("aria-selected"),"true");
+  assert.equal(selector(studioView).value,"studio");
+  selector(studioView).events.change({target:{value:"84"}});
+  assert.equal(window.location.hash,"/dev/juego/84?seccion=resenas");
+  const assistant=walk(studioView).find(n=>n.tag==="details"&&n.children[0].textContent==="Asistente del informe");
+  assert.ok(assistant);
+  assert.equal(assistant.getAttribute("open"),null);
+  walk(assistant).find(n=>n.textContent==="¿Qué conviene mejorar?"&&n.tag==="button").events.click();
+  assert.equal(questions[0].studio,studio);
+  assert.ok(!("game_id" in questions[0]));
 });

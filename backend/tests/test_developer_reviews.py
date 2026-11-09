@@ -64,6 +64,24 @@ def test_negative_aspect_in_positive_review(client, data, evidence):
     assert [r['id'] for r in global_negative['items']] == [evidence[1].id]
 
 
+def test_report_fragment_opens_exact_review_only_in_its_scope(client, data, evidence):
+    headers = auth(client, 'dev')
+    review = evidence[0]
+    for path in (f'/api/v1/analytics/games/{review.game_id}', '/api/v1/analytics/studio'):
+        report = client.get(path, headers=headers).json()
+        choices = report.get('juegos_del_estudio', report.get('juegos'))
+        assert {game['id'] for game in choices} == {data['breve'].id, data['largo'].id}
+        reference = report['referencias_negativas']['optimizacion'][0]
+        assert reference == {'cita': 'el rendimiento es pésimo', 'review_id': review.id}
+        assert report['citas_negativas']['optimizacion'] == [reference['cita']]
+    url = '/api/v1/analytics/reviews'
+    params = {'studio': 'Estudio Test', 'review_id': review.id}
+    result = client.get(url, headers=headers, params=params).json()
+    assert [(item['id'], item['content']) for item in result['items']] == [(review.id, review.content)]
+    assert client.get(url, headers=headers, params={**params, 'studio': 'Otro'}).json()['total'] == 0
+    assert client.get(url, headers=headers, params={**params, 'review_id': evidence[3].id}).json()['total'] == 0
+
+
 def test_date_filter_uses_original_date_and_full_last_day(client, data, evidence):
     result=client.get('/api/v1/analytics/reviews',headers=auth(client,'dev'),
                       params={'date_from':'2024-02-01','date_to':'2024-02-01'}).json()
@@ -78,6 +96,7 @@ def test_date_filter_uses_original_date_and_full_last_day(client, data, evidence
     ({'date_from':'2024-03-01','date_to':'2024-02-01'},422),
     ({'date_to':'9999-12-31'},422),({'aspect':'inventado'},422),
     ({'limit':101},422),({'offset':-1},422),({'sort':'invalid'},422),
+    ({'review_id':0},422),
 ])
 def test_invalid_filters(client, data, evidence, params, status):
     assert client.get('/api/v1/analytics/reviews',headers=auth(client,'dev'),params=params).status_code == status

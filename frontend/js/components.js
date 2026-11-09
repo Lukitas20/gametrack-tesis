@@ -263,7 +263,7 @@ export function aspectChip(aspect) {
 }
 
 let reviewBodySequence=0;
-export function reviewItem(review) {
+export function reviewItem(review, { expanded = false } = {}) {
   const steam=review.source==="steam";
   const author=review.author_name&&review.author_name!=="Jugador de Steam"?review.author_name:(steam?"Autor no disponible":"Jugador");
   const rawDate=steam ? review.published_at : review.created_at;
@@ -271,12 +271,12 @@ export function reviewItem(review) {
   const date=rawDate ? new Date(normalizedDate) : null,validDate=date && Number.isFinite(date.getTime());
   const content=(review.content||"").replace(/\r\n?/g,"\n").replace(/\n[ \t]*\n(?:[ \t]*\n)+/g,"\n\n").trim();
   const long=content.length>280||content.split("\n").length>5;
-  const body=h("p",{class:`review-body${long?" is-collapsed":""}`,id:`review-text-${++reviewBodySequence}`},content);
-  const expand=long?h("button",{class:"review-read-more",type:"button","aria-expanded":"false","aria-controls":body.id,onClick:()=>{
+  const body=h("p",{class:`review-body${long&&!expanded?" is-collapsed":""}`,id:`review-text-${++reviewBodySequence}`},content);
+  const expand=long?h("button",{class:"review-read-more",type:"button","aria-expanded":String(expanded),"aria-controls":body.id,onClick:()=>{
     const collapsed=body.classList.toggle("is-collapsed");
     expand.setAttribute("aria-expanded",String(!collapsed));
     expand.textContent=collapsed?"Leer reseña completa":"Mostrar menos";
-  }},"Leer reseña completa"):null;
+  }},expanded?"Mostrar menos":"Leer reseña completa"):null;
   const recommendation=typeof review.is_recommended==="boolean"?h("span",{class:"game-review-verdict",dataset:{recommended:String(review.is_recommended)}},
     icon(review.is_recommended?"check":"x",13),review.is_recommended?"Recomendado":"No recomendado"):null;
   return h("article",{class:"review game-real-review clean-review",dataset:{reviewId:review.id}},

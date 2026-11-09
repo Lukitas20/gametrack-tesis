@@ -528,35 +528,38 @@ def aspect_scores_by_game(
     return result
 
 
-def _evidence_samples(db: Session, game_ids: list[int], limit: int = 3) -> dict[str, list[str]]:
+def _negative_evidence(db: Session, game_ids: list[int], limit: int = 3) -> dict:
     """Citas textuales que respaldan la valoración negativa de cada aspecto.
 
     Se deduplica el texto: varias reseñas pueden coincidir en la frase exacta y
     repetir la misma cita no agrega evidencia, sólo ocupa lugar en el panel.
     """
-    samples: dict[str, list[str]] = {}
+    samples: dict[str, list[dict]] = {}
     for aspect in Aspect:
-        rows = db.scalars(
-            select(ReviewAspect.evidence)
+        rows = db.execute(
+            select(ReviewAspect.evidence, ReviewAspect.review_id)
             .where(
                 ReviewAspect.game_id.in_(game_ids),
                 ReviewAspect.aspect == aspect,
                 ReviewAspect.sentiment == Sentiment.NEGATIVE,
                 ReviewAspect.evidence.is_not(None),
             )
-            .order_by(ReviewAspect.score)
-        ).all()
+            .order_by(ReviewAspect.score, ReviewAspect.review_id)
+        )
 
-        unique: list[str] = []
-        for row in rows:
-            text = row.strip()
-            if text and text not in unique:
-                unique.append(text)
+        unique: dict[str, int] = {}
+        for evidence, review_id in rows:
+            quote = evidence.strip()
+            if quote:
+                unique.setdefault(quote, review_id)
             if len(unique) == limit:
                 break
         if unique:
-            samples[aspect.value] = unique
-    return samples
+            samples[aspect.value] = [{"cita": quote, "review_id": review_id} for quote, review_id in unique.items()]
+    return {
+        "citas_negativas": {aspect: [row["cita"] for row in rows] for aspect, rows in samples.items()},
+        "referencias_negativas": samples,
+    }
 
 
 def game_analytics(db: Session, game: Game) -> dict:
@@ -602,7 +605,7 @@ def game_analytics(db: Session, game: Game) -> dict:
         "aspectos": breakdown,
         "punto_debil": breakdown[0]["aspecto"] if breakdown else None,
         "punto_fuerte": breakdown[-1]["aspecto"] if breakdown else None,
-        "citas_negativas": _evidence_samples(db, [game.id]),
+        **_negative_evidence(db, [game.id]),
     }
 
 
@@ -684,7 +687,7 @@ def studio_analytics(db: Session, studio: str) -> dict:
             "sentimiento_neto": _net_score(distribution),
         },
         "aspectos": aspect_breakdown(db, game_ids),
-        "citas_negativas": _evidence_samples(db, game_ids, limit=5),
+        **_negative_evidence(db, game_ids, limit=5),
     }
 
 

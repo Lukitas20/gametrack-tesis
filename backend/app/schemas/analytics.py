@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from typing import Any
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from app.schemas.interaction import ReviewOut
 
 
@@ -160,6 +160,17 @@ class AudienceReport(BaseModel):
     steam_histories: SteamHistoryReport | None = None
 
 
+class NegativeEvidenceReference(BaseModel):
+    cita: str
+    review_id: int
+
+
+class ReportGameOption(BaseModel):
+    id: int
+    nombre: str
+    steam_app_id: int | None = None
+
+
 class GameAnalyticsOut(BaseModel):
     juego: GameHeader
     resenas: ReviewSummary
@@ -168,6 +179,8 @@ class GameAnalyticsOut(BaseModel):
     punto_fuerte: str | None
     # Aspecto -> citas textuales que respaldan la valoración negativa.
     citas_negativas: dict[str, list[str]]
+    referencias_negativas: dict[str, list[NegativeEvidenceReference]] = Field(default_factory=dict)
+    juegos_del_estudio: list[ReportGameOption] = Field(default_factory=list)
     trained_ai: TrainedReviewReport | None = None
     audience: AudienceReport | None = None
 
@@ -194,6 +207,7 @@ class StudioAnalyticsOut(BaseModel):
     resenas: ReviewSummary
     aspectos: list[AspectBreakdown]
     citas_negativas: dict[str, list[str]] = {}
+    referencias_negativas: dict[str, list[NegativeEvidenceReference]] = Field(default_factory=dict)
     trained_ai: TrainedReviewReport | None = None
     audience: AudienceReport | None = None
 
