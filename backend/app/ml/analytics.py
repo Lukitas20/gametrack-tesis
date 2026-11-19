@@ -44,16 +44,10 @@ from app.ml.lexicon import (
     SENTIMENT_LEXICON,
     STRONG_TERM_THRESHOLD,
 )
-from app.models import Aspect, Game, Review, ReviewAspect, Sentiment
+from app.models import Aspect, Game, Rating, Review, ReviewAspect, Sentiment
 
-# Umbral de la banda neutra sobre la polaridad [-1, 1].
 NEUTRAL_BAND = 0.25
-# Cuando una cláusula menciona varios aspectos, se conservan los que llegan a
-# esta fracción del aspecto dominante. Un valor alto favorece la precisión,
-# que es lo que importa en un panel de analítica.
 ASPECT_TIE_RATIO = 0.9
-# La negación invierte la polaridad pero la atenúa: "no es bueno" es menos
-# intenso que "es malo".
 NEGATION_FACTOR = 0.7
 
 _MAX_NGRAM = 3
@@ -65,9 +59,6 @@ _CONTRASTIVE_RE = re.compile(
 )
 
 
-# ---------------------------------------------------------------------------
-# Resultados
-# ---------------------------------------------------------------------------
 
 
 @dataclass(frozen=True)
@@ -87,9 +78,6 @@ class TextAnalysis:
     aspects: list[AspectOpinion] = field(default_factory=list)
 
 
-# ---------------------------------------------------------------------------
-# Normalización y segmentación
-# ---------------------------------------------------------------------------
 
 
 def normalize_text(text: str) -> str:
@@ -119,17 +107,12 @@ def split_into_clauses(text: str) -> list[list[str]]:
 
         clauses: list[str] = []
         for chunk in _CLAUSE_SPLIT.split(sentence):
-            # El conector adversativo se conserva al inicio de la cláusula
-            # siguiente; no aporta polaridad propia pero facilita la lectura
-            # de la evidencia guardada.
             parts = _CONTRASTIVE_RE.split(normalize_text(chunk))
             if len(parts) == 1:
                 if chunk.strip():
                     clauses.append(chunk.strip())
                 continue
 
-            # Se reparte el texto original usando las posiciones de los cortes
-            # detectados sobre la versión normalizada (misma longitud).
             offsets = [m.start() for m in _CONTRASTIVE_RE.finditer(normalize_text(chunk))]
             previous = 0
             for offset in offsets:
@@ -146,9 +129,6 @@ def split_into_clauses(text: str) -> list[list[str]]:
     return sentences
 
 
-# ---------------------------------------------------------------------------
-# Emparejamiento con los vocabularios
-# ---------------------------------------------------------------------------
 
 
 def _lookup(key: str, vocabulary: dict[str, float]) -> float | None:
@@ -209,9 +189,6 @@ def score_polarity(tokens: list[str]) -> tuple[float, int]:
         if any(token in NEGATORS for token in window) and not is_exception:
             weight = -weight * NEGATION_FACTOR
 
-        # Los modificadores se buscan a ambos lados: en español el adjetivo
-        # suele ir detrás del sustantivo ("decepción enorme", "tirones
-        # constantes"), así que mirar sólo hacia atrás pierde la mitad.
         span = len(key.split())
         neighbourhood = (
             tokens[max(0, start - 2) : start] + tokens[start + span : start + span + 2]
@@ -271,9 +248,6 @@ def _confidence(score: float, matches: int) -> float:
     return round(min(1.0, 0.4 + 0.12 * matches + 0.4 * abs(score)), 3)
 
 
-# ---------------------------------------------------------------------------
-# Análisis completo
-# ---------------------------------------------------------------------------
 
 
 def analyze_text(text: str) -> TextAnalysis:
@@ -281,7 +255,6 @@ def analyze_text(text: str) -> TextAnalysis:
     if not text or not text.strip():
         return TextAnalysis(sentiment=Sentiment.NEUTRAL, score=0.0, confidence=0.0)
 
-    # aspecto -> (suma de polaridad, cantidad de cláusulas, términos, evidencia)
     per_aspect: dict[Aspect, list[tuple[float, int, str]]] = {}
     global_scores: list[float] = []
     global_matches = 0
@@ -302,8 +275,6 @@ def analyze_text(text: str) -> TextAnalysis:
             if aspects:
                 previous_aspects = aspects
             else:
-                # La opinión continúa sobre el tema de la cláusula anterior:
-                # "el gameplay es correcto aunque le falta profundidad".
                 aspects = previous_aspects
 
             for aspect in aspects:
@@ -315,10 +286,8 @@ def analyze_text(text: str) -> TextAnalysis:
     for aspect, entries in per_aspect.items():
         total_matches = sum(matches for _score, matches, _clause in entries)
         if total_matches == 0:
-            # El aspecto se mencionó pero no se opinó sobre él.
             continue
         score = sum(score for score, _m, _c in entries) / len(entries)
-        # Como evidencia se usa la cláusula de opinión más intensa.
         evidence = max(
             (entry for entry in entries if entry[1] > 0),
             key=lambda entry: abs(entry[0]),
@@ -379,7 +348,8 @@ def apply_analysis(db: Session, review: Review, analysis: TextAnalysis) -> None:
 
 
 def analyze_pending_reviews(
-    db: Session, limit: int | None = None, reanalyze: bool = False
+    db: Session, limit: int | None = None, reanalyze: bool = False,
+    game_ids: list[int] | None = None,
 ) -> int:
     """Procesa las reseñas sin analizar y persiste el resultado.
 
@@ -392,8 +362,13 @@ def analyze_pending_reviews(
         La cantidad de reseñas procesadas.
     """
     query = select(Review)
+    if game_ids is not None:
+        if not game_ids:
+            return 0
+        query = query.where(Review.game_id.in_(game_ids))
     if not reanalyze:
         query = query.where(Review.is_analyzed.is_(False))
+    query = query.order_by(Review.id)
     if limit:
         query = query.limit(limit)
 
@@ -406,9 +381,6 @@ def analyze_pending_reviews(
     return processed
 
 
-# ---------------------------------------------------------------------------
-# Agregación para el panel de desarrollador
-# ---------------------------------------------------------------------------
 
 
 def _distribution(rows: list[tuple[Sentiment, int]]) -> dict[str, int]:
@@ -426,9 +398,9 @@ def _net_score(counts: dict[str, int]) -> float:
     return round((counts["positivo"] - counts["negativo"]) / total, 3)
 
 
-def aspect_breakdown(db: Session, game_ids: list[int]) -> list[dict]:
+def aspect_breakdown(db: Session, game_ids: list[int] | None = None) -> list[dict]:
     """Desglose por aspecto para un conjunto de juegos."""
-    if not game_ids:
+    if game_ids is not None and not game_ids:
         return []
 
     rows = db.execute(
@@ -438,7 +410,7 @@ def aspect_breakdown(db: Session, game_ids: list[int]) -> list[dict]:
             func.count(ReviewAspect.id),
             func.avg(ReviewAspect.score),
         )
-        .where(ReviewAspect.game_id.in_(game_ids))
+        .where(ReviewAspect.game_id.in_(game_ids if game_ids is not None else select(Game.id)))
         .group_by(ReviewAspect.aspect, ReviewAspect.sentiment)
     ).all()
 
@@ -469,35 +441,86 @@ def aspect_breakdown(db: Session, game_ids: list[int]) -> list[dict]:
     return breakdown
 
 
-def _evidence_samples(db: Session, game_ids: list[int], limit: int = 3) -> dict[str, list[str]]:
+def aspect_scores_by_game(
+    db: Session, game_ids: list[int], aspect: Aspect
+) -> dict[int, dict]:
+    """Sentimiento real de un aspecto puntual, juego por juego.
+
+    A diferencia de ``aspect_breakdown`` (que agrega un conjunto de juegos en
+    un solo número, para el panel de estudio), esto mantiene un puntaje por
+    juego: lo usa el asistente "¿Qué jugamos hoy?" para ordenar por lo que
+    las reseñas reales dicen de ese aspecto puntual, no sólo por género.
+    """
+    if not game_ids:
+        return {}
+
+    rows = db.execute(
+        select(ReviewAspect.game_id, func.avg(ReviewAspect.score), func.count(ReviewAspect.id))
+        .where(ReviewAspect.game_id.in_(game_ids), ReviewAspect.aspect == aspect)
+        .group_by(ReviewAspect.game_id)
+    ).all()
+    result = {
+        game_id: {"score": round(float(avg_score or 0.0), 3), "mentions": count, "evidence": None}
+        for game_id, avg_score, count in rows
+    }
+    if not result:
+        return result
+
+    evidence_rows = db.execute(
+        select(ReviewAspect.game_id, ReviewAspect.evidence, ReviewAspect.score,
+               ReviewAspect.sentiment, ReviewAspect.id)
+        .where(
+            ReviewAspect.game_id.in_(result.keys()),
+            ReviewAspect.aspect == aspect,
+            ReviewAspect.evidence.is_not(None),
+        )
+    )
+    best: dict[int, tuple] = {}
+    for game_id, evidence, score, sentiment, aspect_id in evidence_rows:
+        if not evidence or not evidence.strip():
+            continue
+        average = result[game_id]["score"]
+        if sentiment != label_from_score(average):
+            continue
+        key = (abs(score - average), aspect_id)
+        if game_id not in best or key < best[game_id]:
+            best[game_id] = key
+            result[game_id]["evidence"] = evidence
+    return result
+
+
+def _negative_evidence(db: Session, game_ids: list[int], limit: int = 3) -> dict:
     """Citas textuales que respaldan la valoración negativa de cada aspecto.
 
     Se deduplica el texto: varias reseñas pueden coincidir en la frase exacta y
     repetir la misma cita no agrega evidencia, sólo ocupa lugar en el panel.
     """
-    samples: dict[str, list[str]] = {}
+    samples: dict[str, list[dict]] = {}
     for aspect in Aspect:
-        rows = db.scalars(
-            select(ReviewAspect.evidence)
+        rows = db.execute(
+            select(ReviewAspect.evidence, ReviewAspect.review_id)
             .where(
                 ReviewAspect.game_id.in_(game_ids),
                 ReviewAspect.aspect == aspect,
                 ReviewAspect.sentiment == Sentiment.NEGATIVE,
                 ReviewAspect.evidence.is_not(None),
             )
-            .order_by(ReviewAspect.score)
-        ).all()
+            .order_by(ReviewAspect.score, ReviewAspect.review_id)
+        )
 
-        unique: list[str] = []
-        for row in rows:
-            text = row.strip()
-            if text and text not in unique:
-                unique.append(text)
+        unique: dict[str, int] = {}
+        for evidence, review_id in rows:
+            quote = evidence.strip()
+            if quote:
+                unique.setdefault(quote, review_id)
             if len(unique) == limit:
                 break
         if unique:
-            samples[aspect.value] = unique
-    return samples
+            samples[aspect.value] = [{"cita": quote, "review_id": review_id} for quote, review_id in unique.items()]
+    return {
+        "citas_negativas": {aspect: [row["cita"] for row in rows] for aspect, rows in samples.items()},
+        "referencias_negativas": samples,
+    }
 
 
 def game_analytics(db: Session, game: Game) -> dict:
@@ -517,6 +540,9 @@ def game_analytics(db: Session, game: Game) -> dict:
     )
 
     breakdown = aspect_breakdown(db, [game.id])
+    local_average, local_count = db.execute(
+        select(func.avg(Rating.score), func.count(Rating.id)).where(Rating.game_id == game.id)
+    ).one()
 
     return {
         "juego": {
@@ -524,6 +550,10 @@ def game_analytics(db: Session, game: Game) -> dict:
             "nombre": game.name,
             "slug": game.slug,
             "desarrollador": game.developer,
+            "background_image": game.background_image,
+            "steam_app_id": game.steam_app_id,
+            "rating_local_promedio": round(float(local_average), 2) if local_count else None,
+            "cantidad_ratings_local": local_count,
             "rating_promedio": game.avg_rating,
             "cantidad_ratings": game.ratings_count,
         },
@@ -536,13 +566,15 @@ def game_analytics(db: Session, game: Game) -> dict:
         "aspectos": breakdown,
         "punto_debil": breakdown[0]["aspecto"] if breakdown else None,
         "punto_fuerte": breakdown[-1]["aspecto"] if breakdown else None,
-        "citas_negativas": _evidence_samples(db, [game.id]),
+        **_negative_evidence(db, [game.id]),
     }
 
 
 def studio_analytics(db: Session, studio: str) -> dict:
     """Informe agregado de todos los juegos de un estudio."""
-    games = db.scalars(select(Game).where(Game.developer == studio)).all()
+    games = db.scalars(select(Game).where(
+        func.lower(func.trim(Game.developer)) == studio.strip().lower()
+    )).all()
     game_ids = [game.id for game in games]
 
     if not game_ids:
@@ -561,8 +593,20 @@ def studio_analytics(db: Session, studio: str) -> dict:
     ).all()
     distribution = _distribution([(s, c) for s, c in sentiment_rows if s is not None])
 
+    pending = db.scalar(select(func.count(Review.id)).where(
+        Review.game_id.in_(game_ids), Review.is_analyzed.is_(False)
+    )) or 0
+    totals = dict(db.execute(select(Review.game_id, func.count(Review.id))
+                            .where(Review.game_id.in_(game_ids)).group_by(Review.game_id)).all())
+    local_ratings = {
+        game_id: (round(float(average), 2), count)
+        for game_id, average, count in db.execute(
+            select(Rating.game_id, func.avg(Rating.score), func.count(Rating.id))
+            .where(Rating.game_id.in_(game_ids)).group_by(Rating.game_id)
+        )
+    }
     per_game = []
-    for game in sorted(games, key=lambda g: g.avg_rating, reverse=True):
+    for game in sorted(games, key=lambda g: g.popularity_score, reverse=True):
         game_distribution = _distribution(
             [
                 (s, c)
@@ -578,11 +622,13 @@ def studio_analytics(db: Session, studio: str) -> dict:
             {
                 "id": game.id,
                 "nombre": game.name,
+                "background_image": game.background_image,
+                "steam_app_id": game.steam_app_id,
+                "rating_local_promedio": local_ratings.get(game.id, (None, 0))[0],
+                "cantidad_ratings_local": local_ratings.get(game.id, (None, 0))[1],
                 "rating_promedio": game.avg_rating,
-                "cantidad_resenas": game.reviews_count,
-                # Se devuelve el reparto completo, no sólo el neto: con el neto
-                # solo, el frontend tendría que reconstruirlo y el resultado
-                # sería una aproximación presentada como dato real.
+                "cantidad_ratings": game.ratings_count,
+                "cantidad_resenas": totals.get(game.id, 0),
                 "distribucion": game_distribution,
                 "resenas_analizadas": sum(game_distribution.values()),
                 "sentimiento_neto": _net_score(game_distribution),
@@ -594,11 +640,12 @@ def studio_analytics(db: Session, studio: str) -> dict:
         "juegos": per_game,
         "resenas": {
             "analizadas": sum(distribution.values()),
+            "pendientes": pending,
             "distribucion": distribution,
             "sentimiento_neto": _net_score(distribution),
         },
         "aspectos": aspect_breakdown(db, game_ids),
-        "citas_negativas": _evidence_samples(db, game_ids, limit=5),
+        **_negative_evidence(db, game_ids, limit=5),
     }
 
 
@@ -615,10 +662,9 @@ def platform_overview(db: Session) -> dict:
             if s is not None
         ]
     )
-    all_ids = list(db.scalars(select(Game.id)))
     return {
         "resenas_analizadas": sum(distribution.values()),
         "distribucion": distribution,
         "sentimiento_neto": _net_score(distribution),
-        "aspectos": aspect_breakdown(db, all_ids),
+        "aspectos": aspect_breakdown(db),
     }

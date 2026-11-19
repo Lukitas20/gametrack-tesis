@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, String, Text, UniqueConstraint, func
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, String, Text, UniqueConstraint, false, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.database import Base
@@ -13,13 +13,14 @@ from app.db.types import enum_column
 from app.models.enums import UserRole
 
 if TYPE_CHECKING:
-    from app.models.game import Game, Genre
+    from app.models.steam_auth import SteamIdentity
+    from app.models.game import Genre
     from app.models.game_list import GameList
     from app.models.interaction import Rating, Review
 
 
 class User(Base):
-    """Usuario de la plataforma: jugador o desarrollador."""
+    """Una cuenta de un único tipo, elegido durante el registro."""
 
     __tablename__ = "users"
 
@@ -32,20 +33,27 @@ class User(Base):
     avatar_url: Mapped[str | None] = mapped_column(Text)
     bio: Mapped[str | None] = mapped_column(Text)
 
-    # --- Cuenta de Steam vinculada ----------------------------------------
-    # Permite entrar sin contraseña y, con STEAM_API_KEY configurada, importar
-    # la biblioteca del usuario como historial inicial. Es la vía más directa
-    # para que una cuenta nueva salga del arranque en frío.
     steam_id: Mapped[str | None] = mapped_column(String(20), unique=True, index=True)
     steam_username: Mapped[str | None] = mapped_column(String(100))
     steam_avatar_url: Mapped[str | None] = mapped_column(Text)
+    steam_identity: Mapped[SteamIdentity | None] = relationship(
+        "SteamIdentity", uselist=False, cascade="all, delete-orphan"
+    )
+
+    @property
+    def steam_verified(self) -> bool:
+        return self.steam_identity is not None and self.steam_identity.steam_id == self.steam_id
 
     role: Mapped[UserRole] = mapped_column(
         enum_column(UserRole), default=UserRole.PLAYER, index=True
     )
-    # Solo para el rol desarrollador: estudio al que pertenece. Permite filtrar
-    # el dashboard de analítica a los juegos de ese estudio.
+    developer_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    onboarding_step: Mapped[str | None] = mapped_column(String(20))
+    analysis_game_id: Mapped[int | None] = mapped_column(
+        ForeignKey("games.id", ondelete="SET NULL")
+    )
     studio: Mapped[str | None] = mapped_column(String(120), index=True)
+    preferences_source: Mapped[str | None] = mapped_column(String(20))
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
@@ -71,7 +79,12 @@ class User(Base):
 
     @property
     def is_developer(self) -> bool:
-        return self.role is UserRole.DEVELOPER
+        return self.role is UserRole.DEVELOPER and self.onboarding_step != "choose"
+
+    @property
+    def genres(self) -> list[Genre]:
+        """Géneros elegidos en el onboarding, para mostrarlos en el perfil."""
+        return [preference.genre for preference in self.preferences]
 
     def __repr__(self) -> str:
         return f"<User {self.id} {self.username} ({self.role.value})>"
@@ -94,7 +107,6 @@ class UserPreference(Base):
     genre_id: Mapped[int] = mapped_column(
         ForeignKey("genres.id", ondelete="CASCADE"), index=True
     )
-    # Intensidad de la preferencia en el rango [0, 1].
     weight: Mapped[float] = mapped_column(Float, default=1.0)
 
     created_at: Mapped[datetime] = mapped_column(

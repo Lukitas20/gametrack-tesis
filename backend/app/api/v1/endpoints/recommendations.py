@@ -1,23 +1,132 @@
 """Recomendaciones personalizadas para el rol jugador."""
 
-from fastapi import APIRouter, Depends, Query
+from typing import Literal
+from math import isfinite
+
+from fastapi import APIRouter, Depends, Path, Query, Response
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, require_player
 from app.core.config import settings
 from app.db.database import get_db
-from app.ml.recommender import recommend_for_user
+from app.ml.recommender import recommend_for_user, get_engine
 from app.models import Game, Rating, User
 from app.schemas.game import GameSummary
 from app.schemas.recommendation import RecommendationOut, RecommendationResponse
 
+from app.schemas.gametrack_score import DiscoveryResponse, GameTrackScore, ExplanationQuestion, GameExplanation, GameComparison, GameComparisonRequest
+
 router = APIRouter(prefix="/recommendations", tags=["recomendaciones"])
+
+
+def _public_affinity_status(status, *, used_items=0):
+    """Publicar procedencia y disponibilidad, nunca datos o rutas del artefacto."""
+    allowed = {"status", "source", "model_version", "trained_at", "training_observations",
+               "training_examples", "history_examples", "dataset_fingerprint", "message"}
+    public = {key: value for key, value in status.items() if key in allowed}
+    public["heads"] = {key: value for key, value in status.get("heads", {}).items()
+                       if key in {"explicit", "hours"} and type(value) is bool}
+    public.update(used=used_items > 0, used_items=used_items)
+    return public
+
+
+@router.get("/affinity-model")
+def affinity_model_status(response: Response, user: User = Depends(get_current_user)):
+    """Estado de sólo lectura, disponible para jugadores y desarrolladores."""
+    from app.services.steam_affinity_service import load_affinity_model
+    response.headers["Cache-Control"] = "no-store"
+    _, status = load_affinity_model()
+    public = _public_affinity_status(status)
+    public["message"] = ("El modelo está disponible; consultar su estado no calcula una recomendación personal."
+                         if status.get("status") == "ready" else status.get("message", "El motor sigue disponible."))
+    return public
+
+
+def personal_score_user(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    from app.services.friendship_service import require_player
+    from app.services.steam_review_service import prepare_personal_history
+    require_player(user)
+    if user.steam_verified:
+        prepare_personal_history(db, user)
+    return user
+
+
+@router.get('/upcoming/{appid}/explanation', response_model=GameExplanation)
+def upcoming_explanation(response: Response, appid: int = Path(gt=0, le=4294967295),
+                         user: User = Depends(personal_score_user), db: Session = Depends(get_db)):
+    from app.services.prelaunch_score_service import explain_upcoming
+    response.headers['Cache-Control'] = 'no-store'
+    return explain_upcoming(db,user,appid)
+
+
+@router.post('/upcoming/{appid}/explanation', response_model=GameExplanation)
+def ask_upcoming(payload: ExplanationQuestion, response: Response, appid: int = Path(gt=0, le=4294967295),
+                 user: User = Depends(personal_score_user), db: Session = Depends(get_db)):
+    from app.services.prelaunch_score_service import explain_upcoming
+    response.headers['Cache-Control'] = 'no-store'
+    return explain_upcoming(db,user,appid,payload.question)
+
+
+@router.get("/game/{game_id}/explanation", response_model=GameExplanation)
+def explain_personal_game(
+    game_id: int, response: Response,
+    user: User = Depends(personal_score_user), db: Session = Depends(get_db),
+):
+    from app.services.game_explanation_service import explain_game
+    response.headers["Cache-Control"] = "no-store"
+    return explain_game(db, user, game_id)
+
+
+@router.post("/game/{game_id}/explanation", response_model=GameExplanation)
+def ask_about_personal_game(
+    game_id: int, payload: ExplanationQuestion, response: Response,
+    user: User = Depends(personal_score_user), db: Session = Depends(get_db),
+):
+    from app.services.game_explanation_service import explain_game
+    response.headers["Cache-Control"] = "no-store"
+    return explain_game(db, user, game_id, payload.question)
+
+
+@router.post("/compare", response_model=GameComparison)
+def compare_personal_games(payload: GameComparisonRequest, response: Response,
+                           user: User = Depends(personal_score_user), db: Session = Depends(get_db)):
+    from app.services.game_comparison_service import compare_games
+    response.headers["Cache-Control"] = "no-store"
+    return compare_games(db,user,payload.game_ids)
+
+
+@router.get("/discovery", response_model=DiscoveryResponse)
+def discover_games(
+    response: Response,
+    mode: str = Query(default="affinity", pattern="^(affinity|critics|friends)$"),
+    limit: int = Query(default=8, ge=1, le=24),
+    friend_id: int | None = Query(default=None, gt=0),
+    user: User = Depends(personal_score_user),
+    db: Session = Depends(get_db),
+):
+    from app.services.gametrack_score_service import discovery
+    response.headers["Cache-Control"] = "no-store"
+    return discovery(db, user, mode, limit, friend_id)
+
+
+@router.get("/game/{game_id}/score", response_model=GameTrackScore)
+def personal_game_score(
+    game_id: int,
+    response: Response,
+    user: User = Depends(personal_score_user),
+    db: Session = Depends(get_db),
+):
+    from app.services.gametrack_score_service import game_score
+    response.headers["Cache-Control"] = "no-store"
+    return game_score(db, user, game_id)
 
 
 @router.get("", response_model=RecommendationResponse)
 def get_recommendations(
+    response: Response,
     limit: int = Query(default=10, ge=1, le=50),
+    company: Literal["solo", "amigos", "en-linea"] | None = None,
     strategy: str = Query(
         default="auto",
         pattern="^(auto|contenido|colaborativo|hibrido|popularidad)$",
@@ -26,7 +135,12 @@ def get_recommendations(
             "permite comparar los enfoques entre sí."
         ),
     ),
-    user: User = Depends(get_current_user),
+    discovery: str = Query(
+        default="balanced",
+        pattern="^(balanced|familiar|explore)$",
+        description="Equilibrio entre afinidad y variedad de la selección; no cambia la escala del índice.",
+    ),
+    user: User = Depends(require_player),
     db: Session = Depends(get_db),
 ) -> RecommendationResponse:
     """Juegos recomendados para el usuario autenticado.
@@ -34,20 +148,89 @@ def get_recommendations(
     La respuesta incluye el aporte de cada estrategia y el motivo en lenguaje
     natural, para que la recomendación sea auditable y no una caja negra.
     """
-    recommendations = recommend_for_user(db, user, limit=limit, strategy=strategy)
-
-    history_size = (
-        db.scalar(select(func.count(Rating.id)).where(Rating.user_id == user.id)) or 0
-    )
+    response.headers["Cache-Control"] = "no-store"
+    personal_context = None
+    if strategy == "auto":
+        from app.services.gametrack_score_service import score_context
+        personal_context = score_context(db,user)
+    recommendations = recommend_for_user(db, user, limit=limit, strategy=strategy,
+                                        discovery=discovery, _context=personal_context, company=company)
+    history_size = db.scalar(select(func.count(Rating.id)).where(Rating.user_id == user.id)) or 0
+    if personal_context and personal_context["has_history"]:
+        history_size = personal_context["history_size"]
     games = {
         game.id: game
         for game in db.scalars(
             select(Game).where(Game.id.in_([r.game_id for r in recommendations]))
         )
     }
+    if personal_context is not None:
+        weights = personal_context.get("affinity_weights", {})
+        supported = set()
+        for item in recommendations:
+            try:
+                weight = float(weights.get(item.game_id, 0.))
+            except (TypeError, ValueError, OverflowError):
+                continue
+            if item.game_id in games and isfinite(weight) and weight > 0:
+                supported.add(item.game_id)
+        affinity_model = _public_affinity_status(personal_context.get("affinity_status", {}), used_items=len(supported))
+        if supported:
+            affinity_model["message"] = "El modelo de afinidad aporta a juegos de esta selección según tu historial."
+        elif affinity_model.get("status") == "ready":
+            affinity_model["message"] = "Esta selección conserva el motor: ninguno de los juegos devueltos tiene un aporte del modelo de afinidad."
+    else:
+        from app.services.steam_affinity_service import load_affinity_model
+        _, model_status = load_affinity_model()
+        affinity_model = _public_affinity_status(model_status)
+        affinity_model["message"] = "Esta estrategia usa el motor; el modelo de afinidad no participa en esta selección."
+    sources = {r.source.value for r in recommendations}
+    effective_strategy = next(
+        (name for name in ("ia_local", "hibrido", "colaborativo", "contenido", "popularidad") if name in sources),
+        "popularidad",
+    )
+    if not recommendations:
+        profile_hint = "No quedan juegos disponibles para recomendar con los datos actuales."
+    elif effective_strategy == "ia_local":
+        profile_hint = "Un modelo entrenado con valoraciones cruza sus patrones con tus notas actuales. No usa una API de IA externa."
+    elif effective_strategy == "hibrido":
+        profile_hint = (
+            "Combinamos tus gustos con patrones de valoración entre juegos. "
+            "La señal colaborativa pesa más cuando tiene suficiente evidencia."
+        )
+    elif effective_strategy == "colaborativo":
+        profile_hint = (
+            "Usamos patrones de valoración compartidos entre juegos. "
+            "Los candidatos con poca evidencia se apoyan en la valoración general."
+        )
+    elif effective_strategy == "contenido":
+        profile_hint = (
+            "Usamos tus valoraciones y preferencias para comparar géneros y etiquetas. "
+            "Valorar juegos que te gustaron y otros que no ayuda a definir tu perfil."
+            if history_size else
+            "Partimos de los géneros que elegiste. Valorá algunos juegos para personalizar tu perfil."
+        )
+    else:
+        profile_hint = (
+            "La selección usa la valoración general y la cantidad de reseñas. "
+            "Elegí géneros o valorá juegos para sumar tus gustos al modo automático."
+        )
+    if recommendations and personal_context and personal_context["has_history"]:
+        profile_hint = "Usamos el mismo historial que GameTrackScore: tus notas, reseñas propias, experiencias y horas de Steam. Las opiniones negativas también ajustan la selección."
+    if affinity_model["used"]:
+        count = affinity_model["used_items"]
+        profile_hint += (f" La IA de afinidad entrenada con opiniones reales de Steam también aporta a {count} "
+                         + ("juego de esta selección." if count == 1 else "juegos de esta selección."))
+    if strategy != "auto" and strategy != effective_strategy and recommendations:
+        profile_hint = "La estrategia solicitada no tiene evidencia suficiente; usamos una alternativa. " + profile_hint
 
     return RecommendationResponse(
         strategy=strategy,
+        effective_strategy=effective_strategy,
+        discovery=discovery,
+        profile_hint=profile_hint,
+        local_model=get_engine(db).local_model_status,
+        affinity_model=affinity_model,
         history_size=history_size,
         cold_start=history_size < settings.REC_COLD_START_THRESHOLD,
         items=[
@@ -57,6 +240,7 @@ def get_recommendations(
                 source=r.source,
                 reason=r.reason,
                 components=r.components,
+                signals=r.signals,
             )
             for r in recommendations
             if r.game_id in games

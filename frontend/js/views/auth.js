@@ -1,108 +1,113 @@
-/* Selector de cuenta para la demostración, con acceso manual como alternativa. */
-
 import { navigate } from "../router.js";
-import { DEMO_ACCOUNTS, DEMO_PASSWORD, login, state } from "../store.js";
-import { h, icon, initials, toast } from "../ui.js";
+import { login, register, loginDestination, displayName } from "../store.js";
+import { h, icon, mount, toast } from "../ui.js";
+import { accessHeader, accessPath, accessPlan, plansView } from "./access-plans.js";
 
-async function enter(username, password = DEMO_PASSWORD) {
-  const user = await login(username, password);
-  toast(`Sesión iniciada como ${user.username}`);
-  navigate(user.role === "desarrollador" ? "/dev" : "/recomendaciones");
+function steamIcon() {
+  return h("span", { "aria-hidden": "true", html: '<svg viewBox="0 0 24 24" width="25" height="25" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="16.5" cy="7.5" r="5"/><circle cx="16.5" cy="7.5" r="2.7"/><circle cx="6.5" cy="17.5" r="3.7"/><path d="m9.8 19 8-6.7M6.8 13.8l4.8-6M0 13l7.6 3.2a1.9 1.9 0 0 1-1.5 3.5L0 17"/></svg>' });
 }
 
-export function accountsView() {
-  const wrap = h("div", { style: { maxWidth: "620px", margin: "0 auto" } });
-
-  const cards = DEMO_ACCOUNTS.map((account) =>
-    h(
-      "button",
-      {
-        class: "account-card",
-        onClick: async () => {
-          try {
-            await enter(account.username);
-          } catch (error) {
-            toast(error.message, "error");
-          }
-        },
-      },
-      // Las iniciales salen del usuario, no del nombre visible: dos cuentas
-      // "Cuenta Demo …" darían la misma sigla, y además así coincide con el
-      // avatar de la cabecera.
-      h("span", { class: "avatar" }, initials(account.username)),
-      h(
-        "span",
-        { style: { flex: "1", minWidth: "0" } },
-        h(
-          "span",
-          { class: "row", style: { gap: "var(--s-2)" } },
-          h("span", { class: "account-name" }, account.label),
-          h(
-            "span",
-            { class: "badge-role" },
-            icon(account.role === "desarrollador" ? "chart" : "user", 10),
-            account.role,
-          ),
-          state.user?.username === account.username &&
-            h("span", { class: "chip chip-accent" }, "Actual"),
+export function accountsView({ query = new URLSearchParams(), role } = {}) {
+  const invite = query.get("invitacion");
+  if (invite && /^[A-Za-z0-9_-]{32,64}$/.test(invite)) sessionStorage.setItem("gametrack.invite", invite);
+  if (!role && query.has("steam_error")) role = "jugador";
+  if (!["jugador", "desarrollador"].includes(role)) return plansView({ query });
+  const player = role === "jugador";
+  const selectedPlan = accessPlan(role, query.get("plan"));
+  let mode = query.get("modo") === "registro" ? "register" : "login";
+  let steamError = query.get("steam_error");
+  if (query.has("steam_error")) {
+    query.delete("steam_error");
+    history.replaceState(history.state, "", `#${accessPath(role, { plan: selectedPlan.id, register: mode === "register" })}`);
+  }
+  let busy = false;
+  const panel = h("section", { class: "auth-panel", "aria-label": player ? "Acceso de jugadores" : "Acceso de desarrolladores y estudios" });
+  function renderForm() {
+    const creating = mode === "register";
+    const error = h("p", { class: "auth-error", role: "alert", hidden: true });
+    const report = (message) => { error.textContent = message; error.hidden = false; };
+    const errors = {
+      cancelled: "Cancelaste el acceso con Steam. Podés volver a intentarlo.",
+      invalid: "No pudimos verificar el acceso con Steam. Volvé a intentarlo.",
+      expired: "El intento de acceso venció. Iniciá nuevamente con Steam.",
+      timeout: "Steam tardó demasiado en responder. Tocá Continuar con Steam para iniciar un nuevo intento.",
+      unavailable: "No pudimos conectar con Steam. Revisá tu conexión y tocá Continuar con Steam para reintentar.",
+      conflict: "Esta cuenta tiene una vinculación anterior. Entrá con tu usuario y verificá Steam desde tu perfil.",
+      linked: "Esa cuenta de Steam ya está vinculada a otro usuario de GameTrack.",
+      inactive: "Esta cuenta está desactivada.",
+    };
+    if (steamError !== null) {
+      report(errors[steamError] || errors.invalid);
+      steamError = null;
+    }
+    const tabs = h("div", { class: "auth-tabs", role: "group", "aria-label": "Tipo de acceso" });
+    for (const [value, label] of [["login", "Iniciar sesión"], ["register", "Crear cuenta"]]) {
+      tabs.append(h("button", { type: "button", class: mode === value ? "active" : "", "aria-pressed": String(mode === value), onClick: () => {
+        if (busy || mode === value) return;
+        mode = value; query.delete("steam_error");
+        history.replaceState(null, "", `#${accessPath(role, { plan: selectedPlan.id, register: mode === "register" })}`);
+        renderForm(); panel.querySelector("h2").focus();
+      } }, label));
+    }
+    const username = h("input", { id: "auth-username", name: "username", placeholder: "Tu nombre de usuario", autocomplete: "username", required: true, minlength: creating ? "3" : null, maxlength: "50", autocapitalize: "none", spellcheck: "false" });
+    const email = h("input", { id: "auth-email", name: "email", type: "email", placeholder: "vos@ejemplo.com", autocomplete: "email", required: true, maxlength: "255" });
+    const password = h("input", { id: "auth-password", name: "password", type: "password", placeholder: creating ? "Creá una contraseña" : "Tu contraseña", autocomplete: creating ? "new-password" : "current-password", required: true, minlength: creating ? "8" : null, maxlength: "128", "aria-describedby": creating ? "auth-password-help" : null });
+    const reveal = h("button", { class: "auth-reveal", type: "button", "aria-label": "Mostrar contraseña", "aria-pressed": "false", onClick: () => {
+      const show = password.type === "password"; password.type = show ? "text" : "password";
+      reveal.setAttribute("aria-label", show ? "Ocultar contraseña" : "Mostrar contraseña");
+      reveal.setAttribute("aria-pressed", String(show)); reveal.textContent = show ? "Ocultar" : "Mostrar";
+    } }, "Mostrar");
+    const confirm = h("input", { id: "auth-confirm", name: "confirm", type: "password", placeholder: "Repetí tu contraseña", autocomplete: "new-password", required: true, maxlength: "128" });
+    const strength = h("div", { class: "auth-strength", "aria-hidden": "true" }, h("i"), h("i"), h("i"), h("i"));
+    password.addEventListener("input", () => {
+      const n = password.value.length;
+      strength.dataset.level = String(n >= 16 ? 4 : n >= 12 ? 3 : n >= 8 ? 2 : n ? 1 : 0);
+      confirm.setCustomValidity("");
+    });
+    confirm.addEventListener("input", () => confirm.setCustomValidity(""));
+    const field = (label, input, extra) => h("div", { class: "auth-field" }, h("label", { for: input.id }, label), extra || input);
+    const submit = h("button", { class: "auth-submit", type: "submit" }, creating ? "Crear mi cuenta" : "Iniciar sesión", icon("chevron", 18));
+    const form = h("form", { id: "auth-form", class: "auth-form", "aria-labelledby": "auth-title", onSubmit: async (event) => {
+      event.preventDefault(); if (busy) return;
+      if (creating && password.value !== confirm.value) { confirm.setCustomValidity("Las contraseñas no coinciden."); confirm.reportValidity(); return; }
+      error.hidden = true; busy = true; form.setAttribute("aria-busy", "true");
+      panel.querySelectorAll("button, input").forEach(el => { el.disabled = true; });
+      submit.textContent = creating ? "Creando tu cuenta…" : "Entrando…";
+      try {
+        const user = creating ? await register({ username: username.value.trim(), email: email.value.trim(), password: password.value, role }) : await login(username.value.trim(), password.value, role);
+        toast(creating ? `¡Bienvenido a GameTrack, ${displayName(user)}!` : `¡Hola, ${displayName(user)}!`);
+        navigate(loginDestination(user));
+      } catch (failure) { report(failure instanceof TypeError ? "No pudimos conectar con GameTrack. Revisá tu conexión e intentá de nuevo." : failure.message); }
+      finally {
+        busy = false; form.removeAttribute("aria-busy");
+        panel.querySelectorAll("button, input").forEach(el => { el.disabled = false; });
+        submit.replaceChildren(creating ? "Crear mi cuenta" : "Iniciar sesión", icon("chevron", 18));
+      }
+    } }, field("Usuario", username), creating && field("Email", email),
+      field("Contraseña", password, h("div", { class: "auth-password-wrap" }, password, reveal)),
+      creating && h("div", null, strength, h("p", { class: "auth-field-help", id: "auth-password-help" }, "Usá al menos 8 caracteres; una frase larga es mejor.")),
+      creating && field("Confirmá tu contraseña", confirm), submit);
+    mount(panel, tabs,
+      h("div", { class: "auth-form-heading" },
+        h("p", { class: "auth-kicker" }, player ? "ACCESO DE JUGADORES" : "ACCESO DE DESARROLLADORES / ESTUDIOS"),
+        h("h2", { id: "auth-title", tabindex: "-1" }, creating ? player ? "Creá tu cuenta de jugador" : "Creá tu cuenta de estudio" : player ? "Ingresá como jugador" : "Ingresá a tu estudio"),
         ),
-        h(
-          "span",
-          { class: "account-note", style: { display: "block", marginTop: "2px" } },
-          `${account.username} · ${account.note}`,
-        ),
-      ),
-      icon("chevron", 16, "muted"),
-    ),
-  );
+      creating && h("p", { class: "auth-account-kind" }, "El tipo de cuenta no se puede cambiar después."),
+      player && h("a", { class: "auth-steam", href: "/api/v1/auth/steam/start", onClick: e => {
+        if (busy) { e.preventDefault(); return; }
+        sessionStorage.removeItem("gametrack.registration-role");
+        sessionStorage.setItem("gametrack.registration-role", "jugador");
+        error.hidden = true;
+      } }, steamIcon(), h("span", null, "Continuar con Steam"), icon("chevron", 17)),
+      player && h("div", { class: "auth-divider" }, h("span", null, "o con tu usuario")),
+      error, form,
+      h("nav", { class: "auth-other-access", "aria-label": "Otros accesos" },
+        h("a", { href: "#/cuentas" }, icon("arrowLeft", 14), "Volver a los planes")));
 
-  // --- Acceso manual ---
-  const username = h("input", { class: "input", placeholder: "usuario", autocomplete: "username" });
-  const password = h("input", {
-    class: "input",
-    type: "password",
-    placeholder: "contraseña",
-    autocomplete: "current-password",
-  });
-
-  const form = h(
-    "form",
-    {
-      onSubmit: async (event) => {
-        event.preventDefault();
-        try {
-          await enter(username.value.trim(), password.value);
-        } catch (error) {
-          toast(error.message, "error");
-        }
-      },
-    },
-    h(
-      "div",
-      { class: "row", style: { gap: "var(--s-2)", alignItems: "stretch" } },
-      username,
-      password,
-      h("button", { class: "btn btn-primary", type: "submit" }, "Entrar"),
-    ),
-  );
-
-  wrap.append(
-    h(
-      "div",
-      { class: "view-head", style: { display: "block", textAlign: "center", marginBottom: "var(--s-8)" } },
-      h("p", { class: "eyebrow" }, "GameTrack"),
-      h("h1", null, "Elegí un perfil"),
-      h(
-        "p",
-        { style: { margin: "var(--s-3) auto 0" } },
-        "Cada cuenta demuestra un escenario distinto de la plataforma. La contraseña de todas es ",
-        h("code", null, DEMO_PASSWORD),
-        ".",
-      ),
-    ),
-    h("div", { style: { display: "grid", gap: "var(--s-3)" } }, cards),
-    h("div", { class: "section" }, h("p", { class: "eyebrow" }, "O ingresá con tu cuenta"), form),
-  );
-
-  return wrap;
+  }
+  renderForm();
+  return h("div", { class: "auth-page auth-minimal" },
+    accessHeader(),
+    h("div", { class: "auth-layout" }, panel),
+    h("footer", { class: "auth-footer" }, player ? "Tu próxima partida empieza acá." : "Recepción, reseñas y juegos de referencia para tu estudio."));
 }

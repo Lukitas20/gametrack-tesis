@@ -56,3 +56,4 @@ class RecommendationSource(str, Enum):
     COLLABORATIVE = "colaborativo"
     HYBRID = "hibrido"
     POPULARITY = "popularidad"
+    LOCAL = "ia_local"

@@ -5,7 +5,6 @@ from sqlalchemy.orm import Session
 
 from app.models import GameList, GameListItem, ListType, User
 
-# Listas que todo usuario tiene desde el registro.
 SYSTEM_LISTS: tuple[tuple[ListType, str, str], ...] = (
     (ListType.FAVORITES, "Favoritos", "Mis juegos preferidos."),
     (ListType.PLAYING, "Jugando", "Lo que estoy jugando ahora."),

@@ -67,12 +67,6 @@
   font-size: var(--fs-xs);
 }
 
-.btn-lg {
-  min-height: 44px;
-  padding: var(--s-3) var(--s-6);
-  font-size: var(--fs-base);
-}
-
 .btn-icon {
   padding: var(--s-2);
   min-width: 36px;
@@ -121,9 +115,6 @@
 }
 .grid-2 {
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-}
-.grid-3 {
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
 }
 .grid-4 {
   grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
@@ -264,23 +255,6 @@ button.chip[aria-pressed="true"] {
   background-size: 5px 5px, 5px 5px;
   background-repeat: no-repeat;
   padding-right: var(--s-8);
-}
-
-.search-wrap {
-  position: relative;
-  flex: 1;
-  min-width: 200px;
-}
-.search-wrap .input {
-  padding-left: 34px;
-}
-.search-wrap svg {
-  position: absolute;
-  left: 10px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--ink-muted);
-  pointer-events: none;
 }
 
 /* Una sola fila de filtros por encima de todo lo que condiciona. */
@@ -690,44 +664,9 @@ tbody tr:last-child td {
   overflow-x: auto;
 }
 
-tr.clickable {
-  cursor: pointer;
-}
-tr.clickable:hover td {
-  background: var(--surface-hover);
-}
-
 /* ------------------------------------------------------------------ *
- * Panel de aspectos (ABSA)
+ * Evidencia textual del panel de aspectos (ABSA)
  * ------------------------------------------------------------------ */
-
-.aspect-row {
-  padding: var(--s-4) 0;
-  border-bottom: 1px solid var(--border);
-}
-.aspect-row:last-child {
-  border-bottom: none;
-}
-
-.aspect-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--s-3);
-  margin-bottom: var(--s-3);
-}
-
-.aspect-name {
-  font-size: var(--fs-sm);
-  font-weight: 650;
-  text-transform: capitalize;
-}
-
-.aspect-net {
-  font-size: var(--fs-sm);
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
 
 .quote {
   margin-top: var(--s-3);
@@ -739,10 +678,6 @@ tr.clickable:hover td {
   color: var(--ink-secondary);
   font-style: italic;
   line-height: 1.55;
-}
-
-.quote-positive {
-  border-left-color: var(--positivo);
 }
 
 /* ------------------------------------------------------------------ *
@@ -937,21 +872,180 @@ tr.clickable:hover td {
   }
 }
 
-.skeleton {
-  background: linear-gradient(
-    90deg,
-    var(--surface-sunken) 25%,
-    var(--surface-hover) 50%,
-    var(--surface-sunken) 75%
-  );
-  background-size: 200% 100%;
-  animation: shimmer 1.4s infinite;
-  border-radius: var(--r-sm);
+/* Cargas "de marca", línea fantasía/hechicero (ver logo): un caldero
+ * hirviendo para "¿Qué jugamos hoy?" (gt-cauldron-loader) y un círculo
+ * rúnico para el resto (gt-magic-loader) — mismo mundo, dos piezas
+ * distintas, para que no se sientan la misma animación reciclada. Los
+ * colores son ilustrativos (violeta poción / oro caldero), no tokens de
+ * tema: se ven igual en claro y oscuro, como los degradados de portada. */
+.gt-loader-message {
+  font-weight: 600;
+  font-size: var(--fs-md);
+  color: var(--ink);
 }
 
-@keyframes shimmer {
+/* --- Caldero: exclusivo del asistente "¿Qué jugamos hoy?" --- */
+
+.gt-cauldron-loader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-5);
+  padding: var(--s-8) 0 var(--s-6);
+}
+
+/* La escena se dibuja siempre en 1080x1080 y se escala con transform (ver
+ * js/cauldron.js): así las coordenadas del diseño original no se tocan.
+ * `contain` acota el trabajo del navegador al recuadro, para que animar
+ * decenas de nodos por frame no obligue a recalcular la página entera. */
+.gt-cauldron {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--r-lg, 16px);
+  background: radial-gradient(
+    ellipse 70% 60% at 50% 42%,
+    oklch(22% 0.035 300),
+    oklch(8% 0.02 300)
+  );
+  contain: layout paint;
+}
+
+.gt-cauldron-stage {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: top left;
+}
+
+/* --- Círculo rúnico: el resto de las cargas (búsqueda, enriquecimiento
+ * de fichas, transición entre pantallas). --- */
+
+.gt-magic-loader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-6);
+  padding: var(--s-14) 0;
+}
+
+/* 96px y no 76: el orbe crece para que la mascota entre adentro sin que los
+ * anillos se le vengan encima. El radio de la órbita de los puntos
+ * (gt-orbit) va atado a esta medida. */
+.gt-magic-loader-orb {
+  position: relative;
+  width: 96px;
+  height: 96px;
+  display: grid;
+  place-items: center;
+}
+
+/* Los tres colores de la marca, uno por elemento: violeta el anillo de
+ * afuera, verde agua el de adentro, oro los puntos en órbita. Antes eran
+ * hexes sueltos (#8b5cf6, #d9a441) que no se movían con el tema; los `-ui`
+ * son las variantes de marca ajustadas para sostenerse como trazo sobre la
+ * superficie de cada tema (ver tokens.css). */
+.gt-magic-loader-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px dashed var(--accent);
+  /* 0,75 y no 0,55: mezclada contra --page, la opacidad vieja dejaba el
+   * anillo interno en 1,98:1 en tema claro (invisible) y los dos anillos por
+   * debajo de 3:1 en oscuro. Con 0,75 los cuatro casos quedan sobre el piso:
+   * claro 5,58 / 3,40 y oscuro 4,45 / 6,31. */
+  opacity: 0.75;
+  animation: gt-ring-spin 3.2s linear infinite;
+}
+.gt-magic-loader-ring.gt-ring-inner {
+  inset: 12px;
+  border-color: var(--brand-teal-ui);
+  opacity: 0.75;
+  animation-duration: 2.3s;
+  animation-direction: reverse;
+}
+
+/* La chispa se corre a la esquina para dejarle el centro a la mascota. */
+.gt-magic-loader-spark {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  color: var(--accent);
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--accent) 50%, transparent));
+  animation: gt-spark-pulse 1.2s ease-in-out infinite;
+}
+
+.gt-magic-loader-dot {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--brand-gold-ui);
+  top: 50%;
+  left: 50%;
+  margin: -2.5px;
+  animation: gt-orbit 2.4s linear infinite;
+}
+.gt-magic-loader-dot:nth-child(3) {
+  animation-delay: -1.2s;
+}
+
+/* --- La mascota --- *
+ * `inset: 0` + `margin: auto` centra un absoluto de tamaño conocido sin
+ * gastar `transform`, que queda libre para la animación. Si se centrara con
+ * `translate(-50%, -50%)`, la flotación tendría que repetir ese desplazamiento
+ * en cada keyframe y cualquier cambio de tamaño lo desincronizaría. */
+.gt-mascot {
+  display: block;
+}
+
+.gt-magic-loader-mascot {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  animation: gt-mascot-float 3s ease-in-out infinite;
+}
+
+/* Flotación: arranca y termina en el mismo lugar, y eso es deliberado. El
+ * bloque global de `prefers-reduced-motion` (base.css) colapsa la duración a
+ * 0,01 ms, así que la animación salta a su estado final: si el último
+ * keyframe fuera el punto alto, la mascota quedaría congelada flotando en el
+ * aire. Volviendo a translateY(0) queda quieta y en su lugar. */
+@keyframes gt-mascot-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes gt-ring-spin {
   to {
-    background-position: -200% 0;
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes gt-spark-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.85;
+  }
+  50% {
+    transform: scale(1.22);
+    opacity: 1;
+  }
+}
+
+@keyframes gt-orbit {
+  from {
+    transform: rotate(0deg) translateX(46px) rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg) translateX(46px) rotate(-360deg);
   }
 }
 
@@ -1232,17 +1326,113 @@ tr.clickable:hover td {
   background: var(--accent);
 }
 
-/* Barra de progreso simple con la pista en un paso más claro del mismo tono. */
-.meter {
-  height: 6px;
-  border-radius: var(--r-full);
-  background: var(--accent-wash);
+/* Descubrimiento: las recomendaciones y el asistente son la portada. */
+.discovery-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 250px;
+  align-items: center;
+  gap: var(--s-8);
+  padding: clamp(24px, 4vw, 48px);
+  margin-bottom: var(--s-10);
+  border: 1px solid var(--border-strong);
+  border-radius: 24px;
+  background: radial-gradient(ellipse at 100% 0%, var(--accent-wash-strong), transparent 65%), var(--surface);
   overflow: hidden;
 }
-
-.meter-fill {
-  height: 100%;
-  border-radius: var(--r-full);
-  background: var(--accent);
-  transition: width 0.3s ease-out;
+.discovery-hero h1 { max-width: 650px; font-size: clamp(2rem, 4vw, 3.25rem); line-height: 1.12; letter-spacing: -0.045em; margin: 12px 0 18px; }
+.discovery-lead { max-width: 580px; font-size: var(--fs-md); color: var(--ink-secondary); }
+.discovery-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: var(--s-5); }
+.discovery-caption { font-size: var(--fs-xs); color: var(--ink-secondary); margin-top: 14px; }
+.discovery-hero-art { display: grid; justify-items: center; gap: 10px; }
+.discovery-hero-art img { width: 220px; height: 220px; object-fit: contain; filter: drop-shadow(0 16px 22px var(--accent-wash)); }
+.discovery-art-note { padding: 8px 12px; border-radius: var(--r-full); color: var(--accent); background: var(--accent-wash); font-size: var(--fs-xs); font-weight: 650; text-align: center; }
+.discovery-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-8); margin-bottom: var(--s-8); }
+.discovery-steps h2 { font-size: var(--fs-md); margin: 8px 0; }
+.discovery-steps p, .discovery-profile-hint { color: var(--ink-secondary); }
+.discovery-profile-hint { margin-top: 8px; max-width: 760px; }
+.discovery-controls { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--s-4); margin-bottom: var(--s-4); }
+.discovery-control-label { font-weight: 650; margin-bottom: 8px; font-size: var(--fs-sm); }
+.discovery-control-note { margin-top: 8px; margin-bottom: 12px; font-size: var(--fs-sm); color: var(--ink-secondary); }
+.recommendation-lab { border-block: 1px solid var(--border); padding: 14px 0; margin-bottom: var(--s-6); }
+.recommendation-lab summary { cursor: pointer; color: var(--ink-secondary); font-size: var(--fs-sm); }
+.recommendation-lab summary svg { display: inline-block; vertical-align: middle; margin-right: 6px; }
+.recommendation-lab[open] summary { margin-bottom: 16px; }
+.recommendation-lab .filter-bar { flex-wrap: wrap; gap: 12px; }
+.recommendation-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-5); }
+.recommendation-card { display: flex; flex-direction: column; min-width: 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); overflow: hidden; }
+.recommendation-card .game-card { width: 100%; border: 0; border-radius: 0; box-shadow: none; }
+.recommendation-card .game-card:hover { transform: none; }
+.recommendation-signals { padding: 12px 20px 4px 32px; color: var(--ink-secondary); font-size: var(--fs-xs); }
+.recommendation-signals li + li { margin-top: 5px; }
+.recommendation-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 16px; margin-top: auto; }
+.recommendation-actions .btn { font-size: var(--fs-xs); padding: 7px 10px; }
+.quiz-shell { max-width: 980px; margin-inline: auto; }
+.quiz-shell .view-head h1 { font-size: clamp(1.8rem, 4vw, 2.6rem); letter-spacing: -0.035em; }
+.quiz-question-title { margin-bottom: var(--s-5); }
+.quiz-question-title:focus { outline: none; }
+.quiz-shell .quiz-options { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+.quiz-shell .quiz-option { padding: 28px 22px; min-height: 160px; border-radius: var(--r-lg); }
+.quiz-shell .quiz-option-emoji { font-size: 2rem; margin-bottom: 18px; }
+.quiz-shell .quiz-option-title { font-size: var(--fs-base); }
+.quiz-shell .quiz-option-note { color: var(--ink-secondary); margin-top: 7px; }
+.quiz-option[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-wash); box-shadow: inset 0 0 0 1px var(--accent); }
+.quiz-answer-summary { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
+.quiz-answer-summary .chip { padding: 10px 14px; font-size: var(--fs-sm); }
+.quiz-strict-control { display: flex; align-items: flex-start; gap: 10px; margin: 14px 0; font-size: var(--fs-sm); color: var(--ink-secondary); cursor: pointer; }
+.quiz-strict-control input { margin-top: 5px; accent-color: var(--accent); }
+.quiz-result-card { display: grid; grid-template-columns: 220px minmax(0, 1fr); border: 1px solid var(--border); border-radius: var(--r-lg); overflow: hidden; background: var(--surface); }
+.quiz-result-cover { display: block; height: 100%; background: var(--surface-sunken); }
+.quiz-result-cover .game-cover { height: 100%; min-height: 220px; aspect-ratio: auto; border-radius: 0; }
+.quiz-result-body { padding: var(--s-6); min-width: 0; }
+.quiz-result-body h2 { font-size: var(--fs-lg); line-height: 1.3; }
+.quiz-result-body h2 a { color: var(--ink); }
+.quiz-result-body .quote { margin-top: 14px; }
+.quiz-result-body cite { display: block; margin-top: 6px; font-size: var(--fs-xs); font-style: normal; color: var(--ink-secondary); }
+.quiz-match-chips { margin-top: 12px; gap: 6px; }
+.quiz-exception, .quiz-time-note { display: flex; align-items: baseline; gap: 6px; font-size: var(--fs-xs); color: var(--ink-secondary); margin-top: 10px; }
+.quiz-exception svg, .quiz-time-note svg { flex-shrink: 0; }
+.friends-shell { max-width: 980px; margin-inline: auto; }
+.friend-list { display: grid; gap: 12px; margin-top: 16px; }
+.friend-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; padding: 16px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface); }
+.friend-person { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.friend-person p { font-size: var(--fs-sm); overflow-wrap: anywhere; }
+.friend-form { margin-top: 20px; }
+.friend-form .input { flex: 1; min-width: 150px; }
+.friend-picker { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 24px; }
+.friend-picker-option { display: flex; align-items: center; gap: 14px; padding: 18px; border: 1px solid var(--border-strong); border-radius: var(--r-lg); background: var(--surface); cursor: pointer; }
+.friend-picker-option:has(input:checked) { background: var(--accent-wash); border-color: var(--accent); }
+.friend-picker-option input { accent-color: var(--accent); width: 18px; height: 18px; }
+.friend-picker-option small { display: block; color: var(--ink-secondary); }
+.group-strategy-control { display: grid; gap: 8px; max-width: 400px; }
+.group-summary { margin-bottom: 16px; }
+.group-summary h2 { font-size: var(--fs-md); }
+.group-fit { border-top: 1px solid var(--border); margin-top: 18px; padding-top: 14px; }
+.group-fit h3 { font-size: var(--fs-sm); margin-bottom: 10px; }
+.group-fit-row { display: grid; grid-template-columns: minmax(70px, 1fr) minmax(60px, 1fr) 90px; gap: 10px; align-items: center; font-size: var(--fs-xs); margin-block: 6px; }
+.group-fit-row > span:first-child { overflow-wrap: anywhere; }
+.group-fit-row meter { width: 100%; accent-color: var(--accent); }
+.local-model-note { margin: 12px 0 20px; padding: 12px 16px; border-left: 3px solid var(--brand-teal-ui); background: var(--accent-wash); font-size: var(--fs-sm); color: var(--ink-secondary); }
+.strategy-comparison-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: var(--s-4); }
+@media (max-width: 960px) {
+  .recommendation-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .discovery-hero { grid-template-columns: minmax(0, 1fr) 180px; }
+  .discovery-hero-art img { width: 170px; height: 170px; }
 }
+@media (max-width: 600px) {
+  .discovery-hero { grid-template-columns: 1fr; padding: 24px; border-radius: 18px; }
+  .discovery-hero-art { display: none; }
+  .discovery-steps, .recommendation-grid { grid-template-columns: 1fr; }
+  .discovery-controls .segmented { display: flex; flex-wrap: wrap; }
+  .recommendation-lab .segmented { display: flex; flex-wrap: wrap; }
+  .quiz-result-card { grid-template-columns: 1fr; }
+  .quiz-result-cover .game-cover { height: 175px; min-height: 0; }
+  .quiz-shell .quiz-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .quiz-shell .quiz-option { padding: 20px 14px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .quiz-option, .game-card { transition: none; }
+}
+.catalog-sync-notice { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px; margin-bottom: 24px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.catalog-sync-notice p { margin: 6px 0 0; }
+.catalog-sync-notice button { flex-shrink: 0; }
+@media (max-width: 640px) { .catalog-sync-notice { flex-direction: column; align-items: stretch; } }

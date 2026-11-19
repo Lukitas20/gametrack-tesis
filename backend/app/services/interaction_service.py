@@ -1,6 +1,8 @@
 """Alta y actualización de ratings y reseñas."""
 
 import math
+from datetime import datetime, timezone
+from statistics import median
 
 from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
@@ -9,6 +11,36 @@ from app.ml.analytics import analyze_review, apply_analysis
 from app.ml.recommender import UNCERTAINTY_WEIGHT, invalidate_engine
 from app.models import Game, Rating, Review, User
 from app.schemas.interaction import RatingCreate, ReviewCreate
+
+
+MIN_HOURS_SAMPLES = 5
+
+
+def recompute_median_review_hours(db: Session, game_id: int) -> None:
+    """Recalcula la mediana de horas de los reseñadores de un juego.
+
+    Es la única fuente de duración operativa (RAWG está muerta): la usa el
+    filtro "¿cuánto tiempo tenés?" del asistente para juegos finitos. Se
+    llama al importar reseñas nuevas; el backfill inicial sobre lo ya
+    importado es ``scripts/backfill_duracion.py``.
+    """
+    game = db.get(Game, game_id)
+    if game is None:
+        return
+    hours = [
+        float(value)
+        for (value,) in db.execute(
+            select(Review.hours_at_review).where(
+                Review.game_id == game_id,
+                Review.source.in_(["user", "steam"]),
+                Review.hours_at_review.is_not(None),
+                Review.hours_at_review > 0,
+            )
+        )
+    ]
+    game.median_review_hours = (
+        round(median(hours), 1) if len(hours) >= MIN_HOURS_SAMPLES else None
+    )
 
 
 def recompute_game_aggregates(db: Session, game_id: int) -> None:
@@ -32,13 +64,22 @@ def recompute_game_aggregates(db: Session, game_id: int) -> None:
     ).one()
     rating_count = int(rating_count or 0)
 
-    recommended, steam_count = db.execute(
-        select(
-            func.sum(case((Review.is_recommended.is_(True), 1), else_=0)),
-            func.count(Review.id),
-        ).where(Review.game_id == game_id, Review.is_recommended.is_not(None))
-    ).one()
-    steam_count = int(steam_count or 0)
+    steamspy_total = (game.steamspy_positive or 0) + (game.steamspy_negative or 0)
+    if game.steam_total_reviews:
+        steam_count = int(game.steam_total_reviews)
+        recommended = int(game.steam_positive_reviews or 0)
+    elif steamspy_total > 0:
+        steam_count = steamspy_total
+        recommended = int(game.steamspy_positive or 0)
+    else:
+        recommended, steam_count = db.execute(
+            select(
+                func.sum(case((Review.is_recommended.is_(True), 1), else_=0)),
+                func.count(Review.id),
+            ).where(Review.game_id == game_id, Review.source.in_(["user", "steam"]), Review.is_recommended.is_not(None))
+        ).one()
+        steam_count = int(steam_count or 0)
+        recommended = int(recommended or 0)
     steam_average = 1 + 4 * (recommended / steam_count) if steam_count else None
 
     if rating_count and steam_count:
@@ -57,16 +98,12 @@ def recompute_game_aggregates(db: Session, game_id: int) -> None:
         game.avg_rating = 0.0
         game.ratings_count = 0
 
-    # Mismo criterio que usa el recomendador para su piso de popularidad
-    # (ver app/ml/recommender.py): penaliza por incertidumbre en vez de sólo
-    # mostrar el promedio crudo, para que el catálogo no ordene "mejor
-    # valorados" con dos reseñas perfectas por delante de cien muy buenas.
     game.popularity_score = round(
         game.avg_rating - UNCERTAINTY_WEIGHT / math.sqrt(max(game.ratings_count, 1)), 4
     )
 
     game.reviews_count = (
-        db.scalar(select(func.count(Review.id)).where(Review.game_id == game_id)) or 0
+        db.scalar(select(func.count(Review.id)).where(Review.game_id == game_id, Review.source.in_(["user", "steam"]))) or 0
     )
 
 
@@ -82,14 +119,13 @@ def upsert_rating(db: Session, user: User, data: RatingCreate) -> Rating:
     rating.score = data.score
     rating.hours_played = data.hours_played
     rating.status = data.status
+    rating.updated_at = datetime.now(timezone.utc)
 
     db.flush()
     recompute_game_aggregates(db, data.game_id)
     db.commit()
     db.refresh(rating)
 
-    # Actualizar una valoración existente no cambia la cantidad de filas, así
-    # que la huella del motor no lo detectaría: hay que invalidar a mano.
     invalidate_engine()
     return rating
 
@@ -110,10 +146,11 @@ def create_review(db: Session, user: User, data: ReviewCreate) -> Review:
         db.add(review)
 
     review.title = data.title
+    review.source = "user"
     review.content = data.content
     review.is_recommended = data.is_recommended
     review.hours_at_review = data.hours_at_review
-    review.author_name = user.username
+    review.author_name = (user.steam_username if user.steam_verified else None) or user.full_name or user.username
     db.flush()
 
     apply_analysis(db, review, analyze_review(review))

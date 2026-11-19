@@ -1,6 +1,11 @@
 """Panel de analítica NLP/ABSA. Exclusivo del rol desarrollador."""
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from datetime import date
+from typing import Literal
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from pydantic import BaseModel, Field
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_developer
@@ -17,9 +22,126 @@ from app.schemas.analytics import (
     PlatformOverviewOut,
     ProcessResult,
     StudioAnalyticsOut,
+    DeveloperReviewPage,
+    AudienceReport,
 )
+from app.services import steam_service
+from app.services.developer_assistant import explain_developer_report
+from app.services.developer_reviews import explore_reviews
+from app.services.trained_ai_service import review_model_report
+from app.services.audience_service import audience_report
+from app.models.enums import Aspect, Sentiment
 
 router = APIRouter(prefix="/analytics", tags=["analitica"])
+
+
+class AudienceCollectionResult(BaseModel):
+    status: Literal["busy", "more", "ready"]
+    profiles_fetched: int
+    audience: AudienceReport
+
+
+def audience_scope(db, game_id, studio, user):
+    if game_id is not None:
+        if studio is not None:
+            raise HTTPException(400, "Elegí un juego o un estudio, no ambos")
+        if db.get(Game, game_id) is None:
+            raise HTTPException(404, "El juego no existe")
+        return {"game_id": game_id}
+    target = (studio or user.studio or "").strip()
+    if not target:
+        raise HTTPException(400, "Elegí un juego o estudio")
+    return {"studio": target}
+
+
+@router.get("/audience", response_model=AudienceReport)
+def get_audience(response: Response, game_id: int | None = Query(default=None, gt=0),
+                 studio: str | None = Query(default=None, max_length=120),
+                 user: User = Depends(require_developer), db: Session = Depends(get_db)):
+    response.headers["Cache-Control"] = "no-store"
+    return audience_report(db, **audience_scope(db, game_id, studio, user))
+
+
+@router.post("/audience/collect", response_model=AudienceCollectionResult)
+def collect_audience(response: Response, game_id: int | None = Query(default=None, gt=0),
+                     studio: str | None = Query(default=None, max_length=120),
+                     user: User = Depends(require_developer), db: Session = Depends(get_db)):
+    from app.services.steam_audience_service import collect_step
+    response.headers["Cache-Control"] = "no-store"
+    scope = audience_scope(db, game_id, studio, user)
+    try:
+        result = collect_step(db, **scope)
+    except ValueError:
+        raise HTTPException(404, "No hay juegos en el alcance seleccionado")
+    return {**result, "audience": audience_report(db, **scope)}
+
+
+@router.get("/review-model")
+def get_review_model_status(response: Response, _: User = Depends(require_developer)):
+    """Procedencia y disponibilidad del clasificador que usan los informes."""
+    from app.ml.trained_reviews import load_model
+    response.headers["Cache-Control"] = "no-store"
+    _, status = load_model()
+    return status
+
+
+@router.get("/reviews", response_model=DeveloperReviewPage)
+def get_reviews(response: Response,
+                studio: str | None = Query(default=None, max_length=120),
+                game_id: int | None = Query(default=None, gt=0),
+                review_id: int | None = Query(default=None, gt=0),
+                search: str = Query(default="", max_length=300),
+                aspect: Aspect | None = None, sentiment: Sentiment | None = None,
+                source: Literal["steam", "user"] | None = None,
+                date_from: date | None = None, date_to: date | None = None,
+                sort: Literal["newest", "oldest", "helpful"] = "newest",
+                limit: int = Query(default=20, ge=1, le=100), offset: int = Query(default=0, ge=0),
+                user: User = Depends(require_developer), db: Session = Depends(get_db)):
+    response.headers["Cache-Control"] = "no-store"
+    return explore_reviews(db, user, studio=studio, game_id=game_id, review_id=review_id, search=search,
+                           aspect=aspect, sentiment=sentiment, source=source,
+                           date_from=date_from, date_to=date_to, sort=sort, limit=limit, offset=offset)
+
+
+class AssistantQuestion(BaseModel):
+    question: str = Field(min_length=1, max_length=600)
+    studio: str | None = Field(default=None, max_length=120)
+    game_id: int | None = Field(default=None, gt=0)
+
+
+@router.get("/studios")
+def studios(search: str = Query(default="", max_length=120),
+            _: User = Depends(require_developer), db: Session = Depends(get_db)):
+    name = func.trim(Game.developer)
+    query = select(func.min(name).label('name'), func.count(Game.id).label('games')).where(
+        Game.developer.is_not(None), name != ""
+    )
+    if search.strip():
+        query = query.where(func.lower(name).contains(search.strip().lower(), autoescape=True))
+    rows = db.execute(query.group_by(func.lower(name)).order_by(func.count(Game.id).desc(), func.min(name)).limit(20))
+    return [dict(row._mapping) for row in rows]
+
+
+@router.post("/assistant")
+def assistant(payload: AssistantQuestion, user: User = Depends(require_developer),
+              db: Session = Depends(get_db)):
+    if payload.game_id is not None:
+        game = db.get(Game, payload.game_id)
+        if game is None:
+            raise HTTPException(404, 'El juego no existe')
+        report = game_analytics(db, game)
+        report["trained_ai"] = review_model_report(db, game_id=game.id)
+    else:
+        target = (payload.studio or user.studio or '').strip()
+        if not target:
+            raise HTTPException(400, 'Elegí un estudio para consultar el informe')
+        report = studio_analytics(db, target)
+        report["trained_ai"] = review_model_report(db, studio=target)
+    import unicodedata
+    question = ''.join(c for c in unicodedata.normalize('NFD', payload.question.lower())
+                       if unicodedata.category(c) != 'Mn')
+    overview = platform_overview(db) if any(word in question for word in ('compar', 'catalogo', 'promedio')) else None
+    return explain_developer_report(report, payload.question, overview)
 
 
 @router.get("/overview", response_model=PlatformOverviewOut)
@@ -32,32 +154,49 @@ def get_overview(
 
 @router.get("/studio", response_model=StudioAnalyticsOut)
 def get_studio_analytics(
+    response: Response,
     studio: str | None = Query(
         default=None, description="Por defecto, el estudio del usuario autenticado"
     ),
     user: User = Depends(require_developer),
     db: Session = Depends(get_db),
 ) -> dict:
+    response.headers["Cache-Control"] = "no-store"
     target = studio or user.studio
     if not target:
         raise HTTPException(
             status_code=400,
             detail="El usuario no tiene estudio asignado; indicá uno con ?studio=",
         )
-    return studio_analytics(db, target)
+    report = studio_analytics(db, target)
+    report["trained_ai"] = review_model_report(db, studio=target)
+    report["audience"] = audience_report(db, studio=target)
+    return report
 
 
 @router.get("/games/{game_id}", response_model=GameAnalyticsOut)
 def get_game_analytics(
     game_id: int,
+    response: Response,
     _: User = Depends(require_developer),
     db: Session = Depends(get_db),
 ) -> dict:
     """Sentimiento y desglose por aspecto de un juego."""
+    response.headers["Cache-Control"] = "no-store"
     game = db.get(Game, game_id)
     if game is None:
         raise HTTPException(status_code=404, detail="El juego no existe")
-    return game_analytics(db, game)
+    if not steam_service.maybe_refresh(db, game):
+        raise HTTPException(status_code=404, detail="El juego no existe")
+    report = game_analytics(db, game)
+    if studio := (game.developer or "").strip():
+        titles = select(Game.id, Game.name.label("nombre"), Game.steam_app_id).where(
+            func.lower(func.trim(Game.developer)) == studio.lower()
+        ).order_by(Game.name, Game.id)
+        report["juegos_del_estudio"] = [dict(row) for row in db.execute(titles).mappings()]
+    report["trained_ai"] = review_model_report(db, game_id=game.id)
+    report["audience"] = audience_report(db, game_id=game.id)
+    return report
 
 
 @router.post("/process", response_model=ProcessResult)
@@ -66,11 +205,25 @@ def process_reviews(
         default=False, description="Reprocesa también las reseñas ya analizadas"
     ),
     limit: int | None = Query(default=None, ge=1),
+    studio: str | None = Query(default=None, max_length=120),
+    game_id: int | None = Query(default=None, gt=0),
     _: User = Depends(require_developer),
     db: Session = Depends(get_db),
 ) -> ProcessResult:
     """Ejecuta el módulo NLP sobre las reseñas pendientes."""
-    processed = analyze_pending_reviews(db, limit=limit, reanalyze=reanalyze)
+    game_ids = None
+    if game_id is not None:
+        game = db.get(Game, game_id)
+        if game is None:
+            raise HTTPException(404, 'El juego no existe')
+        if studio is not None and (game.developer or '').strip().lower() != studio.strip().lower():
+            raise HTTPException(400, 'El juego no pertenece al estudio seleccionado')
+        game_ids = [game_id]
+    elif studio is not None:
+        game_ids = list(db.scalars(select(Game.id).where(
+            func.lower(func.trim(Game.developer)) == studio.strip().lower()
+        )))
+    processed = analyze_pending_reviews(db, limit=limit, reanalyze=reanalyze, game_ids=game_ids)
     return ProcessResult(
         procesadas=processed,
         mensaje=f"Se analizaron {processed} reseñas.",

@@ -1,12 +1,6 @@
-/* Utilidades de interfaz: construcción de DOM, íconos, avisos y formato. */
 
-/**
- * Constructor de elementos.
- *
- * Los hijos de tipo string se insertan como texto, nunca como HTML: el
- * contenido que viene de la base (reseñas, nombres de usuario) no puede
- * inyectar marcado.
- */
+import { cauldronScene } from "./cauldron.js";
+
 export function h(tag, props = null, ...children) {
   const element = document.createElement(tag);
 
@@ -43,11 +37,33 @@ export function clear(node) {
   return node;
 }
 
-/* ------------------------------------------------------------------ *
- * Íconos
- * ------------------------------------------------------------------ */
+export function mount(node, ...children) {
+  node.replaceChildren();
+  append(node, children);
+  return node;
+}
+
+export function infoDetails(label, ...children) {
+  return h("details", { class: "ui-details" }, h("summary", null, label),
+    h("div", { class: "ui-details-body" }, children));
+}
+
+let readableSequence = 0;
+export function expandableText(text, { className = "", limit = 320 } = {}) {
+  const content = String(text ?? ""), long = content.length > limit || content.split("\n").length > 5;
+  const body = h("p", { class: `${className} ui-text-body${long ? " is-collapsed" : ""}`, id: `readable-${++readableSequence}` }, content);
+  const button = long ? h("button", { class: "review-read-more", type: "button", "aria-expanded": "false", "aria-controls": body.id, onClick: () => {
+    const collapsed = body.classList.toggle("is-collapsed");
+    button.setAttribute("aria-expanded", String(!collapsed)); button.textContent = collapsed ? "Leer completo" : "Mostrar menos";
+  } }, "Leer completo") : null;
+  return h("div", { class: "ui-readable-text" }, body, button);
+}
+
 
 const PATHS = {
+  trophy: "M5 2h6v4a3 3 0 01-6 0V2zM5 3H2v2a3 3 0 003 3M11 3h3v2a3 3 0 01-3 3M8 9v4M5 14h6",
+  lock: "M4 7h8v7H4V7zM5 7V5a3 3 0 016 0v2M8 10v1",
+  gamepad: "M5 4h6a3 3 0 012.9 2.3l1.1 5a1.5 1.5 0 01-2.5 1.4L10 11H6l-2.5 1.7A1.5 1.5 0 011 11.3l1.1-5A3 3 0 015 4zM4 6v4M2 8h4M10 7h.01M12 9h.01",
   search: "M11 11l4 4M13 8a5 5 0 11-10 0 5 5 0 0110 0z",
   star: "M8 1.6l2 4.1 4.5.6-3.3 3.2.8 4.5L8 11.9l-4 2.1.8-4.5L1.5 6.3l4.5-.6z",
   sparkles: "M8 1.5l1.4 3.6L13 6.5 9.4 7.9 8 11.5 6.6 7.9 3 6.5l3.6-1.4z M13 11l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z",
@@ -96,9 +112,6 @@ export function icon(name, size = 16, extraClass = "") {
   return svg;
 }
 
-/* ------------------------------------------------------------------ *
- * Formato
- * ------------------------------------------------------------------ */
 
 export const SENTIMENT_LABEL = {
   positivo: "Positivo",
@@ -115,6 +128,7 @@ export const ASPECT_LABEL = {
 
 export const STRATEGY_LABEL = {
   auto: "Automático",
+  ia_local: "IA propia",
   hibrido: "Híbrido",
   contenido: "Contenido",
   colaborativo: "Colaborativo",
@@ -122,6 +136,7 @@ export const STRATEGY_LABEL = {
 };
 
 export const SOURCE_LABEL = {
+  ia_local: "Modelo entrenado con valoraciones",
   hibrido: "Híbrido",
   contenido: "Basado en contenido",
   colaborativo: "Filtrado colaborativo",
@@ -152,10 +167,6 @@ export function initials(text) {
     .toUpperCase();
 }
 
-/* Degradados decorativos para las portadas que el dataset no trae. No
- * codifican ningún dato, así que no comparten paleta con los gráficos: se
- * eligen de una lista fija indexada por el nombre para que un juego siempre
- * tenga el mismo. */
 const COVER_GRADIENTS = [
   ["#1e3a5f", "#2d5f8a"],
   ["#3d2b52", "#6b4a7d"],
@@ -176,9 +187,6 @@ export function coverGradient(name) {
   return `linear-gradient(140deg, ${from}, ${to})`;
 }
 
-/* ------------------------------------------------------------------ *
- * Avisos y modales
- * ------------------------------------------------------------------ */
 
 let toastStack = null;
 
@@ -201,9 +209,6 @@ export function toast(message, kind = "info") {
   }, 2600);
 }
 
-/**
- * Abre un modal. `render` recibe una función `close` para cerrarse a sí mismo.
- */
 export function openModal(render, { wide = false } = {}) {
   const overlay = h("div", { class: "overlay" });
 
@@ -232,7 +237,6 @@ export function openModal(render, { wide = false } = {}) {
   document.body.style.overflow = "hidden";
   document.body.appendChild(overlay);
 
-  // El foco entra al modal para que el teclado no quede detrás.
   const focusable = modal.querySelector("input, textarea, button, select");
   if (focusable) focusable.focus();
 
@@ -258,5 +262,47 @@ export function spinnerBlock(message = "Cargando…") {
     { class: "empty row", style: { justifyContent: "center" } },
     h("div", { class: "spinner" }),
     h("span", null, message),
+  );
+}
+
+export function cauldronLoader(message = "Preparando la poción…") {
+  return h(
+    "div",
+    { class: "gt-cauldron-loader" },
+    cauldronScene(),
+    h("span", { class: "gt-loader-message" }, message),
+  );
+}
+
+export const MASCOT_SRC = "/assets/brand/mascota.png";
+
+export function mascot({ size = 96, className = "" } = {}) {
+  return h("img", {
+    class: `gt-mascot${className ? ` ${className}` : ""}`,
+    src: MASCOT_SRC,
+    width: size,
+    height: size,
+    alt: "",
+    "aria-hidden": "true",
+    decoding: "async",
+    onError: (event) => event.currentTarget.remove(),
+  });
+}
+
+export function magicLoader(message = "Cargando…") {
+  return h(
+    "div",
+    { class: "gt-magic-loader" },
+    h(
+      "div",
+      { class: "gt-magic-loader-orb" },
+      h("div", { class: "gt-magic-loader-ring" }),
+      h("div", { class: "gt-magic-loader-ring gt-ring-inner" }),
+      h("div", { class: "gt-magic-loader-dot" }),
+      h("div", { class: "gt-magic-loader-dot" }),
+      mascot({ size: 58, className: "gt-magic-loader-mascot" }),
+      icon("sparkles", 22, "gt-magic-loader-spark"),
+    ),
+    h("span", { class: "gt-loader-message", role: "status" }, message),
   );
 }

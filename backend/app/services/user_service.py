@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.security import hash_password, verify_password
-from app.models import Genre, User, UserPreference
+from app.models import Genre, User, UserPreference, UserRole
 from app.schemas.user import UserCreate
 
 
@@ -28,6 +28,8 @@ def create_user(db: Session, data: UserCreate) -> User:
         full_name=data.full_name,
         role=data.role,
         studio=data.studio,
+        developer_enabled=data.role is UserRole.DEVELOPER,
+        onboarding_step="studio" if data.role is UserRole.DEVELOPER else "player",
     )
     db.add(user)
     db.commit()
@@ -46,8 +48,51 @@ def authenticate_user(db: Session, username: str, password: str) -> User | None:
 
 def set_preferences(db: Session, user: User, genre_ids: list[int]) -> User:
     """Reemplaza las preferencias de género del usuario por las indicadas."""
-    genres = db.scalars(select(Genre).where(Genre.id.in_(genre_ids))).all()
-    user.preferences = [UserPreference(genre=genre, weight=1.0) for genre in genres]
+    from app.services.steam_profile_service import _user_lock
+    with _user_lock(user.id):
+        db.refresh(user, attribute_names=["preferences", "preferences_source"])
+        genres = db.scalars(select(Genre).where(Genre.id.in_(genre_ids))).all()
+        replace_preferences(user, [(genre, 1.0) for genre in genres])
+        user.preferences_source = "manual"
+        db.commit()
+        db.refresh(user)
+    return user
+
+
+def replace_preferences(user: User, weighted_genres: list[tuple[Genre, float]]) -> None:
+    """Conserva las filas comunes para no insertar duplicados al modificar gustos."""
+    previous = {preference.genre_id: preference for preference in user.preferences}
+    preferences = []
+    for genre, weight in weighted_genres:
+        preference = previous.get(genre.id) or UserPreference(genre=genre)
+        preference.weight = weight
+        preferences.append(preference)
+    user.preferences = preferences
+
+
+def ensure_steam_preferences(db: Session, user: User) -> None:
+    if user.role is UserRole.PLAYER and user.onboarding_step != "choose" and user.steam_verified and user.preferences_source != "manual":
+        from app.services.steam_profile_service import sync_profile
+        sync_profile(db, user)
+
+
+def update_profile(
+    db: Session,
+    user: User,
+    full_name: str | None,
+    email: str | None,
+    avatar_url: str | None,
+) -> User:
+    """Actualiza sólo los campos que vinieron en el pedido (``None`` = sin tocar)."""
+    if full_name is not None:
+        user.full_name = full_name
+    if email is not None:
+        existing = get_user_by_email(db, email)
+        if existing and existing.id != user.id:
+            raise ValueError("Ese email ya está en uso por otra cuenta")
+        user.email = email
+    if avatar_url is not None:
+        user.avatar_url = avatar_url
     db.commit()
     db.refresh(user)
     return user

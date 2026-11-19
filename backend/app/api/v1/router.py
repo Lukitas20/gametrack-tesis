@@ -3,21 +3,35 @@ from fastapi import APIRouter
 from app.api.v1.endpoints import (
     analytics,
     auth,
+    friends,
     games,
     health,
+    home,
     interactions,
+    invites,
     lists,
+    quiz,
+    play,
     recommendations,
     steam,
+    steam_auth,
+    steam_catalog,
 )
 from app.core.config import settings
 
 api_router = APIRouter(prefix=settings.API_V1_PREFIX)
 api_router.include_router(health.router)
 api_router.include_router(auth.router)
+api_router.include_router(steam_auth.router)
+api_router.include_router(friends.router)
+api_router.include_router(invites.router)
 api_router.include_router(games.router)
+api_router.include_router(home.router)
 api_router.include_router(interactions.router)
 api_router.include_router(lists.router)
 api_router.include_router(recommendations.router)
+api_router.include_router(quiz.router)
+api_router.include_router(play.router)
 api_router.include_router(analytics.router)
 api_router.include_router(steam.router)
+api_router.include_router(steam_catalog.router)

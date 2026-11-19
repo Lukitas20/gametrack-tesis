@@ -1,35 +1,55 @@
-/* Esqueleto de la aplicación: cabecera, navegación, cambio de rol y rutas. */
 
-import { navigate, resolve, route, setNavigateHook, setNotFound, start } from "./router.js";
 import {
-  DEMO_ACCOUNTS,
-  DEMO_PASSWORD,
+  currentPath,
+  navigate,
+  resolve,
+  route,
+  setNavigateHook,
+  setNotFound,
+  start,
+} from "./router.js";
+import {
+  completeSteamLogin,
+  displayName,
+  loginDestination,
   isDeveloper,
   isLoggedIn,
-  login,
+  canAccessRoute,
+  studioDestination,
   logout,
   restore,
   state,
   subscribe,
 } from "./store.js";
-import { clear, emptyState, h, icon, initials, spinnerBlock, toast } from "./ui.js";
+import { clear, emptyState, h, icon, initials, magicLoader, toast } from "./ui.js";
 import { accountsView } from "./views/auth.js";
+import { plansView } from "./views/access-plans.js";
+import { experienceView } from "./views/experience.js";
 import { catalogView } from "./views/catalog.js";
 import { developerGameView, developerView } from "./views/developer.js";
 import { gameView } from "./views/game.js";
 import { listsView } from "./views/lists.js";
-import { openQuiz } from "./views/quiz.js";
+import { friendsView } from "./views/friends.js";
+import { quizView } from "./views/quiz.js";
+import { profileView } from "./views/profile.js";
+import { inviteView } from "./views/invite.js";
+import { ratingsView } from "./views/ratings.js";
 import { recommendationsView } from "./views/recommendations.js";
+import { createHeaderSearch } from "./header-search.js?v=search-1";
+import { initMotion } from "./motion.js";
 
 const THEME_KEY = "gametrack.theme";
+const MOTION_KEY = "gametrack.motion";
+let motionPaused = localStorage.getItem(MOTION_KEY) === "paused";
+document.body.classList.toggle("motion-paused", motionPaused);
+document.addEventListener("visibilitychange", () => document.body.classList.toggle("page-hidden", document.hidden));
 
 const main = document.getElementById("view");
+const brandLink = document.getElementById("brand-link");
 const navSlot = document.getElementById("nav");
 const actionsSlot = document.getElementById("actions");
+const headerSearchSlot = document.getElementById("header-search");
 
-/* ------------------------------------------------------------------ *
- * Tema
- * ------------------------------------------------------------------ */
 
 function currentTheme() {
   return document.documentElement.dataset.theme || null;
@@ -60,45 +80,67 @@ function isDark() {
   return theme ? theme === "dark" : prefersDark();
 }
 
-/* ------------------------------------------------------------------ *
- * Navegación
- * ------------------------------------------------------------------ */
+
+function homePath() {
+  if (state.user?.onboarding_step) return "/bienvenida";
+  return isDeveloper() ? studioDestination() : "/recomendaciones";
+}
 
 const PLAYER_NAV = [
-  ["/recomendaciones", "Para vos"],
-  ["/catalogo", "Catálogo"],
-  ["/listas", "Mis listas"],
+  ["/recomendaciones", "Inicio", "sparkles"],
+  ["/que-jugamos", "¿Qué jugamos?", "gamepad"],
+  ["/catalogo", "Catálogo", "search"],
+  ["/listas", "Mis listas", "list"],
+  ["/amigos", "Amigos", "user"],
+  ["/valoraciones", "Valoraciones", "star"],
+  ["/perfil", "Mi perfil", "heart"],
 ];
 
 const DEVELOPER_NAV = [
-  ["/dev", "Panel"],
-  ["/catalogo", "Catálogo"],
+  ["/dev", "Panel", "chart"],
+  ["/catalogo", "Catálogo", "search"],
+  ["/perfil", "Mi perfil", "user"],
 ];
 
 function renderNav(activePath = null) {
   const path = activePath || window.location.hash.slice(1).split("?")[0] || "/";
-  const items = isDeveloper() ? DEVELOPER_NAV : PLAYER_NAV;
+  const items = state.user?.onboarding_step ? [] : isDeveloper() ? DEVELOPER_NAV : PLAYER_NAV;
+
+  brandLink.setAttribute("href", `#${homePath()}`);
 
   clear(navSlot);
-  for (const [href, label] of items) {
+  for (const [href, label, symbol] of items) {
     const isActive = path === href || (href !== "/" && path.startsWith(`${href}/`));
     navSlot.appendChild(
       h(
         "a",
         {
-          class: "nav-link",
+          class: `nav-link${href === "/que-jugamos" ? " nav-play" : ""}`,
+          title: label,
           href: `#${href}`,
           "aria-current": isActive ? "page" : null,
         },
-        label,
+        icon(symbol, 19), h("span", { class: "nav-label" }, label),
       ),
     );
   }
 }
 
-/* ------------------------------------------------------------------ *
- * Acciones de la cabecera
- * ------------------------------------------------------------------ */
+
+let headerSearchInput = null;
+let headerSearch = null;
+
+function renderHeaderSearch() {
+  headerSearch = createHeaderSearch(headerSearchSlot);
+  headerSearchInput = headerSearch.input;
+}
+
+function syncHeaderSearch() {
+  if (!headerSearchInput || document.activeElement === headerSearchInput) return;
+  const params = new URLSearchParams(window.location.hash.split("?")[1] || "");
+  headerSearchInput.value = currentPath() === "/catalogo" ? params.get("q") || "" : "";
+}
+
 
 let openMenu = null;
 
@@ -116,46 +158,15 @@ document.addEventListener("click", (event) => {
 function accountMenu() {
   const menu = h("div", { class: "menu", role: "menu" });
 
+  if (isLoggedIn()) menu.append(h("div", { class: "menu-label" },
+    state.user.onboarding_step === "choose" ? "Completá tu registro" : isDeveloper() ? "Cuenta de desarrollador / estudio" : "Cuenta de jugador"), h("div", { class: "menu-sep" }));
+
   menu.append(
-    h("div", { class: "menu-label" }, "Cambiar de perfil"),
-    ...DEMO_ACCOUNTS.map((account) =>
-      h(
-        "button",
-        {
-          class: "menu-item",
-          role: "menuitem",
-          "aria-current": String(state.user?.username === account.username),
-          onClick: async () => {
-            closeMenu();
-            try {
-              const user = await login(account.username, DEMO_PASSWORD);
-              toast(`Ahora sos ${user.username}`);
-              navigate(user.role === "desarrollador" ? "/dev" : "/recomendaciones");
-            } catch (error) {
-              toast(error.message, "error");
-            }
-          },
-        },
-        h("span", { class: "avatar" }, initials(account.username)),
-        h(
-          "span",
-          { style: { flex: "1", minWidth: "0" } },
-          h("span", { style: { display: "block", fontWeight: "600" } }, account.label),
-          h(
-            "span",
-            { class: "account-note", style: { display: "block" } },
-            account.username,
-          ),
-        ),
-        state.user?.username === account.username ? icon("check", 14) : null,
-      ),
-    ),
-    h("div", { class: "menu-sep" }),
     h(
       "a",
       { class: "menu-item", href: "#/cuentas", onClick: closeMenu },
       icon("user", 15),
-      "Ver todos los perfiles",
+      "Planes y acceso",
     ),
     h(
       "a",
@@ -191,13 +202,6 @@ function accountMenu() {
 function renderActions() {
   clear(actionsSlot);
 
-  const quizButton = h(
-    "button",
-    { class: "btn btn-sm", onClick: openQuiz, title: "Asistente de decisión" },
-    icon("dice", 15),
-    h("span", { class: "quiz-label" }, "¿Qué jugamos hoy?"),
-  );
-
   const themeButton = h(
     "button",
     {
@@ -212,7 +216,9 @@ function renderActions() {
   const accountButton = h(
     "button",
     {
-      class: "btn btn-sm",
+      class: "btn btn-sm account-trigger",
+      title: isLoggedIn() ? displayName() : "Iniciar sesión",
+      "aria-label": isLoggedIn() ? `Cuenta de ${displayName()}` : "Iniciar sesión",
       "aria-haspopup": "menu",
       onClick: (event) => {
         event.stopPropagation();
@@ -226,36 +232,47 @@ function renderActions() {
     },
     isLoggedIn()
       ? [
-          h(
+          (state.user.steam_verified && state.user.steam_avatar_url) || state.user.avatar_url
+            ? h("img", { class: "avatar account-avatar", src: (state.user.steam_verified && state.user.steam_avatar_url) || state.user.avatar_url, alt: "", onError: event => event.currentTarget.replaceWith(h("span", { class: "avatar account-avatar" }, initials(displayName()))) })
+            : h(
             "span",
             {
               class: "avatar",
               style: { width: "20px", height: "20px", fontSize: "9px" },
             },
-            initials(state.user.username),
+            initials(displayName()),
           ),
-          h("span", { class: "account-trigger-label" }, state.user.username),
+          h("span", { class: "account-trigger-label" }, displayName()),
         ]
-      : [icon("user", 15), "Elegir perfil"],
+      : [icon("user", 15), "Iniciar sesión"],
     icon("chevronDown", 13),
   );
   accountWrap.appendChild(accountButton);
 
-  actionsSlot.append(quizButton, themeButton, accountWrap);
+  actionsSlot.append(themeButton, accountWrap);
 }
 
-/* ------------------------------------------------------------------ *
- * Montaje de vistas
- * ------------------------------------------------------------------ */
 
-/** Envuelve un handler de vista: muestra carga, captura errores y monta. */
+let navigationRevision = 0;
+
 function view(loader) {
   return async (context) => {
-    main.replaceChildren(spinnerBlock());
+    if (state.user?.onboarding_step && !["/bienvenida", "/cuentas", "/planes", "/acceso/jugadores", "/acceso/estudios"].includes(currentPath())) {
+      navigate("/bienvenida", { replace: true }); return;
+    }
+    if (!canAccessRoute(currentPath())) {
+      navigate(homePath(), { replace: true }); return;
+    }
+    const revision = navigationRevision;
+    const ownerId = state.user?.id ?? null;
+    const isCurrent = () => revision === navigationRevision && (state.user?.id ?? null) === ownerId;
+    main.replaceChildren(magicLoader("Cargando…"));
     try {
       const node = await loader(context);
+      if (!isCurrent()) return;
       main.replaceChildren(node);
     } catch (error) {
+      if (!isCurrent()) return;
       console.error(error);
       main.replaceChildren(
         emptyState(
@@ -268,17 +285,27 @@ function view(loader) {
   };
 }
 
-route("/", view(async () => {
-  // La raíz manda a cada rol a su lugar.
-  if (!isLoggedIn()) return accountsView();
-  navigate(isDeveloper() ? "/dev" : "/recomendaciones", { replace: true });
-  return h("div");
-}));
+route("/", async (context) => {
+  if (!isLoggedIn()) {
+    navigate("/cuentas", { replace: true });
+    return;
+  }
+  navigate(homePath(), { replace: true });
+});
 
-route("/cuentas", view(async () => accountsView()));
+route("/cuentas", view(async (context) => accountsView(context)));
+route("/planes", view(plansView));
+route("/acceso/jugadores", view(context => accountsView({ ...context, role: "jugador" })));
+route("/acceso/estudios", view(context => accountsView({ ...context, role: "desarrollador" })));
+route("/bienvenida", view(experienceView));
 route("/catalogo", view(catalogView));
 route("/recomendaciones", view(recommendationsView));
 route("/listas", view(listsView));
+route("/amigos", view(friendsView));
+route("/valoraciones", view(ratingsView));
+route("/que-jugamos", view(quizView));
+route("/perfil", view(profileView));
+route("/invitacion/:token", view(inviteView));
 route("/juego/:id", view(gameView));
 route("/dev", view(developerView));
 route("/dev/juego/:id", view(developerGameView));
@@ -294,15 +321,17 @@ setNotFound(
 );
 
 setNavigateHook((path) => {
+  navigationRevision += 1;
+  document.body.classList.toggle("auth-active", ["/cuentas", "/planes", "/acceso/jugadores", "/acceso/estudios"].includes(path));
   renderNav(path);
+  headerSearch?.close();
+  syncHeaderSearch();
   closeMenu();
 });
 
-/* ------------------------------------------------------------------ *
- * Arranque
- * ------------------------------------------------------------------ */
 
 subscribe(() => {
+  headerSearch?.close();
   renderNav();
   renderActions();
 });
@@ -311,12 +340,28 @@ async function boot() {
   initTheme();
   renderActions();
   renderNav();
-  main.replaceChildren(spinnerBlock("Iniciando GameTrack…"));
+  renderHeaderSearch();
+  initMotion(main);
+  main.replaceChildren(magicLoader("Iniciando GameTrack…"));
 
   await restore();
 
+  if (window.location.hash === "#/steam-complete") {
+    try {
+      await completeSteamLogin();
+      const requested = sessionStorage.getItem("gametrack.registration-role");
+      sessionStorage.removeItem("gametrack.registration-role");
+      const destination = state.user.onboarding_step === "choose" && ["jugador", "desarrollador"].includes(requested)
+        ? `/bienvenida?tipo=${requested}` : loginDestination(state.user, "/perfil");
+      history.replaceState(null, "", `#${destination}`);
+      toast("¡Listo! Verificamos tu cuenta con Steam.");
+    } catch (error) {
+      history.replaceState(null, "", "#/cuentas?steam_error=expired");
+    }
+  }
+
   if (!isLoggedIn() && !window.location.hash) {
-    navigate("/cuentas", { replace: true });
+    history.replaceState(null, "", "#/cuentas");
   }
   start();
 }

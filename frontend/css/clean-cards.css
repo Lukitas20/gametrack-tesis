@@ -1,0 +1,84 @@
+/* Tarjetas compartidas: portada, nombre, contexto y una sola nota pública. */
+.clean-game-card {min-width:0;border-radius:16px;box-shadow:none;color:var(--ink);transition:transform .2s ease,border-color .2s ease,box-shadow .2s ease;}
+.clean-game-card:hover {transform:translateY(-3px);border-color:var(--border-strong);box-shadow:0 8px 24px #1406200c;}
+.clean-game-card:focus-visible {outline:2px solid var(--brand-teal-ui);outline-offset:4px;}
+.clean-game-card .game-cover {width:100%;aspect-ratio:16/9;}
+.clean-game-card .game-meta {padding:18px;gap:7px;width:100%;min-width:0;}
+.clean-game-card .game-name {font-size:15px;font-weight:650;line-height:1.45;letter-spacing:-.02em;min-height:2.9em;}
+.game-card-genres {font-size:11px;color:var(--ink-secondary);line-height:1.5;}
+.clean-game-card .game-sub {font-size:11px;line-height:1.5;color:var(--ink-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.game-card-scores {margin-top:auto;padding-top:13px;}
+.game-community-score {display:flex;align-items:center;gap:5px;flex-wrap:wrap;font-size:12px;line-height:1.5;}
+.game-community-score strong {font-size:14px;font-weight:650;color:var(--ink);}
+.game-community-score svg {color:var(--brand-gold-ui);}
+.game-community-score .game-score-scale {font-size:10px;font-weight:400;color:var(--ink-secondary);}
+.game-community-score .game-score-label {margin-left:5px;font-size:10px;font-weight:400;}
+.game-community-score small {margin-left:auto;color:var(--ink-secondary);font-weight:400;font-size:10px;}
+.game-rating-empty {font-size:11px;line-height:1.7;color:var(--ink-secondary);}
+.game-own-rating {position:absolute;right:10px;bottom:10px;display:inline-flex;align-items:center;gap:5px;padding:6px 9px;background:#17121fdd;color:#fff;border:1px solid #ffffff20;border-radius:8px;font-size:10px;font-weight:550;backdrop-filter:blur(8px);}
+.game-own-rating svg {color:#edc98e;}
+.game-pending-label {display:flex;align-items:center;gap:5px;font-size:10px;color:var(--ink-secondary);line-height:1.5;margin-top:4px;}
+.clean-card-reason {padding:14px 18px;background:var(--surface);gap:9px;line-height:1.6;font-size:11px;}
+.clean-card-reason>span {display:grid;gap:5px;}
+.clean-card-reason small {font-size:8px;font-weight:600;letter-spacing:.07em;color:var(--brand-teal-ui);}
+.console-home .clean-game-card {border:1px solid var(--border);border-radius:16px;}
+.console-home .clean-game-card:hover {box-shadow:0 8px 24px #1406200c;}
+.gts-card,.recommendation-card {border-radius:16px;box-shadow:none;}
+.gts-card .clean-game-card,.recommendation-card .clean-game-card {border:0;border-radius:0;}
+.gts-card .clean-game-card:hover,.recommendation-card .clean-game-card:hover {transform:none;box-shadow:none;}
+.gts-card-info {padding:18px;gap:14px;}
+.gts-badge small {font-size:10px;line-height:1.5;}
+.recommendation-signals {font-size:11px;line-height:1.65;}
+.recommendation-actions {padding:14px 18px;border-top:1px solid var(--border);gap:9px;}
+/* Reseñas: identidad y recomendación arriba; opinión primero, análisis opcional. */
+.clean-review {padding:24px;border-radius:16px;border:1px solid var(--border);box-shadow:none;margin-bottom:14px;min-width:0;}
+.clean-review .review-head {display:flex;align-items:center;flex-wrap:nowrap;gap:12px;margin-bottom:18px;}
+.clean-review .avatar {width:36px;height:36px;flex-shrink:0;background:var(--accent-wash);color:var(--accent);font-size:12px;border-radius:50%;}
+.clean-review .game-review-author {min-width:0;flex:1;}
+.clean-review .game-review-author strong {font-size:13px;font-weight:600;overflow-wrap:anywhere;}
+.game-review-byline {display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;margin-top:4px;font-size:10px;color:var(--ink-secondary);line-height:1.5;}
+.clean-review .game-review-origin {padding:0;background:none;font-size:10px;}
+.game-review-verdict {display:inline-flex;align-items:center;gap:5px;flex-shrink:0;padding:6px 9px;border-radius:7px;font-size:10px;font-weight:550;line-height:1.4;color:var(--ink-secondary);background:var(--surface-sunken);}
+.game-review-verdict[data-recommended=true] {color:var(--brand-teal-ui);background:color-mix(in srgb,var(--brand-teal-ui) 9%,var(--surface));}
+.game-review-verdict[data-recommended=false] {color:var(--accent);background:var(--accent-wash);}
+.clean-review .game-review-title {font-size:16px;line-height:1.5;font-weight:600;margin-bottom:10px;overflow-wrap:anywhere;}
+.clean-review .review-body {font-size:14px;line-height:1.8;white-space:pre-wrap;color:var(--ink-secondary);overflow-wrap:anywhere;margin:0;}
+.clean-review .review-body.is-collapsed {display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;}
+.review-read-more {display:block;margin-top:12px;padding:3px 0;border:0;background:none;color:var(--accent);font:inherit;font-size:12px;font-weight:550;cursor:pointer;min-height:28px;}
+.review-read-more:hover {text-decoration:underline;}
+.review-read-more:focus-visible {outline:2px solid var(--brand-teal-ui);outline-offset:3px;border-radius:3px;}
+.clean-review .game-review-analysis {padding:0;border:0;margin:18px 0 0;font-size:10px;}
+.clean-review .game-review-analysis summary {display:inline-flex;gap:6px;font-size:10px;min-height:28px;color:var(--ink-secondary);}
+.review-analysis-content {padding:14px 0 0;border-top:1px solid var(--border);}
+.clean-review .game-review-analysis p {font-size:11px;line-height:1.7;}
+.clean-review .aspect-tags {margin-top:10px;}
+.game-section-head h2 {font-size:22px;}
+.game-section-head p {font-size:13px;}
+.game-your-experience .game-experience-button {font-size:12px;min-height:42px;}
+.game-detail-side .game-your-experience p:not(.eyebrow):not(.label) {font-size:13px;}
+.game-detail-side .game-your-experience small {font-size:11px;}
+.profile-written-review {padding:22px;border-radius:16px;box-shadow:none;}
+.profile-written-review>p {font-size:13px;line-height:1.75;}
+.profile-review-game {font-size:13px;line-height:1.5;}
+.profile-review-footer small {font-size:11px;}
+.steam-game,.steam-review-card {border-radius:16px;box-shadow:none;}
+.steam-game-info {padding:18px;}
+.steam-game-info h3 {font-size:14px;line-height:1.5;}
+.steam-caption {font-size:11px;line-height:1.6;}
+@media(max-width:600px){
+  .game-grid {grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;}
+  .clean-game-card .game-meta {padding:13px;gap:6px;}
+  .clean-game-card .game-name {font-size:13px;}
+  .clean-game-card .game-sub,.game-card-genres {font-size:10px;}
+  .game-community-score .game-score-label {flex-basis:100%;margin-left:0;font-size:10px;}
+  .game-community-score small {margin-left:0;}
+  .game-own-rating {right:6px;bottom:6px;font-size:9px;padding:5px 6px;}
+  .clean-card-reason {padding:12px;font-size:11px;}
+  .clean-review {padding:19px;}
+  .clean-review .review-head {flex-wrap:wrap;gap:10px;}
+  .clean-review .game-review-author {flex-basis:calc(100% - 46px);}
+  .game-review-verdict {margin-left:46px;}
+  .clean-review .review-body {font-size:13px;}
+}
+@media(prefers-reduced-motion:reduce){.clean-game-card,.clean-game-card .game-cover img {animation:none!important;transition:none!important;}}
+body.motion-paused .clean-game-card,body.motion-paused .clean-game-card .game-cover img {animation:none!important;transition:none!important;}

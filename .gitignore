@@ -2,6 +2,8 @@
 __pycache__/
 *.py[cod]
 .venv/
+.venv2/
+.venv-local/
 venv/
 *.egg-info/
 .pytest_cache/
@@ -14,9 +16,26 @@ venv/
 # Base de datos local
 *.db
 *.sqlite3
+*.db-wal
+*.db-shm
+*.db-journal
+*.sqlite3-wal
+*.sqlite3-shm
+*.sqlite3-journal
 
 # Datos generados por el seed
 backend/data/generated/
+backend/data/evaluation/
+# Corpus y claves privadas, incluso si el recolector usa un directorio distinto.
+.author_hmac.key
+*_hmac.key
+observations.jsonl
+observations.jsonl.tmp
+steam_training/
+deploy/backups/
+
+# Logs locales
+*.log
 
 # Node / frontend
 node_modules/
@@ -26,8 +45,22 @@ dist/
 # Modelos entrenados
 *.pkl
 *.joblib
+*.npz
+backend/models/*
+!backend/models/review_model.npz
+!backend/models/review_model.json
+!backend/models/steam_affinity.json
 
 # IDE
 .vscode/
 .idea/
 *.swp
+
+# Despliegue Google Cloud: estado y configuración de cada cuenta.
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+*.tfvars.json
+deploy/google-cloud/.tools/

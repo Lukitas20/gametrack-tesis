@@ -2,16 +2,19 @@
 
 Combina tres estrategias complementarias:
 
-- **Basada en contenido** — embeddings semánticos (modelo preentrenado
-  multilingüe) sobre géneros, etiquetas, desarrollador y descripción de cada
-  juego, con similitud coseno. Funciona desde la primera valoración y explica
-  bien sus resultados, pero encierra al usuario en lo que ya conoce.
+- **Basada en contenido** — TF-IDF sobre las etiquetas comunitarias de cada
+  juego ponderadas por votos (vía SteamSpy) más sus géneros, con similitud
+  coseno. La frecuencia del término es la evidencia (proporción de votos
+  dentro del juego) y el IDF castiga solo lo ubicuo ("Indie", "Action") y
+  premia lo que discrimina ("Souls-like", "Farming Sim"). Funciona desde la
+  primera valoración y explica bien sus resultados, pero encierra al usuario
+  en lo que ya conoce.
 - **Colaborativa** — filtrado ítem-ítem sobre la matriz usuario-ítem centrada
   por usuario. Descubre afinidades que el contenido no captura, pero necesita
   historial. Se eligió ítem-ítem sobre usuario-usuario porque las similitudes
   entre juegos son mucho más estables que entre personas cuando el catálogo
   es chico y los usuarios entran y salen.
-- **Popularidad** — media bayesiana. Es el piso: responde siempre, incluso
+- **Popularidad** — valoración ajustada por cantidad de evidencia. Responde siempre, incluso
   para un usuario del que no se sabe absolutamente nada.
 
 La estrategia se elige según cuánto historial tenga el usuario, de modo que
@@ -21,33 +24,50 @@ el arranque en frío degrada de forma gradual en lugar de fallar.
 from __future__ import annotations
 
 import threading
+from pathlib import Path
 from dataclasses import dataclass, field
-from functools import lru_cache
 
 import numpy as np
-from sentence_transformers import SentenceTransformer
+from scipy.sparse import csr_matrix, lil_matrix
+from sklearn.feature_extraction.text import TfidfTransformer
 from sklearn.metrics.pairwise import cosine_similarity
-from sqlalchemy import func, select
+from sklearn.preprocessing import normalize
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.models import Game, Rating, RecommendationSource, User
+from app.ml.local_model import load_for_database
+from app.models import (
+    Game, Rating, RecommendationSource, SteamCatalogEntry, SteamCatalogSync,
+    Tag, User, game_tags,
+)
 
-# Vecinos considerados al predecir con filtrado colaborativo.
 NEIGHBOURS = 20
-# Castigo por incertidumbre en la popularidad: se resta UNCERTAINTY_WEIGHT /
-# sqrt(evidencia). Con dos reseñas cae ~0,7 puntos; con cien, ~0,1.
+MIN_SHARED_RATERS = 2
+SIMILARITY_SHRINKAGE = 5.0
+DISCOVERY_RELEVANCE = {"familiar": 1.0, "balanced": 0.88, "explore": 0.65}
 UNCERTAINTY_WEIGHT = 1.0
-# Modelo de embeddings para la similitud de contenido: multilingüe (cubre el
-# catálogo en español) y liviano, apto para correr en CPU sin GPU.
-CONTENT_MODEL_NAME = "paraphrase-multilingual-MiniLM-L12-v2"
+GENRE_TF = 0.4
 
 
-@lru_cache(maxsize=1)
-def _content_model() -> SentenceTransformer:
-    """Carga el modelo una sola vez por proceso: instanciarlo es lo costoso,
-    no codificar texto con él."""
-    return SentenceTransformer(CONTENT_MODEL_NAME)
+@dataclass(frozen=True)
+class EngineConfig:
+    """Hiperparámetros del motor, con la producción como default.
+
+    Existe para el arnés de evaluación (``scripts/eval_arnes.py``): cada
+    variante de la tabla comparativa de la tesis es una instancia de esto
+    corriendo EL MISMO código que sirve al usuario — no una reimplementación
+    paralela que pueda divergir de lo evaluado. Construir el motor sin
+    argumentos (``RecommenderEngine(db)``, como hace ``get_engine``) es
+    idéntico a antes de que esta clase existiera.
+    """
+
+    use_community_tags: bool = True
+    use_vote_weights: bool = True
+    genre_tf: float = GENRE_TF
+    w_content: float = 0.6
+    w_quality: float = 0.15
+    w_reach: float = 0.25
 
 
 @dataclass(frozen=True)
@@ -57,6 +77,7 @@ class Recommendation:
     source: RecommendationSource
     reason: str
     components: dict[str, float] = field(default_factory=dict)
+    signals: list[str] = field(default_factory=list)
 
 
 def _normalize(values: np.ndarray) -> np.ndarray:
@@ -73,6 +94,23 @@ def _normalize(values: np.ndarray) -> np.ndarray:
     return (values - low) / (high - low)
 
 
+def _recommendable_game_filter():
+    """Mismo universo para construir el motor y comprobar su caché.
+
+    Indexar un AppID sin rasgos no modifica el modelo. Un elemento confirmado
+    como DLC/software queda fuera, conservando sus interacciones en la base.
+    """
+    non_game = select(SteamCatalogEntry.appid).where(
+        SteamCatalogEntry.appid == Game.steam_app_id,
+        SteamCatalogEntry.status == "non_game",
+    ).exists()
+    return and_(
+        or_(Game.steam_app_id.is_(None), Game.steam_synced_at.is_not(None),
+            Game.genres.any(), Game.tags.any()),
+        ~non_game,
+    )
+
+
 class RecommenderEngine:
     """Modelos entrenados sobre una foto del catálogo y las interacciones.
 
@@ -80,33 +118,178 @@ class RecommenderEngine:
     módulo y se reconstruye sólo cuando los datos cambian (ver ``get_engine``).
     """
 
-    def __init__(self, db: Session) -> None:
-        games = list(db.scalars(select(Game).order_by(Game.id)))
+    def __init__(self, db: Session, config: EngineConfig | None = None) -> None:
+        self.config = config or EngineConfig()
+        games = list(
+            db.scalars(
+                select(Game)
+                .where(_recommendable_game_filter())
+                .order_by(Game.id)
+            )
+        )
         self.game_ids: list[int] = [game.id for game in games]
         self.game_names: dict[int, str] = {game.id: game.name for game in games}
+        self._genre_slugs = {
+            game.id: {genre.slug for genre in game.genres} for game in games
+        }
+        self._genre_names = {
+            genre.slug: genre.name for game in games for genre in game.genres
+        }
         self._game_index: dict[int, int] = {
             game_id: index for index, game_id in enumerate(self.game_ids)
         }
 
-        self._build_content_model(games)
+        self._build_content_model(db, games)
+        self.affinity_features = {
+            game.id: dict(genres=sorted(self._genre_slugs[game.id]),
+                          tags=sorted(self._community_terms_by_game.get(game.id, set())))
+            for game in games
+        }
         self._build_collaborative_model(db)
         self._build_popularity_model(games)
+        self.local_model, self.local_model_status = load_for_database(db)
 
-    # -- Contenido ---------------------------------------------------------
 
-    def _build_content_model(self, games: list[Game]) -> None:
-        corpus = [game.content_soup for game in games]
-        model = _content_model()
-        embeddings = (
-            model.encode(corpus, normalize_embeddings=True, show_progress_bar=False)
-            if corpus
-            else np.zeros((0, model.get_sentence_embedding_dimension()))
+    def _build_content_model(self, db: Session, games: list[Game]) -> None:
+        """Matriz TF-IDF construida directo desde los datos, sin "sopa" de texto.
+
+        Términos: etiquetas comunitarias (slug inglés, vía SteamSpy) y
+        géneros (slug español). Las categorías de plataforma quedan afuera a
+        propósito: son filtros de modalidad, no semántica — que "Logros de
+        Steam" pese en la similitud era una de las causas de que dos indies
+        cualesquiera se vieran idénticos. La descripción también queda
+        afuera: marketing con vocabulario poco discriminante.
+
+        La frecuencia (TF) de una etiqueta es la RAÍZ de su proporción de
+        votos dentro del juego (91 mil votos de "FPS" en CS2 y 800 en un
+        indie significan lo mismo si la proporción es la misma: la
+        popularidad ya entra por otro canal). La raíz amortigua el sesgo de
+        la distribución de votos sin el problema del log sobre valores < 1.
+        ``TfidfTransformer`` aplica después el IDF y normaliza L2: sigue
+        siendo TF-IDF en sentido estricto — cambió qué cuenta como término y
+        cómo se mide su frecuencia, no el modelo.
+        """
+        genre_terms = (
+            {genre.slug for game in games for genre in game.genres}
+            if self.config.genre_tf > 0
+            else set()
         )
-        self._embeddings = np.asarray(embeddings)
-        self.content_similarity = cosine_similarity(self._embeddings)
-        np.fill_diagonal(self.content_similarity, 0.0)
+        vote_rows = (
+            db.execute(
+                select(game_tags.c.game_id, Tag.slug, game_tags.c.votes)
+                .join(Tag, Tag.id == game_tags.c.tag_id)
+                .join(Game, Game.id == game_tags.c.game_id)
+                .where(or_(Tag.kind == "community", game_tags.c.votes > 1), _recommendable_game_filter())
+            ).all()
+            if self.config.use_community_tags
+            else []
+        )
+        community_terms = {slug for _, slug, _ in vote_rows}
+        self._community_terms_by_game: dict[int, set[str]] = {}
+        for game_id, slug, _ in vote_rows:
+            self._community_terms_by_game.setdefault(game_id, set()).add(slug)
+        self._term_index: dict[str, int] = {
+            term: column
+            for column, term in enumerate(sorted(genre_terms | community_terms))
+        }
+        broad = set(self._genre_names) | {
+            "action", "adventure", "rpg", "indie", "casual", "simulation",
+            "strategy", "sports", "racing", "massively-multiplayer", "free-to-play",
+            "singleplayer", "multiplayer", "co-op", "online-co-op", "pvp",
+        }
+        self.personal_specific_terms = set(self._term_index) - broad
 
-    # -- Colaborativo ------------------------------------------------------
+        matrix = lil_matrix((len(games), max(len(self._term_index), 1)))
+        votes_by_game: dict[int, list[tuple[str, int]]] = {}
+        for game_id, slug, votes in vote_rows:
+            votes_by_game.setdefault(game_id, []).append((slug, votes or 1))
+
+        for row, game in enumerate(games):
+            if self.config.genre_tf > 0:
+                for genre in game.genres:
+                    matrix[row, self._term_index[genre.slug]] = self.config.genre_tf
+            tag_votes = votes_by_game.get(game.id, [])
+            total_votes = sum(votes for _, votes in tag_votes)
+            for slug, votes in tag_votes:
+                if self.config.use_vote_weights:
+                    share = votes / total_votes if total_votes else 0.0
+                    matrix[row, self._term_index[slug]] = float(np.sqrt(share))
+                else:
+                    matrix[row, self._term_index[slug]] = 1.0
+
+        self._transformer = TfidfTransformer(norm="l2", smooth_idf=True)
+        if games and self._term_index:
+            self._tfidf = self._transformer.fit_transform(matrix.tocsr())
+        else:
+            self._tfidf = csr_matrix((len(games), 0))
+
+    def _similarity_row(self, index: int) -> np.ndarray:
+        """Similitud de un juego contra todo el catálogo, calculada al vuelo.
+
+        Antes se precomputaba la matriz completa de similitud (juegos x
+        juegos, densa). Con el catálogo chico funcionaba; con el catálogo
+        post-ingesta (decenas de miles de juegos) esa matriz son varios GB y
+        construir el motor se vuelve imposible. Como ``_tfidf`` ya está
+        normalizada L2, la fila de similitud es un producto matriz-vector
+        ralo: milisegundos, sin memoria extra.
+        """
+        if self._tfidf.shape[1] == 0:
+            return np.zeros(len(self.game_ids))
+        row = np.asarray((self._tfidf @ self._tfidf[index].T).todense()).ravel()
+        row[index] = 0.0
+        return row
+
+    def personal_history_similarities(self, game_ids: list[int]) -> dict[int, np.ndarray]:
+        """Comparaciones para GTS: rasgos específicos antes que géneros amplios.
+
+        No construye una matriz catálogo x catálogo. Sólo compara los juegos
+        de esta persona; una coincidencia exclusivamente de género se limita
+        a .45 y no puede aparentar una coincidencia fuerte de experiencia.
+        """
+        if not self._term_index:
+            return {}
+        weights = np.ones(len(self._term_index))
+        for term, column in self._term_index.items():
+            if term not in self.personal_specific_terms:
+                weights[column] = .15
+        matrix = normalize(self._tfidf.multiply(weights).tocsr())
+        specific = matrix.multiply(weights == 1).tocsr()
+        result = {}
+        for gid in game_ids:
+            index = self._game_index.get(gid)
+            if index is None or matrix[index].nnz == 0:
+                continue
+            similarity = np.asarray((matrix @ matrix[index].T).todense()).ravel()
+            shared_specific = np.asarray((specific @ specific[index].T).todense()).ravel() > 0
+            similarity[~shared_specific] = np.minimum(similarity[~shared_specific], .45)
+            result[gid] = np.clip(similarity, 0., 1.)
+        return result
+
+    def score_terms(self, term_weights: dict[str, float]) -> np.ndarray | None:
+        """Afinidad de cada juego con una consulta ponderada término->peso.
+
+        Es el punto de entrada del asistente: el vocabulario del ánimo
+        (``app.ml.quiz_vocab``) se convierte acá en un vector de consulta en
+        el mismo espacio TF-IDF del catálogo. Los términos que no existen en
+        el corpus se ignoran; si no sobrevive ninguno devuelve ``None`` para
+        que quien llama degrade declarándolo, no en silencio.
+        """
+        if not term_weights or not self.game_ids or not self._term_index:
+            return None
+        query = lil_matrix((1, len(self._term_index)))
+        known = 0
+        for term, weight in term_weights.items():
+            column = self._term_index.get(term)
+            if column is not None and weight > 0:
+                query[0, column] = float(weight)
+                known += 1
+        if not known:
+            return None
+        vector = self._transformer.transform(query.tocsr())
+        if vector.nnz == 0:
+            return None
+        return cosine_similarity(vector, self._tfidf).ravel()
+
 
     def _build_collaborative_model(self, db: Session) -> None:
         rows = db.execute(select(Rating.user_id, Rating.game_id, Rating.score)).all()
@@ -114,65 +297,65 @@ class RecommenderEngine:
         self._user_index = {user_id: i for i, user_id in enumerate(self.user_ids)}
 
         shape = (len(self.user_ids), len(self.game_ids))
-        self.matrix = np.zeros(shape, dtype=float)
-        self._rated_mask = np.zeros(shape, dtype=bool)
-
+        user_rows, game_columns, scores = [], [], []
         for user_id, game_id, score in rows:
             if game_id not in self._game_index:
                 continue
-            row, column = self._user_index[user_id], self._game_index[game_id]
-            self.matrix[row, column] = score
-            self._rated_mask[row, column] = True
+            user_rows.append(self._user_index[user_id])
+            game_columns.append(self._game_index[game_id])
+            scores.append(score)
 
-        counts = self._rated_mask.sum(axis=1)
-        totals = self.matrix.sum(axis=1)
-        # Media de cada usuario sobre lo que efectivamente valoró.
+        self.matrix = csr_matrix((scores, (user_rows, game_columns)), shape=shape, dtype=float)
+        self.matrix.sort_indices()
+        counts = np.diff(self.matrix.indptr)
+        totals = np.asarray(self.matrix.sum(axis=1)).ravel()
         self.user_means = np.divide(
             totals, counts, out=np.full(len(self.user_ids), 3.0), where=counts > 0
         )
 
-        # Centrar por usuario neutraliza que unos puntúen alto y otros bajo:
-        # lo que importa es cuánto se aparta cada nota de su propia media.
-        centered = np.where(
-            self._rated_mask, self.matrix - self.user_means[:, np.newaxis], 0.0
-        )
-        self._centered = centered
+        centered = self.matrix.copy()
+        centered.data -= np.repeat(self.user_means, counts)
+        centered.eliminate_zeros()
+        self._centered_sparse = centered.tocsc()
+        observed = self.matrix.astype(np.int32)
+        observed.data.fill(1)
+        self._observed = observed.tocsc()
 
-        if shape[0] == 0:
-            self.item_similarity = np.zeros((shape[1], shape[1]))
-        else:
-            self.item_similarity = cosine_similarity(centered.T)
-            np.fill_diagonal(self.item_similarity, 0.0)
+    def _history(self, row: int) -> tuple[np.ndarray, np.ndarray]:
+        """Columnas y notas observadas de una persona, sin densificar la fila."""
+        start, end = self.matrix.indptr[row:row + 2]
+        return self.matrix.indices[start:end], self.matrix.data[start:end]
 
-    # -- Popularidad -------------------------------------------------------
 
     def _build_popularity_model(self, games: list[Game]) -> None:
         averages = np.array([game.avg_rating for game in games], dtype=float)
         counts = np.array([game.ratings_count for game in games], dtype=float)
 
+        for index, game in enumerate(games):
+            if counts[index] > 0:
+                continue
+            positive = game.steamspy_positive or 0
+            negative = game.steamspy_negative or 0
+            total = positive + negative
+            if total > 0:
+                averages[index] = 1 + 4 * (positive / total)
+                counts[index] = total
+
         rated = counts > 0
         global_mean = float(averages[rated].mean()) if rated.any() else 3.0
 
-        # Un juego con dos notas de 5 no debe superar a uno con doscientas
-        # notas de 4,6. Achicar hacia la media global (media bayesiana) no
-        # alcanza acá: buena parte de la evidencia real viene de reseñas de
-        # Steam agregadas como "recomendado/no recomendado", que se agrupan
-        # cerca del techo (la media global termina siendo ~4,9), así que
-        # "achicar hacia la media" apenas mueve a un juego con pocas reseñas
-        # perfectas. En cambio, castigar directamente por incertidumbre
-        # (1/sqrt(evidencia)) sí discrimina: cae fuerte con poca evidencia y
-        # cada vez menos a medida que se acumulan reseñas reales.
         self.popularity = averages - UNCERTAINTY_WEIGHT / np.sqrt(np.maximum(counts, 1.0))
         self.global_mean = global_mean
 
-    # -- Consultas ---------------------------------------------------------
+        self.reach = _normalize(np.log10(np.maximum(counts, 1.0) + 1.0))
+
 
     def similar_games(self, game_id: int, limit: int = 10) -> list[Recommendation]:
         """Juegos parecidos por contenido a uno dado."""
         if game_id not in self._game_index:
             return []
         index = self._game_index[game_id]
-        similarities = self.content_similarity[index]
+        similarities = self._similarity_row(index)
         order = np.argsort(similarities)[::-1][:limit]
         return [
             Recommendation(
@@ -187,99 +370,265 @@ class RecommenderEngine:
         ]
 
     def _content_scores_from_history(self, user_id: int) -> np.ndarray | None:
-        """Perfil de contenido a partir de los juegos que el usuario valoró alto."""
+        """Perfil firmado: las notas sobre 3 atraen y las inferiores alejan.
+
+        Una nota baja nunca se convierte en un gusto porque falten positivos.
+        El coseno firmado conserva la intensidad sin amplificar diferencias
+        mínimas con un reescalado relativo al catálogo.
+        """
         if user_id not in self._user_index:
             return None
         row = self._user_index[user_id]
-        rated = np.flatnonzero(self._rated_mask[row])
-        if rated.size == 0:
+        rated, ratings = self._history(row)
+        if rated.size == 0 or self._tfidf.shape[1] == 0:
             return None
-
-        threshold = max(3.5, float(self.user_means[row]))
-        liked = [i for i in rated if self.matrix[row, i] >= threshold]
-        if not liked:
-            # Nadie le gustó nada lo suficiente: se usa todo el historial
-            # ponderado por la nota, para no quedarse sin señal.
-            liked = list(rated)
-
-        weights = np.array([self.matrix[row, i] for i in liked], dtype=float)
-        profile = (self._embeddings[liked] * weights[:, np.newaxis]).sum(axis=0)
+        weights = (ratings - 3.0) / 2.0
+        profile = (self._tfidf[rated].multiply(weights[:, np.newaxis])).sum(axis=0)
+        profile = np.asarray(profile)
         norm = np.linalg.norm(profile)
         if norm < 1e-9:
             return None
-        return cosine_similarity((profile / norm).reshape(1, -1), self._embeddings).ravel()
+        return cosine_similarity(profile / norm, self._tfidf).ravel()
 
     def _content_scores_from_preferences(self, genre_slugs: list[str]) -> np.ndarray | None:
         """Perfil de contenido a partir de los géneros elegidos en el onboarding.
 
-        Los slugs se repiten tres veces para reproducir la ponderación que
-        ``Game.content_soup`` le da a los géneros dentro del corpus.
+        Es un caso particular de ``score_terms``: cada género elegido pesa
+        igual, y el TF-IDF resuelve el resto.
         """
         if not genre_slugs:
             return None
-        pseudo_document = " ".join(slug for slug in genre_slugs for _ in range(3))
-        vector = _content_model().encode(
-            [pseudo_document], normalize_embeddings=True, show_progress_bar=False
-        )
-        return cosine_similarity(vector, self._embeddings).ravel()
+        return self.score_terms({slug: 1.0 for slug in genre_slugs})
 
-    def _collaborative_scores(self, user_id: int) -> np.ndarray | None:
-        """Predice la nota de cada juego con filtrado colaborativo ítem-ítem."""
+    def suggest_by_mood(
+        self,
+        term_weights: dict[str, float] | list[str],
+        limit: int = 30,
+        exclude: set[int] | None = None,
+    ) -> list[Recommendation]:
+        """Perfil de contenido armado al vuelo a partir de una respuesta
+        puntual (el asistente "¿Qué jugamos hoy?"), sin pesar el historial
+        del usuario a propósito: la pregunta es por el ánimo de ahora mismo,
+        no por el gusto general — usar ``_content_scores_from_history`` acá
+        le taparía la respuesta a cualquiera que ya tenga valoraciones.
+
+        Acepta un dict término->peso (el vocabulario del asistente, ver
+        ``app.ml.quiz_vocab``) o una lista de slugs con peso uniforme (el
+        contrato viejo, que el frontend legado sigue usando).
+        """
+        if isinstance(term_weights, list):
+            term_weights = {slug: 1.0 for slug in term_weights}
+        content = self.score_terms(term_weights)
+        if content is None:
+            return []
+
+        contributions = {
+            "contenido": self.config.w_content * _normalize(content),
+            "popularidad": self.config.w_quality * _normalize(self.popularity),
+            "alcance": self.config.w_reach * self.reach,
+        }
+        combined = sum(contributions.values())
+        order = np.argsort(combined)[::-1]
+        excluded = exclude or set()
+
+        results: list[Recommendation] = []
+        for index in order:
+            game_id = self.game_ids[index]
+            if game_id in excluded:
+                continue
+            components = self._rounded_components(contributions, index)
+            results.append(
+                Recommendation(
+                    game_id=game_id,
+                    score=round(sum(components.values()), 4),
+                    source=RecommendationSource.CONTENT,
+                    reason="Coincide con el ánimo que elegiste",
+                    components=components,
+                )
+            )
+            if len(results) >= limit:
+                break
+        return results
+
+    def _collaborative_evidence(
+        self, user_id: int
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray] | None:
+        """Predicciones, fuerza de evidencia y vecinos útiles por candidato.
+
+        La similitud se reduce por cantidad de usuarios que valoraron ambos
+        juegos. No se usa min-max sobre predicciones: con poca evidencia no
+        debe aparecer una señal extrema sólo por ser la mayor del catálogo.
+        La fuerza de evidencia regula el peso del canal; no es probabilidad.
+        """
         if user_id not in self._user_index:
             return None
         row = self._user_index[user_id]
-        rated = np.flatnonzero(self._rated_mask[row])
+        rated, ratings = self._history(row)
         if rated.size == 0:
             return None
 
-        # Si ninguna nota se aparta de la media del propio usuario no hay nada
-        # que propagar a los vecinos: todas las predicciones saldrían iguales.
-        # Pasa con una sola valoración, o cuando alguien puntuó todo igual.
-        # Devolver None acá hace que el caso degrade a popularidad en lugar de
-        # a un orden arbitrario entre predicciones empatadas.
-        if float(np.abs(self._centered[row, rated]).max()) < 1e-9:
+        deviations = ratings - self.user_means[row]
+        if float(np.abs(deviations).max()) < 1e-9:
             return None
 
-        predictions = np.full(len(self.game_ids), np.nan)
-        for target in range(len(self.game_ids)):
-            if self._rated_mask[row, target]:
-                continue
-            similarities = self.item_similarity[target, rated]
-            positive = similarities > 0
-            if not positive.any():
-                continue
+        predictions = np.full(len(self.game_ids), self.user_means[row])
+        evidence = np.zeros(len(self.game_ids))
+        neighbour_counts = np.zeros(len(self.game_ids), dtype=int)
+        rated_set = set(rated)
+        centered_history = self._centered_sparse[:, rated].T
+        observed_history = self._observed[:, rated]
+        block_size = min(1024, max(1, 1_000_000 // rated.size))
+        for start in range(0, len(self.game_ids), block_size):
+            end = min(start + block_size, len(self.game_ids))
+            similarities_to_history = cosine_similarity(
+                self._centered_sparse[:, start:end].T, centered_history
+            )
+            shared = (self._observed[:, start:end].T @ observed_history).toarray()
+            similarities_to_history *= shared / (shared + SIMILARITY_SHRINKAGE)
+            similarities_to_history[shared < MIN_SHARED_RATERS] = 0.0
+            for offset, similarities in enumerate(similarities_to_history):
+                target = start + offset
+                if target in rated_set:
+                    continue
+                positive = similarities > 0
+                if not positive.any():
+                    continue
 
-            neighbours = rated[positive]
-            weights = similarities[positive]
-            if weights.size > NEIGHBOURS:
-                top = np.argsort(weights)[::-1][:NEIGHBOURS]
-                neighbours, weights = neighbours[top], weights[top]
+                neighbour_deviations = deviations[positive]
+                weights = similarities[positive]
+                if weights.size > NEIGHBOURS:
+                    top = np.argsort(weights)[::-1][:NEIGHBOURS]
+                    neighbour_deviations, weights = neighbour_deviations[top], weights[top]
 
-            denominator = np.abs(weights).sum()
-            if denominator < 1e-9:
-                continue
-            deviation = float((weights * self._centered[row, neighbours]).sum() / denominator)
-            predictions[target] = self.user_means[row] + deviation
+                denominator = np.abs(weights).sum()
+                if denominator < 1e-9:
+                    continue
+                deviation = float((weights * neighbour_deviations).sum() / denominator)
+                predictions[target] = np.clip(self.user_means[row] + deviation, 1.0, 5.0)
+                evidence[target] = denominator / (denominator + 1.0)
+                neighbour_counts[target] = len(weights)
 
-        if np.all(np.isnan(predictions)):
+        if not evidence.any():
             return None
-        # Los juegos sin vecinos útiles caen a la media del usuario.
-        return np.where(np.isnan(predictions), self.user_means[row], predictions)
+        return predictions, evidence, neighbour_counts
+
+    def _collaborative_scores(self, user_id: int) -> np.ndarray | None:
+        """Compatibilidad con consumidores que sólo necesitan las predicciones."""
+        result = self._collaborative_evidence(user_id)
+        return result[0] if result is not None else None
 
     def _best_content_match(self, user_id: int, target_index: int) -> str | None:
         """Juego ya valorado que más se parece al recomendado (explicabilidad)."""
         if user_id not in self._user_index:
             return None
         row = self._user_index[user_id]
-        rated = np.flatnonzero(self._rated_mask[row])
+        observed, ratings = self._history(row)
+        rated = observed[ratings > 3.0]
         if rated.size == 0:
             return None
-        similarities = self.content_similarity[target_index, rated]
+        similarities = self._similarity_row(target_index)[rated]
         if similarities.max() <= 0:
             return None
         return self.game_names[self.game_ids[rated[int(np.argmax(similarities))]]]
 
-    # -- Recomendación -----------------------------------------------------
+
+    def _local_scores(self, user_id: int | None) -> tuple[np.ndarray, np.ndarray] | None:
+        if self.local_model is None or user_id not in self._user_index:
+            return None
+        row = self._user_index[user_id]
+        observed, ratings = self._history(row)
+        history = [(self.game_ids[i], float(score)) for i, score in zip(observed, ratings)]
+        prediction = self.local_model.predict(history)
+        return self._align_local_prediction(prediction)
+
+    def _align_local_prediction(self, prediction: np.ndarray | None) -> tuple[np.ndarray, np.ndarray] | None:
+        """Alinea los factores al catálogo sin dar soporte a ítems desconocidos."""
+        if prediction is None:
+            return None
+        values, support = np.zeros(len(self.game_ids)), np.zeros(len(self.game_ids))
+        for pos, gid in enumerate(self.local_model.game_ids):
+            index = self._game_index.get(int(gid))
+            count = int(self.local_model.counts[pos])
+            if index is not None and count >= 2:
+                values[index] = (prediction[pos] - 1.0) / 4.0
+                support[index] = count / (count + 5.0)
+        return (values, support) if support.any() else None
+
+    def personal_local_scores(
+        self, signals: dict[int, dict],
+    ) -> tuple[np.ndarray, np.ndarray] | None:
+        """Canal local para GTS, resuelto con opiniones explícitas actuales.
+
+        Sólo usa un artefacto fresco, entrenado con datos observados y que
+        superó la validación automática. No reutiliza el snapshot de Rating:
+        la señal vigente por juego ya resolvió notas y experiencias nuevas.
+        Las horas no se convierten en notas ni completan el mínimo de tres
+        opiniones comparables. El resultado no reemplaza opiniones propias;
+        su mezcla y las restricciones de rechazo corresponden al consumidor.
+        """
+        status = self.local_model_status
+        if (self.local_model is None or status.get("status") != "ready"
+                or status.get("data_label") != "observed" or status.get("automatic_eligible") is not True):
+            return None
+        known = {int(gid) for gid in self.local_model.game_ids}
+        history = []
+        for gid, signal in signals.items():
+            if gid not in known or gid not in self._game_index or not isinstance(signal, dict):
+                continue
+            weight = signal.get("weight")
+            if type(weight) not in (int, float) or not np.isfinite(weight) or not -1 <= weight <= 1 or weight == 0:
+                continue
+            source = signal.get("source")
+            if source == "rating":
+                score = signal.get("rating")
+                if type(score) not in (int, float) or not np.isfinite(score) or not 1 <= score <= 5:
+                    continue
+            elif source in {"gametrack_review", "steam_review"}:
+                recommended = signal.get("recommended")
+                if type(recommended) is not bool:
+                    continue
+                score = 5.0 if recommended else 1.0
+            elif source == "play_feedback":
+                score = 3.0 + 2.0 * weight
+            else:
+                continue
+            history.append((gid, float(score)))
+        if len(history) < 3:
+            return None
+        history.sort()
+        return self._align_local_prediction(self.local_model.predict(history))
+
+    def personal_scores(self, user_id: int, preferred_genres: list[str]) -> tuple[np.ndarray, str]:
+        """Afinidad de TODOS los juegos, incluidos los jugados, para grupos.
+
+        Las notas conocidas tienen prioridad. Un miembro sin perfil aporta
+        0.5 neutral, no una supuesta opinión personal derivada de popularidad.
+        """
+        history = self._content_scores_from_history(user_id)
+        genre_scores = [self.score_terms({slug: 1.0}) for slug in sorted(set(preferred_genres))]
+        genre_scores = [scores for scores in genre_scores if scores is not None]
+        preference = None
+        if genre_scores:
+            similarity = np.maximum.reduce(genre_scores)
+            preference = np.where(similarity > 0, (similarity + 1.0) / 2.0, 0.0)
+        values = (history + 1.0) / 2.0 if history is not None else preference
+        if values is None:
+            values, basis = np.full(len(self.game_ids), 0.5), "popularidad"
+        else:
+            values, basis = np.clip(values, 0, 1), "contenido"
+        local = self._local_scores(user_id) if self.local_model_status.get("automatic_eligible") else None
+        if local is not None:
+            learned, support = local
+            weight = 0.65 * support
+            values = (1 - weight) * values + weight * learned
+            basis = "ia_local"
+        if user_id in self._user_index:
+            row = self._user_index[user_id]
+            observed, ratings = self._history(row)
+            values[observed] = (ratings - 1.0) / 4.0
+            if observed.size and basis == "popularidad":
+                basis = "contenido"
+        return values, basis
 
     def recommend(
         self,
@@ -288,6 +637,8 @@ class RecommenderEngine:
         limit: int = 10,
         strategy: str = "auto",
         exclude: set[int] | None = None,
+        discovery: str = "balanced",
+        personal_affinities: dict[int, float] | None = None,
     ) -> list[Recommendation]:
         """Devuelve los mejores juegos para un usuario.
 
@@ -295,27 +646,59 @@ class RecommenderEngine:
             strategy: ``auto`` elige según el historial disponible. Forzar
                 ``contenido``, ``colaborativo``, ``hibrido`` o ``popularidad``
                 permite comparar los enfoques entre sí.
+            discovery: controla la diversidad de la tanda. El score conserva
+                la afinidad base, incluso si cambia el orden de presentación.
         """
+        if discovery not in DISCOVERY_RELEVANCE:
+            raise ValueError("Modo de descubrimiento desconocido")
+        if limit <= 0 or not self.game_ids:
+            return []
         excluded = set(exclude or set())
         if user_id is not None and user_id in self._user_index:
             row = self._user_index[user_id]
             excluded.update(
-                self.game_ids[i] for i in np.flatnonzero(self._rated_mask[row])
+                self.game_ids[i] for i in self._history(row)[0]
             )
 
-        content = self._content_scores_from_history(user_id) if user_id else None
+        history_content = (
+            self._content_scores_from_history(user_id) if user_id is not None else None
+        )
+        preferences = self._content_scores_from_preferences(preferred_genres or [])
+        content = (
+            (np.clip(history_content, -1.0, 1.0) + 1.0) / 2.0
+            if history_content is not None else None
+        )
         if content is None:
-            content = self._content_scores_from_preferences(preferred_genres or [])
-        collaborative = self._collaborative_scores(user_id) if user_id else None
-
-        popularity = self.popularity
+            content = preferences
+        elif preferences is not None:
+            content = 0.8 * content + 0.2 * np.clip(preferences, 0.0, 1.0)
+        if personal_affinities is not None:
+            content = np.clip(np.array([personal_affinities.get(gid, .15) for gid in self.game_ids]),0.,1.)
+        collaboration = (
+            self._collaborative_evidence(user_id)
+            if user_id is not None and strategy in {"auto", "hibrido", "colaborativo"}
+            else None
+        )
+        collaborative = collaboration[0] if collaboration is not None else None
+        evidence = collaboration[1] if collaboration is not None else np.zeros(len(self.game_ids))
+        neighbour_counts = (
+            collaboration[2] if collaboration is not None
+            else np.zeros(len(self.game_ids), dtype=int)
+        )
+        popularity = np.clip((self.popularity - 1.0) / 4.0, 0.0, 1.0)
         history_size = (
-            int(self._rated_mask[self._user_index[user_id]].sum())
+            self._history(self._user_index[user_id])[0].size
             if user_id in self._user_index
             else 0
         )
 
         chosen = strategy
+        use_local = strategy == "ia_local" or (
+            strategy in {"auto", "hibrido"} and self.local_model_status.get("automatic_eligible")
+        )
+        local = self._local_scores(user_id) if use_local else None
+        if chosen == "ia_local":
+            chosen = "contenido" if content is not None else "popularidad"
         if strategy == "auto":
             if collaborative is not None and history_size >= settings.REC_COLD_START_THRESHOLD:
                 chosen = "hibrido"
@@ -324,98 +707,164 @@ class RecommenderEngine:
             else:
                 chosen = "popularidad"
 
-        content_weight = settings.REC_CONTENT_WEIGHT
-        collab_weight = settings.REC_COLLAB_WEIGHT
+        content_weight = max(0.0, settings.REC_CONTENT_WEIGHT)
+        collab_weight = max(0.0, settings.REC_COLLAB_WEIGHT)
         total_weight = content_weight + collab_weight
-        content_weight, collab_weight = (
-            content_weight / total_weight,
-            collab_weight / total_weight,
-        )
+        collab_weight = collab_weight / total_weight if total_weight else 0.5
 
         components: dict[str, np.ndarray] = {}
         if chosen == "hibrido" and content is not None and collaborative is not None:
-            combined = content_weight * _normalize(content) + collab_weight * _normalize(
-                collaborative
-            )
-            components = {"contenido": content, "colaborativo": collaborative}
+            effective_collab_weight = collab_weight * evidence
+            components = {
+                "contenido": (1.0 - effective_collab_weight) * content,
+                "colaborativo": effective_collab_weight * ((collaborative - 1.0) / 4.0),
+            }
             source = RecommendationSource.HYBRID
-        elif chosen == "colaborativo" and collaborative is not None:
-            combined = _normalize(collaborative)
-            components = {"colaborativo": collaborative}
+        elif chosen in {"colaborativo", "hibrido"} and collaborative is not None:
+            components = {
+                "colaborativo": evidence * ((collaborative - 1.0) / 4.0),
+                "popularidad": (1.0 - evidence) * popularity,
+            }
             source = RecommendationSource.COLLABORATIVE
-        elif chosen == "contenido" and content is not None:
-            # Un toque de popularidad desempata entre juegos igual de afines y
-            # evita recomendar títulos afines pero muy mal valorados.
-            combined = 0.8 * _normalize(content) + 0.2 * _normalize(popularity)
-            components = {"contenido": content, "popularidad": popularity}
+        elif chosen in {"contenido", "hibrido"} and content is not None:
+            components = {"contenido": 0.8 * content, "popularidad": 0.2 * popularity}
             source = RecommendationSource.CONTENT
         else:
-            combined = _normalize(popularity)
             components = {"popularidad": popularity}
             source = RecommendationSource.POPULARITY
 
-        order = np.argsort(combined)[::-1]
+        local_weight = np.zeros(len(self.game_ids))
+        if local is not None:
+            learned, support = local
+            local_weight = support * (0.8 if strategy == "ia_local" else 0.35)
+            components = {key: values * (1.0 - local_weight) for key, values in components.items()}
+            components["ia_local"] = local_weight * learned
+
+        combined = sum(components.values())
+        order = self._diverse_order(combined, excluded, limit, discovery)
         results: list[Recommendation] = []
         for index in order:
             game_id = self.game_ids[index]
-            if game_id in excluded:
-                continue
-
+            item_source = source
+            if evidence[index] == 0 or (
+                source is RecommendationSource.HYBRID and collab_weight == 0
+            ):
+                if source is RecommendationSource.HYBRID:
+                    item_source = RecommendationSource.CONTENT
+                elif source is RecommendationSource.COLLABORATIVE:
+                    item_source = RecommendationSource.POPULARITY
+            contributions = self._rounded_components(components, index)
+            signals = self._build_signals(
+                item_source, user_id, index, preferred_genres or [], int(neighbour_counts[index])
+            )
+            if local_weight[index] > 0:
+                item_source = RecommendationSource.LOCAL if strategy == "ia_local" else RecommendationSource.HYBRID
+                signals.insert(0, "Modelo entrenado localmente con valoraciones; ajustado a tus notas actuales")
             results.append(
                 Recommendation(
                     game_id=game_id,
-                    score=round(float(combined[index]), 4),
-                    source=source,
-                    reason=self._build_reason(source, user_id, index, components),
-                    components={
-                        name: round(float(values[index]), 4)
-                        for name, values in components.items()
-                    },
+                    score=round(sum(contributions.values()), 4),
+                    source=item_source,
+                    reason=signals[0],
+                    components=contributions,
+                    signals=signals,
                 )
             )
             if len(results) >= limit:
                 break
         return results
 
-    def _build_reason(
+    @staticmethod
+    def _rounded_components(components: dict[str, np.ndarray], index: int) -> dict[str, float]:
+        """El score público se obtiene sumando estos aportes ya redondeados."""
+        return {name: round(float(values[index]), 4) for name, values in components.items()}
+
+    def _diverse_order(
+        self, scores: np.ndarray, excluded: set[int], limit: int, discovery: str
+    ) -> list[int]:
+        """MMR en un conjunto acotado: evita llenar la tanda con clones.
+
+        La afinidad sigue siendo el criterio principal. Los empates se
+        resuelven por ID, así una consulta idéntica siempre es reproducible.
+        """
+        ranked = [
+            int(i) for i in np.argsort(-scores, kind="stable")
+            if self.game_ids[i] not in excluded
+        ]
+        relevance = DISCOVERY_RELEVANCE[discovery]
+        if relevance == 1.0 or self._tfidf.shape[1] == 0:
+            return ranked[:limit]
+        pool = np.array(ranked[:max(100, limit * 10)], dtype=int)
+        if pool.size == 0:
+            return []
+        selected: list[int] = []
+        available = np.ones(pool.size, dtype=bool)
+        redundancy = np.zeros(pool.size)
+        for _ in range(min(limit, pool.size)):
+            utility = relevance * scores[pool] - (1.0 - relevance) * redundancy
+            utility[~available] = -np.inf
+            position = int(np.argmax(utility))
+            index = int(pool[position])
+            selected.append(index)
+            available[position] = False
+            similarity = np.asarray((self._tfidf[pool] @ self._tfidf[index].T).todense()).ravel()
+            redundancy = np.maximum(redundancy, similarity)
+        return selected
+
+    def _build_signals(
         self,
         source: RecommendationSource,
         user_id: int | None,
         index: int,
-        components: dict[str, np.ndarray],
-    ) -> str:
+        preferred_genres: list[str],
+        neighbour_count: int,
+    ) -> list[str]:
         if source is RecommendationSource.POPULARITY:
-            return "Entre los mejor valorados del catálogo"
-
-        if source is RecommendationSource.COLLABORATIVE:
-            return "A jugadores con un historial parecido al tuyo les gustó"
-
-        similar = self._best_content_match(user_id, index) if user_id else None
-        if source is RecommendationSource.HYBRID:
+            return ["Valoración general ajustada por cantidad de reseñas disponibles"]
+        signals = []
+        if source in {RecommendationSource.CONTENT, RecommendationSource.HYBRID}:
+            similar = self._best_content_match(user_id, index) if user_id is not None else None
             if similar:
-                return f"Se parece a {similar} y gustó a jugadores como vos"
-            return "Coincide con tus gustos y con los de jugadores parecidos"
+                signals.append(f"Se parece a {similar}, que valoraste bien")
+            common = sorted(self._genre_slugs[self.game_ids[index]] & set(preferred_genres))
+            if common:
+                names = ", ".join(self._genre_names[slug] for slug in common[:3])
+                signals.append(f"Géneros que elegiste: {names}")
+            if user_id in self._user_index:
+                row = self._user_index[user_id]
+                if np.any(self._history(row)[1] < 3.0):
+                    signals.append("Tu perfil también tiene en cuenta las valoraciones negativas")
+            if not signals:
+                signals.append("Seleccionado con tu perfil de contenido y los datos disponibles")
+        if neighbour_count and source in {RecommendationSource.COLLABORATIVE, RecommendationSource.HYBRID}:
+            signals.append(
+                f"Patrones de valoración compartidos con {neighbour_count} "
+                f"{'juego' if neighbour_count == 1 else 'juegos'} de tu historial"
+            )
+        return signals
 
-        if similar:
-            return f"Se parece a {similar}, que valoraste bien"
-        return "Coincide con los géneros que elegiste"
 
-
-# ---------------------------------------------------------------------------
-# Caché del motor
-# ---------------------------------------------------------------------------
 
 _engine: RecommenderEngine | None = None
-_fingerprint: tuple[int, int, int] | None = None
+_fingerprint: tuple[object, int, int, int, int, int] | None = None
 _lock = threading.Lock()
 
 
-def _current_fingerprint(db: Session) -> tuple[int, int, int]:
-    """Huella barata de los datos: cambia cuando hay que reentrenar."""
+def _current_fingerprint(db: Session) -> tuple[object, int, int, int, int, int]:
+    """Detecta cambios útiles, incluso los escritos por un worker separado."""
+    try:
+        model_modified = Path(settings.LOCAL_MODEL_PATH).stat().st_mtime_ns
+    except OSError:
+        model_modified = 0
+    bind = db.get_bind()
+    database_identity = getattr(bind, "engine", bind)
     return (
-        db.scalar(select(func.count(Game.id))) or 0,
+        database_identity,
+        db.scalar(select(func.count(Game.id)).where(_recommendable_game_filter())) or 0,
         db.scalar(select(func.count(Rating.id))) or 0,
         db.scalar(select(func.max(Rating.id))) or 0,
+        db.scalar(select(SteamCatalogSync.revision).where(SteamCatalogSync.id == 1)) or 0,
+        model_modified,
     )
 
 
@@ -440,14 +889,44 @@ def invalidate_engine() -> None:
 
 
 def recommend_for_user(
-    db: Session, user: User, limit: int | None = None, strategy: str = "auto"
+    db: Session, user: User, limit: int | None = None, strategy: str = "auto",
+    discovery: str = "balanced", _context=None, company: str | None = None,
 ) -> list[Recommendation]:
     """Recomendaciones para un usuario, resolviendo sus preferencias."""
     engine = get_engine(db)
     genre_slugs = [preference.genre.slug for preference in user.preferences]
-    return engine.recommend(
+    context = _context
+    if strategy == "auto" and context is None:
+        from app.services.gametrack_score_service import score_context
+        context = score_context(db, user, engine=engine)
+    excluded = (context["owned"] | set(context["own_signals"])) if context else set()
+    if company is not None:
+        from app.ml.group_recommender import compatible_game_ids
+        excluded = excluded | (set(engine.game_ids) - compatible_game_ids(db, company))
+    recommendations = engine.recommend(
         user_id=user.id,
         preferred_genres=genre_slugs,
         limit=limit or settings.REC_DEFAULT_LIMIT,
         strategy=strategy,
+        discovery=discovery,
+        exclude=excluded,
+        personal_affinities=context["scores"] if context and context["has_history"] else None,
     )
+    if context and context["has_history"]:
+        descriptions = {
+            "gametrack_review": "Aprende de tus reseñas de GameTrack, incluyendo los juegos que no recomendaste",
+            "steam_review": "Tiene en cuenta tus propias recomendaciones y rechazos de Steam",
+            "steam_playtime": "Usa tus horas de Steam como señal de interés; no las convierte en valoraciones",
+            "play_feedback": "Tiene en cuenta la experiencia que guardaste después de jugar",
+        }
+        additions=[text for source,text in descriptions.items() if any(signal["source"]==source for signal in context["signals"].values())]
+        from app.services.personal_history_service import history_reasons
+        games = {g.id:g for g in db.scalars(select(Game).where(Game.id.in_([r.game_id for r in recommendations])))}
+        grounded = []
+        for recommendation in recommendations:
+            comparisons = [item[3] for item in history_reasons(games[recommendation.game_id], context)]
+            signals = list(dict.fromkeys(comparisons + recommendation.signals + additions))
+            grounded.append(Recommendation(game_id=recommendation.game_id, score=recommendation.score,
+                source=recommendation.source, reason=signals[0], components=recommendation.components, signals=signals))
+        recommendations = grounded
+    return recommendations

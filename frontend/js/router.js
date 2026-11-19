@@ -1,4 +1,3 @@
-/* Router por hash: funciona sirviendo archivos estáticos, sin reescrituras. */
 
 const routes = [];
 let notFound = null;

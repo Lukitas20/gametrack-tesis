@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.core.security import decode_access_token
 from app.db.database import get_db
-from app.models import User, UserRole
+from app.models import User
 from app.services.user_service import get_user
 
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -28,17 +28,44 @@ def get_current_user(
     if not payload or not payload.get("sub"):
         raise unauthorized
 
-    user = get_user(db, int(payload["sub"]))
+    try:
+        user_id = int(payload["sub"])
+    except (TypeError, ValueError):
+        raise unauthorized
+    user = get_user(db, user_id)
     if user is None or not user.is_active:
         raise unauthorized
+    from app.db.real_data import is_synthetic_profile
+    if is_synthetic_profile(user):
+        raise HTTPException(403, "Este perfil sintético fue retirado. Iniciá sesión con tu cuenta personal o Steam.")
     return user
+
+
+def get_optional_current_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+    db: Session = Depends(get_db),
+) -> User | None:
+    """Admite visitas anónimas; un token enviado igual debe ser válido."""
+    if credentials is None:
+        return None
+    return get_current_user(credentials, db)
 
 
 def require_developer(user: User = Depends(get_current_user)) -> User:
     """Restringe un endpoint al rol desarrollador."""
-    if user.role is not UserRole.DEVELOPER:
+    if not user.is_developer:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Esta sección es exclusiva del rol desarrollador",
         )
     return user
+
+
+def require_player(user: User = Depends(get_current_user)) -> User:
+    from app.services.friendship_service import require_player as check_player
+    return check_player(user)
+
+
+def optional_player(user: User | None = Depends(get_optional_current_user)) -> User | None:
+    """Las consultas públicas siguen disponibles; una cuenta de estudio no es jugador."""
+    return require_player(user) if user is not None else None

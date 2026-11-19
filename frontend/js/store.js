@@ -1,32 +1,7 @@
-/* Estado de sesión y cachés del catálogo. */
 
 import { api, setToken } from "./api.js";
 
 const STORAGE_KEY = "gametrack.session";
-
-/** Cuentas creadas por el seed, para poder cambiar de rol en la demo. */
-export const DEMO_ACCOUNTS = [
-  {
-    username: "jugador.demo",
-    label: "Cuenta Demo Jugador",
-    role: "jugador",
-    note: "Sin valoraciones: arranque en frío real. Valorá juegos para ver cómo cambian las recomendaciones.",
-  },
-  {
-    username: "tester.demo",
-    label: "Cuenta de Testing",
-    role: "jugador",
-    note: "Géneros elegidos y 10 juegos ya valorados: recomendaciones de contenido/híbridas desde el primer login.",
-  },
-  {
-    username: "dev.demo",
-    label: "Cuenta Demo Desarrollador",
-    role: "desarrollador",
-    note: "Panel de analítica del estudio con más juegos importados de Steam.",
-  },
-];
-
-export const DEMO_PASSWORD = "demo1234";
 
 const listeners = new Set();
 
@@ -36,7 +11,6 @@ export const state = {
   genres: [],
   tags: [],
   ratings: new Map(), // game_id -> score
-  ready: false,
 };
 
 export function subscribe(listener) {
@@ -52,8 +26,31 @@ export function isLoggedIn() {
   return Boolean(state.user);
 }
 
-export function isDeveloper() {
-  return state.user?.role === "desarrollador";
+export function displayName(user = state.user) {
+  if (!user) return "Mi cuenta";
+  if (user.steam_verified && user.steam_username?.trim()) return user.steam_username.trim();
+  return user.full_name?.trim() || (user.steam_verified && /^steam_\d+$/.test(user.username) ? "Mi cuenta de Steam" : user.username);
+}
+
+export function isDeveloper(user = state.user) {
+  return user?.role === "desarrollador" && user.onboarding_step !== "choose";
+}
+
+export function accountSetupRole(user, requested = null) {
+  if (user.onboarding_step !== "choose") return user.role;
+  return ["jugador", "desarrollador"].includes(requested) ? requested : null;
+}
+
+export function canAccessRoute(path, user = state.user) {
+  if (!user) return true;
+  if (path === "/dev" || path.startsWith("/dev/")) return isDeveloper(user);
+  const player = ["/recomendaciones", "/listas", "/amigos", "/valoraciones", "/que-jugamos"];
+  if (player.includes(path) || path.startsWith("/invitacion/")) return user.role === "jugador" && user.onboarding_step !== "choose";
+  return true;
+}
+
+export async function saveAccountSetup(data) {
+  return acceptSession(await api.updateAccountSetup(data));
 }
 
 function persist() {
@@ -66,16 +63,14 @@ function persist() {
 
 async function loadRatings() {
   state.ratings = new Map();
-  if (!state.user || state.user.role === "desarrollador") return;
+  if (!state.user || state.user.role !== "jugador" || state.user.onboarding_step === "choose") return;
   try {
     const rows = await api.myRatings();
     state.ratings = new Map(rows.map((row) => [row.game_id, row.score]));
   } catch {
-    // Sin historial no se bloquea la sesión.
   }
 }
 
-/** Carga el catálogo base una sola vez por sesión. */
 export async function loadCatalog() {
   if (state.genres.length) return;
   const [genres, tags] = await Promise.all([api.genres(), api.tags(3)]);
@@ -83,8 +78,34 @@ export async function loadCatalog() {
   state.tags = tags;
 }
 
-export async function login(username, password) {
-  const data = await api.login(username, password);
+export async function login(username, password, role) {
+  const data = await api.login(username, password, role);
+  return acceptSession(data);
+}
+
+export async function register(data) {
+  return acceptSession(await api.register(data));
+}
+
+export async function completeSteamLogin() {
+  return acceptSession(await api.steamSession());
+}
+
+export function loginDestination(user, fallback = "/recomendaciones") {
+  if (user.onboarding_step) return "/bienvenida";
+  const invite = sessionStorage.getItem("gametrack.invite");
+  if (user.role !== "desarrollador") {
+    sessionStorage.removeItem("gametrack.invite");
+    if (invite && /^[A-Za-z0-9_-]{32,64}$/.test(invite)) return `/invitacion/${invite}`;
+  }
+  return user.role === "desarrollador" ? studioDestination(user) : fallback;
+}
+
+export function studioDestination(user = state.user) {
+  return user?.analysis_game_id ? `/dev/juego/${user.analysis_game_id}` : "/dev";
+}
+
+async function acceptSession(data) {
   state.token = data.access_token;
   state.user = data.user;
   setToken(state.token);
@@ -103,7 +124,6 @@ export function logout() {
   emit();
 }
 
-/** Restaura la sesión guardada al arrancar, si el token sigue siendo válido. */
 export async function restore() {
   const raw = localStorage.getItem(STORAGE_KEY);
   if (raw) {
@@ -117,7 +137,6 @@ export async function restore() {
       logout();
     }
   }
-  state.ready = true;
   emit();
 }
 
@@ -137,5 +156,11 @@ export function ratingFor(gameId) {
 
 export async function refreshUser() {
   state.user = await api.me();
+  emit();
+}
+
+export function updateSteamPreferences(preferences) {
+  if (!state.user) return;
+  state.user = { ...state.user, genres: preferences.genres, preferences_source: preferences.source };
   emit();
 }

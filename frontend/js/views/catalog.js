@@ -1,13 +1,19 @@
-/* Catálogo con búsqueda y filtros. */
 
 import { api } from "../api.js";
 import { gameGrid } from "../components.js";
-import { loadCatalog, state } from "../store.js";
-import { emptyState, h, icon, spinnerBlock } from "../ui.js";
+import { isDeveloper, loadCatalog, state } from "../store.js";
+import { emptyState, h, magicLoader } from "../ui.js";
+import { createDeveloperCatalog } from "./developer-catalog.js";
 
 const PAGE_SIZE = 24;
 
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export async function catalogView({ query }) {
+  const developer = isDeveloper();
+  const renderGrid = developer ? createDeveloperCatalog() : gameGrid;
   const filters = {
     search: query.get("q") || "",
     genre: query.get("genero") || "",
@@ -23,17 +29,6 @@ export async function catalogView({ query }) {
   const count = h("p", { class: "muted", style: { fontSize: "var(--fs-sm)" } });
   let loading = false;
   let total = 0;
-
-  const searchInput = h("input", {
-    class: "input",
-    type: "search",
-    placeholder: "Buscar por nombre o desarrollador…",
-    value: filters.search,
-    onInput: (event) => {
-      filters.search = event.target.value;
-      debounceReload();
-    },
-  });
 
   const genreSelect = h(
     "select",
@@ -72,60 +67,31 @@ export async function catalogView({ query }) {
     ),
   );
 
-  // Los filtros van en una sola fila por encima de todo lo que condicionan.
-  const tagRow = h(
-    "div",
-    { class: "tag-scroll" },
-    h(
-      "button",
-      {
-        class: "chip",
-        "aria-pressed": String(!filters.tag),
-        onClick: () => {
-          filters.tag = "";
-          reload();
-        },
-      },
-      "Todas",
-    ),
-    state.tags.slice(0, 22).map((tag) =>
-      h(
-        "button",
-        {
-          class: "chip",
-          "aria-pressed": String(filters.tag === tag.slug),
-          onClick: () => {
-            filters.tag = filters.tag === tag.slug ? "" : tag.slug;
-            reload();
-          },
-        },
-        tag.name,
-      ),
-    ),
-  );
-
-  let timer = null;
-  function debounceReload() {
-    clearTimeout(timer);
-    timer = setTimeout(reload, 280);
-  }
+  const visibleTags = state.tags.filter(tag => tag.name && !tag.name.startsWith("#"));
+  const tagSelect = h("select", { class: "select", "aria-label": "Filtrar por característica", onChange: event => {
+    filters.tag = event.target.value; reload();
+  } }, h("option", { value: "" }, "Todas las características"),
+    filters.tag && !visibleTags.some(tag => tag.slug === filters.tag) && h("option", { value: filters.tag, selected: true }, "Característica seleccionada"),
+    visibleTags.map(tag => h("option", { value: tag.slug, selected: tag.slug === filters.tag }, tag.name)));
 
   async function reload({ append = false } = {}) {
     if (loading) return;
     loading = true;
-    // En un refetch se conserva el render anterior atenuado, sin salto.
-    if (!append && results.firstChild) results.classList.add("is-loading");
+    const isFirstLoad = !append && !results.querySelector(".game-grid");
+    if (!append && isFirstLoad) results.replaceChildren(magicLoader());
+    else if (!append) results.classList.add("is-loading");
     if (!append) filters.offset = 0;
 
     try {
-      const page = await api.games(filters);
+      const minWait = isFirstLoad ? wait(550) : Promise.resolve();
+      const [page] = await Promise.all([api.games(filters), minWait]);
       total = page.total;
 
       count.textContent = total
         ? `${total} juego${total === 1 ? "" : "s"}`
         : "Sin resultados";
 
-      const grid = gameGrid(page.items);
+      const grid = renderGrid(page.items);
       if (append && results.firstChild) {
         const existing = results.querySelector(".game-grid");
         for (const child of [...grid.children]) existing.appendChild(child);
@@ -140,7 +106,6 @@ export async function catalogView({ query }) {
         );
       }
 
-      // Botón de "cargar más" mientras queden resultados.
       const loaded = filters.offset + page.items.length;
       const oldMore = results.querySelector("[data-more]");
       if (oldMore) oldMore.remove();
@@ -169,7 +134,6 @@ export async function catalogView({ query }) {
     }
   }
 
-  results.replaceChildren(spinnerBlock());
   reload();
 
   return h(
@@ -181,20 +145,19 @@ export async function catalogView({ query }) {
       h(
         "div",
         null,
-        h("p", { class: "eyebrow" }, "Catálogo"),
-        h("h1", null, "Explorar juegos"),
-        h("p", null, "Buscá por nombre o desarrollador y filtrá por género y etiquetas."),
+        h("p", { class: "eyebrow" }, developer ? "Catálogo del desarrollador" : "Catálogo"),
+        h("h1", null, developer ? "Investigar y comparar juegos" : "Explorar juegos"),
+        developer && h("p", null, "Elegí un juego para analizarlo o compararlo."),
       ),
       count,
     ),
     h(
       "div",
-      { class: "filter-bar" },
-      h("div", { class: "search-wrap" }, icon("search", 15), searchInput),
+      { class: "filter-bar catalog-filters" },
       genreSelect,
+      tagSelect,
       sortSelect,
     ),
-    h("div", { style: { marginBottom: "var(--s-5)" } }, tagRow),
     results,
   );
 }

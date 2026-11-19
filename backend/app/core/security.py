@@ -7,7 +7,6 @@ import jwt
 
 from app.core.config import settings
 
-# bcrypt sólo considera los primeros 72 bytes y falla si recibe más.
 _MAX_PASSWORD_BYTES = 72
 
 
@@ -23,7 +22,6 @@ def verify_password(plain: str, hashed: str) -> bool:
     try:
         return bcrypt.checkpw(_encode(plain), hashed.encode("utf-8"))
     except ValueError:
-        # El hash almacenado está corrupto o no es bcrypt.
         return False
 
 

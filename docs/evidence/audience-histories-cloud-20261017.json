@@ -1,0 +1,383 @@
+{
+  "audience": {
+    "authors_with_two_other_recommendations": 42,
+    "cache_hours": 24,
+    "checked_authors": 60,
+    "groups": [
+      {
+        "criterion": "Recomendaron al menos dos juegos distintos con este rasgo, fuera de los juegos de este informe.",
+        "denominator": 60,
+        "examples": [
+          {
+            "appid": 883710,
+            "authors": 5,
+            "game_id": 182,
+            "name": "Resident Evil 2"
+          }
+        ],
+        "key": "genre:Acción",
+        "kind": "genre",
+        "label": "Acción",
+        "reception": {
+          "mixed": 0,
+          "not_recommended": 4,
+          "recommended": 29,
+          "unknown": 0
+        },
+        "size": 33
+      },
+      {
+        "criterion": "Recomendaron al menos dos juegos distintos con este rasgo, fuera de los juegos de este informe.",
+        "denominator": 60,
+        "examples": [],
+        "key": "genre:Aventura",
+        "kind": "genre",
+        "label": "Aventura",
+        "reception": {
+          "mixed": 0,
+          "not_recommended": 4,
+          "recommended": 23,
+          "unknown": 0
+        },
+        "size": 27
+      },
+      {
+        "criterion": "Recomendaron al menos dos juegos distintos con este rasgo, fuera de los juegos de este informe.",
+        "denominator": 60,
+        "examples": [],
+        "key": "genre:Indie",
+        "kind": "genre",
+        "label": "Indie",
+        "reception": {
+          "mixed": 0,
+          "not_recommended": 3,
+          "recommended": 15,
+          "unknown": 0
+        },
+        "size": 18
+      },
+      {
+        "criterion": "Recomendaron al menos dos juegos distintos con este rasgo, fuera de los juegos de este informe.",
+        "denominator": 60,
+        "examples": [],
+        "key": "genre:Rol",
+        "kind": "genre",
+        "label": "Rol",
+        "reception": {
+          "mixed": 0,
+          "not_recommended": 3,
+          "recommended": 14,
+          "unknown": 0
+        },
+        "size": 17
+      },
+      {
+        "criterion": "Recomendaron al menos dos juegos distintos con este rasgo, fuera de los juegos de este informe.",
+        "denominator": 60,
+        "examples": [],
+        "key": "tag:Multiplayer",
+        "kind": "tag",
+        "label": "Multijugador",
+        "reception": {
+          "mixed": 0,
+          "not_recommended": 2,
+          "recommended": 13,
+          "unknown": 0
+        },
+        "size": 15
+      },
+      {
+        "criterion": "Recomendaron al menos dos juegos distintos con este rasgo, fuera de los juegos de este informe.",
+        "denominator": 60,
+        "examples": [],
+        "key": "tag:Singleplayer",
+        "kind": "tag",
+        "label": "Un jugador",
+        "reception": {
+          "mixed": 0,
+          "not_recommended": 2,
+          "recommended": 12,
+          "unknown": 0
+        },
+        "size": 14
+      },
+      {
+        "criterion": "Recomendaron al menos dos juegos distintos con este rasgo, fuera de los juegos de este informe.",
+        "denominator": 60,
+        "examples": [],
+        "key": "tag:Atmospheric",
+        "kind": "tag",
+        "label": "Atmosféricos",
+        "reception": {
+          "mixed": 0,
+          "not_recommended": 2,
+          "recommended": 10,
+          "unknown": 0
+        },
+        "size": 12
+      },
+      {
+        "criterion": "Recomendaron al menos dos juegos distintos con este rasgo, fuera de los juegos de este informe.",
+        "denominator": 60,
+        "examples": [],
+        "key": "tag:Third Person",
+        "kind": "tag",
+        "label": "Tercera persona",
+        "reception": {
+          "mixed": 0,
+          "not_recommended": 2,
+          "recommended": 10,
+          "unknown": 0
+        },
+        "size": 12
+      },
+      {
+        "criterion": "Recomendaron al menos dos juegos distintos con este rasgo, fuera de los juegos de este informe.",
+        "denominator": 60,
+        "examples": [],
+        "key": "tag:Open World",
+        "kind": "tag",
+        "label": "Mundo abierto",
+        "reception": {
+          "mixed": 0,
+          "not_recommended": 2,
+          "recommended": 9,
+          "unknown": 0
+        },
+        "size": 11
+      },
+      {
+        "criterion": "Recomendaron al menos dos juegos distintos con este rasgo, fuera de los juegos de este informe.",
+        "denominator": 60,
+        "examples": [],
+        "key": "tag:Co-op",
+        "kind": "tag",
+        "label": "Cooperativos",
+        "reception": {
+          "mixed": 0,
+          "not_recommended": 2,
+          "recommended": 8,
+          "unknown": 0
+        },
+        "size": 10
+      },
+      {
+        "criterion": "Recomendaron al menos dos juegos distintos con este rasgo, fuera de los juegos de este informe.",
+        "denominator": 60,
+        "examples": [],
+        "key": "tag:First-Person",
+        "kind": "tag",
+        "label": "First-Person",
+        "reception": {
+          "mixed": 0,
+          "not_recommended": 1,
+          "recommended": 8,
+          "unknown": 0
+        },
+        "size": 9
+      },
+      {
+        "criterion": "Recomendaron al menos dos juegos distintos con este rasgo, fuera de los juegos de este informe.",
+        "denominator": 60,
+        "examples": [],
+        "key": "tag:Shooter",
+        "kind": "tag",
+        "label": "Shooters",
+        "reception": {
+          "mixed": 0,
+          "not_recommended": 2,
+          "recommended": 7,
+          "unknown": 0
+        },
+        "size": 9
+      },
+      {
+        "criterion": "Recomendaron al menos dos juegos distintos con este rasgo, fuera de los juegos de este informe.",
+        "denominator": 60,
+        "examples": [],
+        "key": "tag:Survival",
+        "kind": "tag",
+        "label": "Survival",
+        "reception": {
+          "mixed": 0,
+          "not_recommended": 1,
+          "recommended": 7,
+          "unknown": 0
+        },
+        "size": 8
+      },
+      {
+        "criterion": "Recomendaron al menos dos juegos distintos con este rasgo, fuera de los juegos de este informe.",
+        "denominator": 60,
+        "examples": [],
+        "key": "tag:Difficult",
+        "kind": "tag",
+        "label": "Difficult",
+        "reception": {
+          "mixed": 0,
+          "not_recommended": 1,
+          "recommended": 6,
+          "unknown": 0
+        },
+        "size": 7
+      },
+      {
+        "criterion": "Recomendaron al menos dos juegos distintos con este rasgo, fuera de los juegos de este informe.",
+        "denominator": 60,
+        "examples": [],
+        "key": "tag:Online Co-Op",
+        "kind": "tag",
+        "label": "Online Co-Op",
+        "reception": {
+          "mixed": 0,
+          "not_recommended": 1,
+          "recommended": 6,
+          "unknown": 0
+        },
+        "size": 7
+      },
+      {
+        "criterion": "Recomendaron al menos dos juegos distintos con este rasgo, fuera de los juegos de este informe.",
+        "denominator": 60,
+        "examples": [],
+        "key": "tag:Story Rich",
+        "kind": "tag",
+        "label": "Historia elaborada",
+        "reception": {
+          "mixed": 0,
+          "not_recommended": 2,
+          "recommended": 5,
+          "unknown": 0
+        },
+        "size": 7
+      },
+      {
+        "criterion": "Recomendaron al menos dos juegos distintos con este rasgo, fuera de los juegos de este informe.",
+        "denominator": 60,
+        "examples": [],
+        "key": "tag:Great Soundtrack",
+        "kind": "tag",
+        "label": "Great Soundtrack",
+        "reception": {
+          "mixed": 0,
+          "not_recommended": 1,
+          "recommended": 5,
+          "unknown": 0
+        },
+        "size": 6
+      },
+      {
+        "criterion": "Recomendaron al menos dos juegos distintos con este rasgo, fuera de los juegos de este informe.",
+        "denominator": 60,
+        "examples": [],
+        "key": "tag:Horror",
+        "kind": "tag",
+        "label": "Horror",
+        "reception": {
+          "mixed": 0,
+          "not_recommended": 1,
+          "recommended": 5,
+          "unknown": 0
+        },
+        "size": 6
+      },
+      {
+        "criterion": "Recomendaron al menos dos juegos distintos con este rasgo, fuera de los juegos de este informe.",
+        "denominator": 60,
+        "examples": [],
+        "key": "tag:Third-Person Shooter",
+        "kind": "tag",
+        "label": "Third-Person Shooter",
+        "reception": {
+          "mixed": 0,
+          "not_recommended": 1,
+          "recommended": 5,
+          "unknown": 0
+        },
+        "size": 6
+      },
+      {
+        "criterion": "Recomendaron al menos dos juegos distintos con este rasgo, fuera de los juegos de este informe.",
+        "denominator": 60,
+        "examples": [],
+        "key": "genre:Free to play",
+        "kind": "genre",
+        "label": "Free to play",
+        "reception": {
+          "mixed": 0,
+          "not_recommended": 1,
+          "recommended": 4,
+          "unknown": 0
+        },
+        "size": 5
+      },
+      {
+        "criterion": "Recomendaron al menos dos juegos distintos con este rasgo, fuera de los juegos de este informe.",
+        "denominator": 60,
+        "examples": [],
+        "key": "genre:Simuladores",
+        "kind": "genre",
+        "label": "Simuladores",
+        "reception": {
+          "mixed": 0,
+          "not_recommended": 0,
+          "recommended": 5,
+          "unknown": 0
+        },
+        "size": 5
+      },
+      {
+        "criterion": "Recomendaron al menos dos juegos distintos con este rasgo, fuera de los juegos de este informe.",
+        "denominator": 60,
+        "examples": [],
+        "key": "tag:Tactical",
+        "kind": "tag",
+        "label": "Tactical",
+        "reception": {
+          "mixed": 0,
+          "not_recommended": 1,
+          "recommended": 4,
+          "unknown": 0
+        },
+        "size": 5
+      },
+      {
+        "criterion": "Recomendaron al menos dos juegos distintos con este rasgo, fuera de los juegos de este informe.",
+        "denominator": 60,
+        "examples": [],
+        "key": "tag:Team-Based",
+        "kind": "tag",
+        "label": "Team-Based",
+        "reception": {
+          "mixed": 0,
+          "not_recommended": 0,
+          "recommended": 5,
+          "unknown": 0
+        },
+        "size": 5
+      }
+    ],
+    "identified_authors": 421,
+    "identified_reviews": 433,
+    "identity_games_pending": 0,
+    "newest_checked_at": "2026-10-17T18:52:42.324071+00:00",
+    "oldest_checked_at": "2026-10-17T18:50:50.198033+00:00",
+    "other_recommendations": 341,
+    "page_limit": 2,
+    "partial_histories": 6,
+    "pending_authors": 0,
+    "private_histories": 0,
+    "public_histories": 60,
+    "recommendations_with_metadata": 224,
+    "sample_limit": 60,
+    "selected_authors": 60,
+    "selection": "Hasta 60 autores únicos, ordenados por hash del identificador antes de consultar sus gustos; no por voto ni por similitud.",
+    "source": "Reseñas públicas de Steam Community; géneros y etiquetas del catálogo guardado, importado de Steam/SteamSpy.",
+    "unavailable_histories": 0
+  },
+  "operation": "public_audience_histories",
+  "result": "observed",
+  "scope": {
+    "studio": "CD PROJEKT RED"
+  }
+}

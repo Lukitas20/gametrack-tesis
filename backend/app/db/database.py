@@ -2,27 +2,48 @@
 
 from collections.abc import Generator
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.core.config import settings
 
-# check_same_thread=False es necesario para que SQLite funcione con el
-# thread pool de FastAPI. No aplica a PostgreSQL.
-connect_args = {"check_same_thread": False} if settings.is_sqlite else {}
+connect_args = {"check_same_thread": False, "timeout": 30} if settings.is_sqlite else {}
+pool_options = {} if settings.is_sqlite else {
+    "pool_size": settings.DB_POOL_SIZE,
+    "max_overflow": settings.DB_MAX_OVERFLOW,
+    "pool_timeout": settings.DB_POOL_TIMEOUT,
+}
 
 engine = create_engine(
     settings.DATABASE_URL,
     echo=settings.SQL_ECHO,
     connect_args=connect_args,
     pool_pre_ping=True,
+    **pool_options,
 )
 
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 
 
+if settings.is_sqlite:
+    @event.listens_for(engine, "connect")
+    def configure_sqlite(connection, _record):
+        cursor = connection.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA busy_timeout=30000")
+        cursor.close()
+
+
 class Base(DeclarativeBase):
     """Clase base declarativa para todos los modelos."""
+
+
+@event.listens_for(Session, "do_orm_execute")
+def real_data_only(execute_state):
+    if (execute_state.is_select and execute_state.is_orm_statement
+            and not execute_state.is_column_load and not execute_state.is_relationship_load):
+        from app.db.real_data import install_real_data_policy
+        execute_state.statement = install_real_data_policy(execute_state.statement)
 
 
 def get_db() -> Generator[Session, None, None]:

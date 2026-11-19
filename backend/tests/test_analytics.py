@@ -132,3 +132,56 @@ def test_guarda_la_evidencia_textual() -> None:
     opinion = opinion_for(text, Aspect.GRAPHICS)
     assert opinion is not None
     assert "pobres" in opinion.evidence.lower()
+
+
+def test_resumen_global_no_materializa_catalogo_como_lista_de_parametros():
+    import sqlite3
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import Session
+    from app.db.base import Base
+    from app.models import Game
+    from app.ml.analytics import platform_overview
+    engine = create_engine('sqlite://')
+    Base.metadata.create_all(engine)
+    with Session(engine) as db:
+        db.add_all([Game(slug=f'juego-{index}', name=f'Juego {index}') for index in range(80)])
+        db.commit()
+        raw = db.connection().connection.driver_connection
+        previous = raw.setlimit(sqlite3.SQLITE_LIMIT_VARIABLE_NUMBER, 50)
+        try:
+            assert platform_overview(db)['aspectos'] == []
+        finally:
+            raw.setlimit(sqlite3.SQLITE_LIMIT_VARIABLE_NUMBER, previous)
+
+
+def test_asistente_no_convierte_aspecto_positivo_en_alerta():
+    from app.services.developer_assistant import explain_developer_report
+    report = {'estudio':'Test','resenas':{'analizadas':20,'pendientes':0},
+              'aspectos':[{'aspecto':'jugabilidad','menciones':10,'sentimiento_neto':0.2,
+                           'distribucion':{'positivo':6,'neutro':0,'negativo':4}}]}
+    response = explain_developer_report(report, 'Qué conviene mejorar')
+    assert 'No aparece un aspecto con balance negativo' in response['answer']
+    assert response['evidence'] == []
+
+
+def test_asistente_prioriza_evidencia_real_y_admite_muestra_insuficiente():
+    from app.services.developer_assistant import explain_developer_report
+    report = {'estudio':'Test','resenas':{'analizadas':20,'pendientes':2},
+              'aspectos':[{'aspecto':'optimizacion','menciones':10,'sentimiento_neto':-0.6,
+                           'distribucion':{'positivo':2,'neutro':0,'negativo':8}}],
+              'citas_negativas':{'optimizacion':['El rendimiento es pésimo.']}}
+    response = explain_developer_report(report, 'Qué conviene mejorar')
+    assert '8 de 10' in response['answer'] and '80%' in response['answer']
+    assert response['evidence'] == [{'aspect':'optimizacion','quote':'El rendimiento es pésimo.'}]
+    report['aspectos'][0]['menciones'] = 2
+    response = explain_developer_report(report, 'Qué revisar de la optimización')
+    assert 'No hay suficientes menciones' in response['answer']
+    assert response['evidence'] == []
+
+
+def test_asistente_muestra_vacia_no_inventa_conclusiones():
+    from app.services.developer_assistant import explain_developer_report
+    report = {'estudio':'Test','resenas':{'analizadas':0,'pendientes':3},'aspectos':[]}
+    response = explain_developer_report(report, 'Qué funciona mejor')
+    assert response['title'] == 'Todavía falta evidencia'
+    assert response['evidence'] == []

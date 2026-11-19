@@ -13,12 +13,27 @@ from app.models.enums import (
     UserRole,
 )
 from app.models.game import Game, Genre, Tag, game_genres, game_tags
+from app.models.friendship import Friendship
 from app.models.game_list import GameList, GameListItem
 from app.models.interaction import Rating, Review, ReviewAspect
+from app.models.play_feedback import PlayFeedback
+from app.models.steamspy import SteamSpySync
+from app.models.steam_catalog import SteamCatalogEntry, SteamCatalogSync
+from app.models.steam_catalog_worker import SteamCatalogWorker
 from app.models.user import User, UserPreference
+from app.models.steam_auth import SteamIdentity, SteamAuthFlow
+from app.models.steam_profile import SteamProfileCache, FriendInvite
+from app.models.steam_audience import SteamAudienceHistory, AudienceCollectionState
 
 __all__ = [
+    "SteamAudienceHistory",
+    "AudienceCollectionState",
+    "SteamProfileCache",
+    "FriendInvite",
+    "SteamIdentity",
+    "SteamAuthFlow",
     "Aspect",
+    "Friendship",
     "Game",
     "GameList",
     "GameListItem",
@@ -26,10 +41,15 @@ __all__ = [
     "Genre",
     "ListType",
     "Rating",
+    "PlayFeedback",
     "RecommendationSource",
     "Review",
     "ReviewAspect",
     "Sentiment",
+    "SteamSpySync",
+    "SteamCatalogEntry",
+    "SteamCatalogSync",
+    "SteamCatalogWorker",
     "Tag",
     "User",
     "UserPreference",

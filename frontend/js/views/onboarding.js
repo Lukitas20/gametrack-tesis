@@ -1,9 +1,3 @@
-/* Onboarding de preferencias.
- *
- * Es la pieza que hace visible el arranque en frío: un usuario sin historial
- * no tiene señal de comportamiento, pero al elegir géneros el motor puede
- * recomendar por contenido en lugar de caer en popularidad.
- */
 
 import { api } from "../api.js";
 import { navigate } from "../router.js";
@@ -12,7 +6,7 @@ import { h, icon, openModal, modalHead, toast } from "../ui.js";
 
 export function openOnboarding({ onDone = null } = {}) {
   openModal((close) => {
-    const selected = new Set();
+    const selected = new Set((state.user?.genres || []).map((genre) => genre.id));
     const container = h("div");
 
     function render() {
@@ -37,7 +31,9 @@ export function openOnboarding({ onDone = null } = {}) {
       container.replaceChildren(
         modalHead(
           "¿Qué géneros te gustan?",
-          "Elegí al menos uno. Con esto ya podemos recomendarte por contenido, sin necesidad de que hayas valorado nada.",
+          state.user?.preferences_source === "steam"
+            ? "Partimos de tus juegos más jugados en Steam. Ajustá la selección a tu gusto; después respetaremos tus cambios."
+            : "Elegí al menos uno para personalizar tus recomendaciones. Si conectaste Steam, también podés usar tus juegos más jugados desde el perfil.",
           close,
         ),
         h("div", { class: "row", style: { gap: "var(--s-2)" } }, chips),
@@ -75,7 +71,6 @@ export function openOnboarding({ onDone = null } = {}) {
   });
 }
 
-/** Aviso que aparece en la vista de recomendaciones durante el cold start. */
 export function coldStartNotice(response) {
   const hasPreferences = response.items.some((item) => item.source === "contenido");
 
@@ -86,11 +81,10 @@ export function coldStartNotice(response) {
     h(
       "div",
       null,
-      h("strong", null, "Arranque en frío. "),
-      `Todavía no valoraste ningún juego (${response.history_size} de ${3} necesarios para el filtrado colaborativo), `,
-      hasPreferences
-        ? "así que las sugerencias salen de los géneros que elegiste, por similitud de contenido."
-        : "y tampoco declaraste preferencias, así que se recurre al piso: los mejor valorados del catálogo.",
+      h("strong", null, "Empecemos por tus gustos. "),
+      response.profile_hint || (response.history_size
+        ? `Ya valoraste ${response.history_size} juegos. Cada opinión ayuda a afinar las sugerencias.`
+        : "Elegí tus géneros o valorá juegos que conozcas para personalizar tus sugerencias."),
       " ",
       h(
         "button",

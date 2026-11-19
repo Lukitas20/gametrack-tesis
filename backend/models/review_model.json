@@ -1,0 +1,190 @@
+{
+  "version": 1,
+  "algorithm": "tfidf_logistic_regression_cpu",
+  "trained_at": "2026-10-05T23:03:53.761681+00:00",
+  "seed": 42,
+  "language": "es",
+  "source": "real_steam_reviews",
+  "examples": 24000,
+  "games": 2687,
+  "vocabulary": 18000,
+  "dataset_fingerprint": "f8a1ee239c552cc78b93e9359244546702aa5bc0dfc0b737cbd1f1130e91246e",
+  "split": "disjoint_game_hash_80_10_10_and_normalized_text_deduplication",
+  "partitions": {
+    "train": {
+      "examples": 19044,
+      "games": 2142
+    },
+    "validation": {
+      "examples": 2425,
+      "games": 273
+    },
+    "test": {
+      "examples": 2531,
+      "games": 272
+    }
+  },
+  "reception": {
+    "eligible": true,
+    "threshold": 0.5,
+    "target": "steam_author_recommendation_not_personal_taste_or_text_sentiment",
+    "supervision": "real_steam_recommendation_flag",
+    "validation": {
+      "examples": 2425,
+      "positives": 2054,
+      "precision": 0.9628,
+      "recall": 0.9075,
+      "f1": 0.9343,
+      "balanced_accuracy": 0.8567
+    },
+    "test": {
+      "examples": 2531,
+      "positives": 2121,
+      "precision": 0.9535,
+      "recall": 0.9085,
+      "f1": 0.9305,
+      "balanced_accuracy": 0.8396
+    },
+    "majority_baseline": {
+      "examples": 2531,
+      "positives": 2121,
+      "precision": 0.838,
+      "recall": 1.0,
+      "f1": 0.9119,
+      "balanced_accuracy": 0.5
+    }
+  },
+  "topics": {
+    "jugabilidad": {
+      "eligible": true,
+      "threshold": 0.65,
+      "supervision": "weak_curated_vocabulary",
+      "validation_agreement": {
+        "examples": 2425,
+        "positives": 387,
+        "precision": 0.859,
+        "recall": 0.8501,
+        "f1": 0.8545,
+        "balanced_accuracy": 0.9118
+      },
+      "test_agreement": {
+        "examples": 2531,
+        "positives": 445,
+        "precision": 0.8355,
+        "recall": 0.8562,
+        "f1": 0.8457,
+        "balanced_accuracy": 0.9101
+      }
+    },
+    "graficos": {
+      "eligible": true,
+      "threshold": 0.8,
+      "supervision": "weak_curated_vocabulary",
+      "validation_agreement": {
+        "examples": 2425,
+        "positives": 205,
+        "precision": 0.8107,
+        "recall": 0.6683,
+        "f1": 0.7326,
+        "balanced_accuracy": 0.8269
+      },
+      "test_agreement": {
+        "examples": 2531,
+        "positives": 277,
+        "precision": 0.835,
+        "recall": 0.6209,
+        "f1": 0.7122,
+        "balanced_accuracy": 0.8029
+      }
+    },
+    "historia": {
+      "eligible": true,
+      "threshold": 0.65,
+      "supervision": "weak_curated_vocabulary",
+      "validation_agreement": {
+        "examples": 2425,
+        "positives": 420,
+        "precision": 0.8397,
+        "recall": 0.8857,
+        "f1": 0.8621,
+        "balanced_accuracy": 0.9252
+      },
+      "test_agreement": {
+        "examples": 2531,
+        "positives": 461,
+        "precision": 0.8475,
+        "recall": 0.8677,
+        "f1": 0.8574,
+        "balanced_accuracy": 0.9164
+      }
+    },
+    "optimizacion": {
+      "eligible": true,
+      "threshold": 0.8,
+      "supervision": "weak_curated_vocabulary",
+      "validation_agreement": {
+        "examples": 2425,
+        "positives": 137,
+        "precision": 0.8257,
+        "recall": 0.6569,
+        "f1": 0.7317,
+        "balanced_accuracy": 0.8243
+      },
+      "test_agreement": {
+        "examples": 2531,
+        "positives": 123,
+        "precision": 0.8667,
+        "recall": 0.5285,
+        "f1": 0.6566,
+        "balanced_accuracy": 0.7622
+      }
+    },
+    "monetizacion": {
+      "eligible": true,
+      "threshold": 0.65,
+      "supervision": "weak_curated_vocabulary",
+      "validation_agreement": {
+        "examples": 2425,
+        "positives": 117,
+        "precision": 0.84,
+        "recall": 0.7179,
+        "f1": 0.7742,
+        "balanced_accuracy": 0.8555
+      },
+      "test_agreement": {
+        "examples": 2531,
+        "positives": 122,
+        "precision": 0.8654,
+        "recall": 0.7377,
+        "f1": 0.7965,
+        "balanced_accuracy": 0.8659
+      }
+    },
+    "dificultad": {
+      "eligible": true,
+      "threshold": 0.65,
+      "supervision": "weak_curated_vocabulary",
+      "validation_agreement": {
+        "examples": 2425,
+        "positives": 245,
+        "precision": 0.8071,
+        "recall": 0.8367,
+        "f1": 0.8216,
+        "balanced_accuracy": 0.9071
+      },
+      "test_agreement": {
+        "examples": 2531,
+        "positives": 288,
+        "precision": 0.8243,
+        "recall": 0.8472,
+        "f1": 0.8356,
+        "balanced_accuracy": 0.912
+      }
+    }
+  },
+  "limitations": [
+    "Temas con etiquetas débiles: las métricas miden acuerdo con el vocabulario, no exactitud humana.",
+    "La recomendación del autor no es el sentimiento de cada aspecto ni el gusto del usuario actual.",
+    "No es un modelo generativo ni utiliza servicios externos."
+  ]
+}

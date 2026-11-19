@@ -1,8 +1,3 @@
-/* Cliente de la API de GameTrack.
- *
- * El frontend lo sirve la misma aplicación FastAPI, así que las rutas son
- * relativas y no hay origen que configurar.
- */
 
 const BASE = "/api/v1";
 
@@ -50,7 +45,6 @@ async function request(path, { method = "GET", body, auth = true, params } = {})
   }
 
   if (!response.ok) {
-    // FastAPI devuelve `detail` como texto o como lista de errores de validación.
     const detail = Array.isArray(payload?.detail)
       ? payload.detail.map((item) => item.msg).join(", ")
       : payload?.detail;
@@ -60,28 +54,62 @@ async function request(path, { method = "GET", body, auth = true, params } = {})
 }
 
 export const api = {
-  // --- Autenticación ---
-  login: (username, password) =>
-    request("/auth/login", { method: "POST", body: { username, password }, auth: false }),
+  login: (username, password, role) =>
+    request("/auth/login", { method: "POST", body: { username, password, ...(role ? { role } : {}) }, auth: false }),
   register: (data) => request("/auth/register", { method: "POST", body: data, auth: false }),
+  steamSession: () => request("/auth/steam/session", { method: "POST", auth: false }),
+  startSteamLink: () => request("/auth/steam/link", { method: "POST" }),
+  steamProfile: () => request("/steam/me/profile"),
+  suggestSteamPreferences: () => request("/auth/me/preferences/steam", { method: "POST" }),
+  syncSteamProfile: () => request("/steam/me/sync", { method: "POST" }),
+  steamReviews: (page = 1) => request("/steam/me/reviews", { params: { page } }),
+  syncSteamReviews: () => request("/steam/me/reviews/sync", { method: "POST" }),
+  steamAchievements: (appid) => request(`/steam/me/achievements/${appid}`),
+  syncSteamAchievements: (appid) => request(`/steam/me/achievements/${appid}/sync`, { method: "POST" }),
+  createInvite: () => request("/friends/invites", { method: "POST" }),
+  inspectInvite: (token) => request(`/friends/invite/${encodeURIComponent(token)}`, { auth: false }),
+  joinInvite: (token) => request(`/friends/invite/${encodeURIComponent(token)}/join`, { method: "POST" }),
   me: () => request("/auth/me"),
+  updateProfile: (data) => request("/auth/me", { method: "PUT", body: data }),
+  updateAccountSetup: (data) => request("/auth/me/experience", { method: "PUT", body: data }),
   setPreferences: (genreIds) =>
     request("/auth/me/preferences", { method: "PUT", body: { genre_ids: genreIds } }),
 
-  // --- Catálogo ---
   genres: () => request("/genres", { auth: false }),
   tags: (minGames = 3) => request("/tags", { auth: false, params: { min_games: minGames } }),
   games: (params) => request("/games", { auth: false, params }),
+  steamCatalogStatus: () => request("/steam/catalog/status", { auth: false }),
+  upcoming: () => request("/home/upcoming", { auth: false }),
+  home: (limit = 8) => request("/home", { auth: false, params: { limit } }),
   game: (id) => request(`/games/${id}`, { auth: false }),
+  gameMedia: (id) => request(`/games/${id}/media`, { auth: false }),
   similar: (id, limit = 6) => request(`/games/${id}/similar`, { auth: false, params: { limit } }),
-  reviews: (id, limit = 10) => request(`/games/${id}/reviews`, { auth: false, params: { limit } }),
+  reviews: (id, limit = 10, offset = 0) => request(`/games/${id}/reviews`, { auth: false, params: { limit, offset } }),
 
-  // --- Recomendaciones ---
-  recommendations: (strategy = "auto", limit = 12) =>
-    request("/recommendations", { params: { strategy, limit } }),
+  recommendations: (strategy = "auto", limit = 12, discovery = "balanced") =>
+    request("/recommendations", { params: { strategy, limit, discovery } }),
+  discovery: (mode = "affinity", friendId = null) => request("/recommendations/discovery", { params: { mode, friend_id: friendId, limit: 8 } }),
+  compareGames: (gameIds) => request("/recommendations/compare", {method:"POST",body:{game_ids:gameIds}}),
+  gameTrackScore: (id) => request(`/recommendations/game/${id}/score`),
+  gameExplanation: (id, question) => request(`/recommendations/game/${id}/explanation`,
+    question === undefined ? {} : { method: "POST", body: { question } }),
+  upcomingExplanation: (appid, question) => request(`/recommendations/upcoming/${appid}/explanation`,
+    question === undefined ? {} : { method: "POST", body: { question } }),
+  quizSuggest: (payload) =>
+    request("/quiz/suggest", { method: "POST", body: payload }),
+  playFeedback: (id) => request(`/play/feedback/${id}`),
+  savePlayFeedback: (id, payload) => request(`/play/feedback/${id}`, {method:"PUT",body:payload}),
+  playExperiences: () => request("/play/feedback"),
+  playBacklog: (mode="light") => request("/play/backlog", {params:{mode}}),
 
-  // --- Interacciones ---
+  friends: () => request("/friends"),
+  requestFriend: (username) => request("/friends/requests", { method: "POST", body: { username } }),
+  acceptFriend: (id) => request(`/friends/requests/${id}/accept`, { method: "POST" }),
+  cancelFriendRequest: (id) => request(`/friends/requests/${id}`, { method: "DELETE" }),
+  removeFriend: (id) => request(`/friends/${id}`, { method: "DELETE" }),
+
   myRatings: () => request("/me/ratings"),
+  myReviews: (params = {}) => request("/me/reviews", { params }),
   rate: (gameId, score, extra = {}) =>
     request("/ratings", {
       method: "POST",
@@ -91,7 +119,6 @@ export const api = {
   analyzeText: (content) =>
     request("/reviews/analyze", { method: "POST", body: { content }, auth: false }),
 
-  // --- Listas ---
   myLists: () => request("/me/lists"),
   myListsSummary: () => request("/me/lists/summary"),
   listsContaining: (gameId) => request(`/me/lists/containing/${gameId}`),
@@ -101,10 +128,15 @@ export const api = {
   removeFromList: (listId, gameId) =>
     request(`/me/lists/${listId}/items/${gameId}`, { method: "DELETE" }),
 
-  // --- Analítica (rol desarrollador) ---
+
   studioAnalytics: (studio) => request("/analytics/studio", { params: { studio } }),
   gameAnalytics: (gameId) => request(`/analytics/games/${gameId}`),
   overview: () => request("/analytics/overview"),
-  processReviews: (reanalyze = false) =>
-    request("/analytics/process", { method: "POST", params: { reanalyze } }),
+  studios: (search = "") => request("/analytics/studios", { params: { search } }),
+  developerAssistant: (body) => request("/analytics/assistant", { method: "POST", body }),
+  developerReviews: (params = {}) => request("/analytics/reviews", { params }),
+  audience: (scope) => request("/analytics/audience", { params: scope }),
+  collectAudience: (scope) => request("/analytics/audience/collect", { method: "POST", params: scope }),
+  processReviews: (reanalyze = false, scope = {}) =>
+    request("/analytics/process", { method: "POST", params: { ...scope, reanalyze } }),
 };
