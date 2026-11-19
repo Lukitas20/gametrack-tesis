@@ -137,7 +137,6 @@ def assistant(payload: AssistantQuestion, user: User = Depends(require_developer
             raise HTTPException(400, 'Elegí un estudio para consultar el informe')
         report = studio_analytics(db, target)
         report["trained_ai"] = review_model_report(db, studio=target)
-    # No actualizar desde Steam al preguntar: explicar la muestra ya guardada.
     import unicodedata
     question = ''.join(c for c in unicodedata.normalize('NFD', payload.question.lower())
                        if unicodedata.category(c) != 'Mn')
@@ -187,9 +186,6 @@ def get_game_analytics(
     game = db.get(Game, game_id)
     if game is None:
         raise HTTPException(status_code=404, detail="El juego no existe")
-    # Antes de analizar, trae las reseñas de Steam que hayan aparecido desde
-    # la última sincronización (si hace más de STEAM_SYNC_TTL_MINUTES, o si
-    # es una ficha pendiente que todavía no se enriqueció).
     if not steam_service.maybe_refresh(db, game):
         raise HTTPException(status_code=404, detail="El juego no existe")
     report = game_analytics(db, game)

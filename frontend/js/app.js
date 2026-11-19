@@ -1,4 +1,3 @@
-/* Esqueleto de la aplicación: cabecera, navegación y rutas de cada tipo de cuenta. */
 
 import {
   currentPath,
@@ -51,9 +50,6 @@ const navSlot = document.getElementById("nav");
 const actionsSlot = document.getElementById("actions");
 const headerSearchSlot = document.getElementById("header-search");
 
-/* ------------------------------------------------------------------ *
- * Tema
- * ------------------------------------------------------------------ */
 
 function currentTheme() {
   return document.documentElement.dataset.theme || null;
@@ -84,19 +80,12 @@ function isDark() {
   return theme ? theme === "dark" : prefersDark();
 }
 
-/* ------------------------------------------------------------------ *
- * Navegación
- * ------------------------------------------------------------------ */
 
-/** A dónde lleva "el inicio" según el rol. Antes esta decisión estaba
- * repetida en tres lugares (la raíz, el cambio de perfil y el ítem de nav);
- * ahora sale de acá, que es también lo que apunta el logo del header. */
 function homePath() {
   if (state.user?.onboarding_step) return "/bienvenida";
   return isDeveloper() ? studioDestination() : "/recomendaciones";
 }
 
-// Accesos persistentes a las secciones del jugador.
 const PLAYER_NAV = [
   ["/recomendaciones", "Inicio", "sparkles"],
   ["/que-jugamos", "¿Qué jugamos?", "gamepad"],
@@ -117,8 +106,6 @@ function renderNav(activePath = null) {
   const path = activePath || window.location.hash.slice(1).split("?")[0] || "/";
   const items = state.user?.onboarding_step ? [] : isDeveloper() ? DEVELOPER_NAV : PLAYER_NAV;
 
-  // El logo apunta al inicio del rol actual en vez de a "/", así la URL que
-  // queda es la canónica (`#/recomendaciones`) y no una que redirige.
   brandLink.setAttribute("href", `#${homePath()}`);
 
   clear(navSlot);
@@ -139,15 +126,7 @@ function renderNav(activePath = null) {
   }
 }
 
-/* ------------------------------------------------------------------ *
- * Barra de búsqueda del header
- * ------------------------------------------------------------------ */
 
-/**
- * Vive fuera de #nav a propósito: #nav se reconstruye en cada navegación
- * (ver renderNav), y un input ahí perdería el foco en cada tecla si escribir
- * dispara una navegación. Este input se crea una sola vez y sobrevive.
- */
 let headerSearchInput = null;
 let headerSearch = null;
 
@@ -156,18 +135,12 @@ function renderHeaderSearch() {
   headerSearchInput = headerSearch.input;
 }
 
-/** Mantiene el input sincronizado si se llega a /catalogo por otra vía (un
- * link con "?q=", el botón atrás). No lo pisa si el usuario lo está
- * escribiendo en este momento: perdería la tecla que acaba de tipear. */
 function syncHeaderSearch() {
   if (!headerSearchInput || document.activeElement === headerSearchInput) return;
   const params = new URLSearchParams(window.location.hash.split("?")[1] || "");
   headerSearchInput.value = currentPath() === "/catalogo" ? params.get("q") || "" : "";
 }
 
-/* ------------------------------------------------------------------ *
- * Acciones de la cabecera
- * ------------------------------------------------------------------ */
 
 let openMenu = null;
 
@@ -279,11 +252,7 @@ function renderActions() {
   actionsSlot.append(themeButton, accountWrap);
 }
 
-/* ------------------------------------------------------------------ *
- * Montaje de vistas
- * ------------------------------------------------------------------ */
 
-/** Envuelve un handler de vista: muestra carga, captura errores y monta. */
 let navigationRevision = 0;
 
 function view(loader) {
@@ -297,9 +266,6 @@ function view(loader) {
     const revision = navigationRevision;
     const ownerId = state.user?.id ?? null;
     const isCurrent = () => revision === navigationRevision && (state.user?.id ?? null) === ownerId;
-    // Es el loader de cada cambio de pantalla (incluida la ficha de un
-    // juego, que puede tardar un par de segundos si hay que enriquecerla
-    // desde Steam): el lugar con más chances de que alguien lo vea.
     main.replaceChildren(magicLoader("Cargando…"));
     try {
       const node = await loader(context);
@@ -319,13 +285,6 @@ function view(loader) {
   };
 }
 
-// La raíz manda a cada rol a su lugar. La rama con sesión NO va envuelta en
-// `view()` a propósito: `view` siempre monta lo que devuelve el handler, y
-// como `navigate(..., { replace: true })` resuelve la ruta destino sin
-// esperar, el `<div>` vacío que se devolvía acá se montaba ENCIMA de la
-// vista recién renderizada y dejaba la pantalla en blanco hasta que la
-// petición de la vista destino terminaba. Sin envoltorio no hay nada que
-// pisar: redirige y punto.
 route("/", async (context) => {
   if (!isLoggedIn()) {
     navigate("/cuentas", { replace: true });
@@ -370,9 +329,6 @@ setNavigateHook((path) => {
   closeMenu();
 });
 
-/* ------------------------------------------------------------------ *
- * Arranque
- * ------------------------------------------------------------------ */
 
 subscribe(() => {
   headerSearch?.close();

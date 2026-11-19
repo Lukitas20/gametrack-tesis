@@ -1,4 +1,3 @@
-/* La amistad aceptada habilita cruzar perfiles, sin publicar el historial. */
 import { api } from "../api.js";
 import { requiresLogin } from "../components.js";
 import { isLoggedIn, isDeveloper, state } from "../store.js";

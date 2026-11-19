@@ -26,12 +26,8 @@ from pathlib import Path
 
 import truststore
 
-# Usa el almacén de certificados del sistema operativo (ver app/main.py).
 truststore.inject_into_ssl()
 
-# El catálogo real de Steam tiene nombres en japonés, chino y cirílico que la
-# consola de Windows (cp1252) no sabe imprimir: sin esto, mostrar el progreso
-# corta el proceso entero con UnicodeEncodeError.
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
@@ -46,8 +42,6 @@ from app.services import steam_service  # noqa: E402
 from app.services.interaction_service import recompute_game_aggregates  # noqa: E402
 
 DEFAULT_DELAY = 1.0
-# Cuántos fallos seguidos se toleran antes de asumir que Steam dejó de
-# responder: uno suelto puede ser un juego sin ficha de reseñas.
 MAX_CONSECUTIVE_FAILURES = 5
 
 
@@ -94,8 +88,6 @@ def main() -> int:
                 consecutive_failures = 0
                 game.steam_total_reviews, game.steam_positive_reviews = totals
                 db.commit()
-                # Rehace avg_rating/ratings_count/popularity_score con el
-                # total real en lugar del tamaño de la muestra importada.
                 recompute_game_aggregates(db, game.id)
                 db.commit()
                 done += 1

@@ -51,7 +51,6 @@ def fetch_achievements(steam_id, appid):
         if not isinstance(definition, dict) or not isinstance(definition.get("name"), str) or definition["name"] in catalog:
             return {"status": "unavailable"}
         catalog[definition["name"]] = definition
-    # Nunca asumimos que un logro ausente esté bloqueado ni inventamos un total.
     if not catalog or set(catalog) != set(states):
         return {"status": "unavailable"}
     items = []
@@ -82,8 +81,6 @@ def achievements(db, user, appid, force=False):
         progress = library.get("achievement_progress", {})
         previous = progress.get(str(appid))
         now = int(time.time())
-        # Los errores transitorios no deben bloquear la carga automática
-        # durante los diez minutos reservados a datos válidos cacheados.
         ttl = RETRY_DELAY if force or (previous and previous.get("status") == "unavailable") else TTL
         if previous and now - previous["checked_at"] < ttl:
             return _payload(appid, previous)

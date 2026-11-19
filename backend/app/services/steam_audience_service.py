@@ -24,8 +24,6 @@ MAX_PAGES = 2
 TTL = 86400
 RETRY = 3600
 LEASE = 300
-# Géneros ya visibles por separado; evitar duplicados y etiquetas de contenido
-# adulto que no describen una experiencia de juego.
 OMIT_TAGS = {"action", "adventure", "indie", "gore", "violent", "nudity", "sexual content"}
 LABELS = {"Open World":"Mundo abierto", "Story Rich":"Historia elaborada", "Singleplayer":"Un jugador",
           "Multiplayer":"Multijugador", "Third Person":"Tercera persona", "Atmospheric":"Atmosféricos",
@@ -82,7 +80,6 @@ def history_report(db, *, game_id=None, studio=None, now=None):
                  if _fresh(h, now)}
     public = {sid: h for sid, h in histories.items() if h.status == "ok"}
     excluded = {appid for _, appid in games if appid}
-    # Deduplicar por autor/app. No convertir horas en una opinión.
     positives = {sid: {i["appid"] for i in h.payload.get("items", [])
                        if type(i.get("appid")) is int and i.get("recommended") is True and i["appid"] not in excluded}
                  for sid, h in public.items()}
@@ -147,7 +144,7 @@ def _state(db, key):
                 db.add(AudienceCollectionState(key=key, lease_until=0, token="", identity_checks={}))
                 db.flush()
         except IntegrityError:
-            pass  # Otra instancia lo creó; la actualización condicional decide.
+            pass
         value = db.get(AudienceCollectionState, key)
     return value
 
@@ -157,7 +154,6 @@ def collect_step(db, *, game_id=None, studio=None):
     if not games:
         raise ValueError("No hay juegos en el alcance seleccionado")
     now, token = time.time(), uuid4().hex
-    # Un único lote de red en toda la plataforma, también entre instancias.
     _state(db, "public-steam-collection")
     acquired = db.execute(update(AudienceCollectionState).where(
         AudienceCollectionState.key == "public-steam-collection", AudienceCollectionState.lease_until < now)
@@ -171,7 +167,6 @@ def collect_step(db, *, game_id=None, studio=None):
         pending_games = _identity_pending(db, games, state, now)
         if pending_games:
             gid = pending_games[0]
-            # Sólo coincidencias exactas recommendationid; no alias ni texto.
             repair_game_authors(db, db.get(Game, gid), max_pages=2, hydrate=False)
             state.identity_checks = {**state.identity_checks, str(gid): time.time()}
             db.commit()
@@ -184,7 +179,7 @@ def collect_step(db, *, game_id=None, studio=None):
                 result = steam_review_service.fetch_reviews(sid, page)
                 status = result["status"]
                 if status != "ok":
-                    items = {}  # Nunca retener una página privada/inaccesible.
+                    items = {}
                     break
                 for item in result.get("items", []):
                     if type(item.get("appid")) is int and 0 < item["appid"] <= 4294967295 and type(item.get("is_recommended")) is bool:

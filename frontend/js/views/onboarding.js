@@ -1,9 +1,3 @@
-/* Onboarding de preferencias.
- *
- * Es la pieza que hace visible el arranque en frío: un usuario sin historial
- * no tiene señal de comportamiento, pero al elegir géneros el motor puede
- * recomendar por contenido en lugar de caer en popularidad.
- */
 
 import { api } from "../api.js";
 import { navigate } from "../router.js";
@@ -77,7 +71,6 @@ export function openOnboarding({ onDone = null } = {}) {
   });
 }
 
-/** Aviso que aparece en la vista de recomendaciones durante el cold start. */
 export function coldStartNotice(response) {
   const hasPreferences = response.items.some((item) => item.source === "contenido");
 

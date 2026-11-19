@@ -1,4 +1,3 @@
-/* Exporta la respuesta recibida sin recalcular ni completar juicios. */
 export function evaluationSnapshot(kind, response, context = {}) {
   return {schema:"gametrack-evaluation-capture-v1", captured_at:new Date().toISOString(),
     kind, context, response, annotation_status:"unjudged", split_status:"not_audited"};

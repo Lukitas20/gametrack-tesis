@@ -37,8 +37,6 @@ def explore_reviews(db, user, *, studio=None, game_id=None, review_id=None, sear
     if source:
         query = query.where(Review.source == source)
     if aspect:
-        # Una reseña globalmente positiva puede criticar el rendimiento:
-        # al elegir un aspecto, el sentimiento corresponde a ese aspecto.
         from app.models.interaction import ReviewAspect
         conditions = [ReviewAspect.aspect == aspect]
         if sentiment:
@@ -52,7 +50,6 @@ def explore_reviews(db, user, *, studio=None, game_id=None, review_id=None, sear
     if date_from:
         query = query.where(published >= datetime.combine(date_from, time.min, timezone.utc))
     if date_to:
-        # Límite exclusivo: incluye el día completo, sin depender de la precisión SQL.
         if date_to == date.max:
             raise HTTPException(422, "La fecha final está fuera del rango permitido")
         query = query.where(published < datetime.combine(date_to + timedelta(days=1), time.min, timezone.utc))

@@ -27,7 +27,6 @@ function reflectionFor(groups, minimum) {
   } else {
     text = "Es la única categoría con evidencia suficiente para aparecer en este informe. Revisá qué valoran estos jugadores antes de ampliar las conclusiones a otros gustos.";
   }
-  // An example belongs to one observed group; it does not imply all leaders share it.
   const example = sharedExample(leaders[0], minimum);
   return {title, text, example:example ? {...example, category:leaders[0].label} : null};
 }

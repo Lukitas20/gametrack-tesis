@@ -82,8 +82,6 @@ def assign_preferences(db, user, library, *, force=False, refresh=False):
         candidates = {genre.id: genre for genre in genre_by_app.get(game["appid"], [])}
         if not candidates:
             continue
-        # Atenúa miles de horas en un único título y divide el aporte entre
-        # sus géneros, para no favorecer juegos con más categorías.
         weight = log1p(game["minutes"] / 60) / len(candidates)
         for genre in candidates.values():
             scores[genre.id] += weight

@@ -32,13 +32,8 @@ términos sin colisionar.
 
 from __future__ import annotations
 
-# Peso de un género dentro de un perfil o consulta. Menor que el de las
-# etiquetas específicas del ánimo: el género es la señal de respaldo (18
-# baldes para miles de juegos), no la protagonista.
 GENRE_WEIGHT = 0.4
 
-# term -> peso de consulta, por ánimo. Mezclan etiquetas comunitarias
-# (inglés) y géneros (español); el motor resuelve ambos en el mismo espacio.
 MOOD_PROFILES: dict[str, dict[str, float]] = {
     "historia": {
         "story-rich": 1.0,
@@ -77,10 +72,6 @@ MOOD_PROFILES: dict[str, dict[str, float]] = {
     },
 }
 
-# Requisito DURO que el ánimo impone, además del perfil blando. Sólo
-# "competir" lo tiene: sin JcJ no hay contra quién competir. Los otros tres
-# ánimos son graduales por naturaleza (un juego puede ser "bastante
-# relajante") y forzarlos como filtro repetiría el bug original del quiz.
 MOOD_REQUIREMENTS: dict[str, frozenset[str]] = {
     "historia": frozenset(),
     "desafio": frozenset(),
@@ -88,15 +79,10 @@ MOOD_REQUIREMENTS: dict[str, frozenset[str]] = {
     "competir": frozenset({"jcj", "jcj-en-linea", "pvp"}),
 }
 
-# Filtro duro de compañía: unión de categorías de plataforma (español) y
-# etiquetas comunitarias equivalentes (inglés). Basta con tener UNA.
-# No se usan descripción, popularidad ni ausencia de singleplayer para
-# inferir multijugador. Online excluye etiquetas que también pueden ser locales.
 COMPANY_FILTERS: dict[str, frozenset[str]] = {
     "solo": frozenset({"un-jugador", "singleplayer"}),
     "amigos": frozenset(
         {
-            # Plataforma
             "cooperativo",
             "cooperativo-en-linea",
             "pantalla-partida-compartida",
@@ -107,7 +93,6 @@ COMPANY_FILTERS: dict[str, frozenset[str]] = {
             "multijugador-multiplataforma",
             "jcj",
             "jcj-en-linea",
-            # Comunidad
             "co-op",
             "online-co-op",
             "local-co-op",
@@ -124,11 +109,9 @@ COMPANY_FILTERS: dict[str, frozenset[str]] = {
     ),
     "en-linea": frozenset(
         {
-            # Plataforma
             "jcj-en-linea",
             "cooperativo-en-linea",
             "multijugador-masivo",
-            # Comunidad
             "online-co-op",
             "online-pvp",
             "online-multiplayer",
@@ -138,17 +121,7 @@ COMPANY_FILTERS: dict[str, frozenset[str]] = {
     ),
 }
 
-# --- Duración: compromiso vs. sesión ---------------------------------------
-#
-# La mediana de horas registradas al reseñar NO mide duración de campaña ni
-# de sesión. Se usa sólo como aproximación al compromiso, con una nota de
-# incertidumbre en cada resultado. Los juegos con señales de partidas o
-# servicio quedan exentos porque acumulan horas entre muchas sesiones.
 
-# Etiquetas comunitarias que marcan un juego-servicio de sesión. Deliberada-
-# mente NO incluyen "multiplayer" ni "co-op" a secas: It Takes Two es
-# cooperativo y finito, Portal 2 tiene co-op y campaña. Tampoco free-to-play:
-# un precio gratuito no prueba que el juego sea un servicio.
 SERVICE_MARKERS: frozenset[str] = frozenset(
     {
         "massively-multiplayer",
@@ -159,7 +132,6 @@ SERVICE_MARKERS: frozenset[str] = frozenset(
     }
 )
 
-# Categorías/etiquetas que indican que existe modo de un jugador.
 _SINGLEPLAYER_MARKERS = frozenset({"un-jugador", "singleplayer"})
 
 

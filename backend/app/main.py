@@ -7,10 +7,6 @@ que mantener sincronizada.
 
 import truststore
 
-# Antes que cualquier otro import: usa el almacén de certificados del sistema
-# operativo para las conexiones TLS salientes (Steam, RAWG) en lugar del
-# bundle de certifi, que no conoce la CA local si hay inspección TLS
-# corporativa (antivirus, proxy) en el equipo.
 truststore.inject_into_ssl()
 
 import sys
@@ -30,17 +26,8 @@ from app.services.steam_catalog_worker import start_worker, stop_worker
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # El prototipo crea el esquema al arrancar en lugar de usar migraciones.
     if settings.DB_AUTO_CREATE:
         init_db()
-    # Precalienta el motor de recomendación: entrenar el TF-IDF y las
-    # matrices de similitud del catálogo crece con su tamaño. Mejor pagar ese
-    # costo acá, una vez al arrancar, que en el primer pedido de un usuario
-    # real, que se quedaría mirando el spinner de "Calculando..." mientras
-    # tanto. Se salta bajo pytest: ahí `TestClient(app)` dispara este mismo
-    # arranque una vez por test, y reentrenar en cada uno dejaría la suite
-    # completa arrastrándose sin necesidad — los tests no dependen de que el
-    # motor venga precalentado.
     if "pytest" in sys.modules:
         yield
         return
@@ -67,13 +54,10 @@ app = FastAPI(
     ),
     version=settings.VERSION,
     lifespan=lifespan,
-    # La documentación se mueve para dejar la raíz al frontend.
     docs_url="/docs",
     redoc_url=None,
 )
 
-# Sólo hace falta para acceder a la API desde otro origen (por ejemplo un
-# frontend servido aparte durante el desarrollo).
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
@@ -109,16 +93,12 @@ def api_root() -> dict[str, str]:
 class FrontendFiles(StaticFiles):
     async def get_response(self, path, scope):
         response = await super().get_response(path, scope)
-        # Estos archivos mantienen su URL entre publicaciones: comprobar
-        # ETag antes de reutilizarlos evita conservar una pantalla anterior.
-        # También se aplica a 304, manteniendo la descarga condicional liviana.
         if path in {".", "", "index.html"} or path.endswith((".html", ".js", ".css")):
             response.headers["Cache-Control"] = "no-cache"
         return response
 
 
 if FRONTEND_DIR.is_dir():
-    # `html=True` hace que la raíz sirva index.html.
     app.mount("/", FrontendFiles(directory=FRONTEND_DIR, html=True), name="frontend")
 else:  # pragma: no cover - sólo si se borró la carpeta del frontend
 

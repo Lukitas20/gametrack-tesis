@@ -45,8 +45,6 @@ def personal_history(db, user, ratings):
         rated_at=rating_times.get(feedback.game_id)
         if rated_at is None or utc(feedback.taste_at)>utc(rated_at):
             signals[feedback.game_id]={'source':'play_feedback','weight':feedback.taste_weight or 0.}
-    # Aprender sólo de la recomendación explícita del autor. El sentimiento
-    # automático del texto nunca se transforma en una valoración inventada.
     for review in db.scalars(select(Review).where(Review.user_id==user.id, Review.source=="user", Review.is_recommended.is_not(None))):
         if review.game_id not in signals:
             signals[review.game_id]={"source":"gametrack_review", "weight":1. if review.is_recommended else -1.,
@@ -57,7 +55,6 @@ def personal_history(db, user, ratings):
         library = cache.library or {}
         if library.get("status") == "ok":
             owned = {item["appid"]: item for item in library.get("items", [])}
-        # Las páginas privadas/no disponibles no se convierten en evidencia.
         for page in library.get("user_reviews", {}).values():
             if page.get("status") == "ok":
                 for item in page.get("items", []):
@@ -78,8 +75,6 @@ def personal_history(db, user, ratings):
     played = [item for item in owned.values() if type(item.get("minutes")) is int and item["minutes"] >= 120
               and item["appid"] in by_app and by_app[item["appid"]].id not in signals]
     played.sort(key=lambda item: (-item["minutes"], item["appid"]))
-    # Conserva evidencia propia de toda la biblioteca; sólo las comparaciones
-    # se limitan a 40 juegos para evitar una matriz innecesariamente grande.
     for item in played:
         game = by_app[item["appid"]]
         signals[game.id] = {"source": "steam_playtime", "minutes": item["minutes"], "appid": item["appid"],
@@ -105,18 +100,11 @@ def combine_history_affinities(similarities, signals, candidate_count):
     used = {gid: signal for gid, signal in signals.items() if gid in similarities and signal["weight"] != 0}
     if not used:
         return None, {}, {}
-    # Opiniones explícitas e interés por tiempo son canales distintos. Cuarenta
-    # juegos con horas no pueden superar una reseña negativa por acumulación.
     explicit = [gid for gid, signal in used.items() if signal["source"] != "steam_playtime" and signal["weight"] > 0]
     implicit = [gid for gid, signal in used.items() if signal["source"] == "steam_playtime"]
     negative = [gid for gid, signal in used.items() if signal["weight"] < 0]
 
     def strengths(ids):
-        # El peso firmado expresa la opinión alrededor de 3/5, no una
-        # probabilidad ni la confianza en esa opinión. Para los positivos
-        # explícitos, anclar la escala a la afinidad propia evita comprimir
-        # un 4/5 (75) a 57.5 aun cuando la semejanza sea perfecta.
-        # El interés por horas mantiene su escala gradual e independiente.
         return np.array([
             (own_history_affinity(used[gid]) - .15) / .85
             if used[gid]["source"] != "steam_playtime"
@@ -125,12 +113,8 @@ def combine_history_affinities(similarities, signals, candidate_count):
         ])
 
     def average(ids, weights):
-        # La media conserva la fuerza absoluta: dos horas no pasan a ser
-        # evidencia máxima sólo por ser el único juego del historial.
         return sum(similarities[gid] * weight * weight for gid, weight in zip(ids, weights)) / weights.sum()
 
-    # Máximo + promedio preserva distintos intereses sin depender de un único
-    # juego. Los pesos absolutos moderan las notas de 4/5 y las horas escasas.
     def interest(ids):
         weights = strengths(ids)
         return .85 * np.maximum.reduce([similarities[gid] * weight for gid, weight in zip(ids, weights)]) + .15 * average(ids, weights)
@@ -138,8 +122,6 @@ def combine_history_affinities(similarities, signals, candidate_count):
     positive = interest(explicit) if explicit else np.zeros(candidate_count)
     if implicit:
         played = interest(implicit)
-        # Una reseña de otro género no apaga el interés por cientos de horas
-        # de disparos. Dos canales positivos no se suman ni duplican evidencia.
         positive = np.maximum(positive, played)
     penalty = np.maximum.reduce([similarities[gid] * abs(used[gid]["weight"]) for gid in negative]) if negative else 0.
     baseline = .15 if explicit or implicit else .5
@@ -165,7 +147,6 @@ def history_reasons(game, context):
             continue
         previous_terms = context["engine"]._community_terms_by_game.get(gid, set())
         shared = [specific[tag.slug] for tag in previous.tags if tag.slug in specific and tag.slug in previous_terms]
-        # Géneros amplios solos nunca se presentan como comparación fuerte.
         if not shared:
             continue
         if signal["source"] == "rating":
@@ -181,6 +162,5 @@ def history_reasons(game, context):
         text = f"Comparte {', '.join(shared[:3])} con {previous.name}, que {opinion}."
         comparisons.append((similarity * abs(signal["weight"]), gid, signal["weight"] < 0, text))
     comparisons.sort(key=lambda item: (-item[0], item[1]))
-    # Incluye al menos una señal negativa si existe, aunque haya muchos positivos.
     return ([item for item in comparisons if not item[2]][:2]
             + [item for item in comparisons if item[2]][:1])

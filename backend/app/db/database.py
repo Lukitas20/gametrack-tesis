@@ -7,8 +7,6 @@ from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.core.config import settings
 
-# check_same_thread=False es necesario para que SQLite funcione con el
-# thread pool de FastAPI. No aplica a PostgreSQL.
 connect_args = {"check_same_thread": False, "timeout": 30} if settings.is_sqlite else {}
 pool_options = {} if settings.is_sqlite else {
     "pool_size": settings.DB_POOL_SIZE,
@@ -30,8 +28,6 @@ SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 if settings.is_sqlite:
     @event.listens_for(engine, "connect")
     def configure_sqlite(connection, _record):
-        # Lecturas de la app y escritura del worker pueden convivir. En una
-        # base :memory: SQLite conserva automáticamente su modo de memoria.
         cursor = connection.cursor()
         cursor.execute("PRAGMA journal_mode=WAL")
         cursor.execute("PRAGMA busy_timeout=30000")

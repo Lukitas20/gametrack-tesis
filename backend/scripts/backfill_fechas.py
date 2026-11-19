@@ -28,9 +28,6 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 import truststore  # noqa: E402
 
-# Usa el almacen de certificados del sistema operativo (ver app/main.py).
-# Sin esto httpx valida contra certifi y Steam falla con
-# CERTIFICATE_VERIFY_FAILED, que el script leeria como "Steam esta caido".
 truststore.inject_into_ssl()
 
 from sqlalchemy import select  # noqa: E402
@@ -67,7 +64,6 @@ def main() -> int:
             try:
                 data = steam_service.get_app_details(juego.steam_app_id)
             except steam_service.SteamUnavailable:
-                # Steam no contestó: NO es "este juego no tiene fecha".
                 caidas += 1
                 if caidas >= 20:
                     print("  demasiados fallos seguidos de Steam, corto acá.")

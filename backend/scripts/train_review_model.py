@@ -39,7 +39,6 @@ def weak_labels(text):
     return labels
 
 def prepare(rows,limit):
-    # Un mismo texto nunca atraviesa particiones ni sobrerrepresenta plantillas.
     seen=set(); unique=[]
     for rid,gid,text,recommended in rows:
         text=text.strip()[:6000]
@@ -93,7 +92,6 @@ def train(rows,path,limit=24000):
             result=metrics(y['test'][:,index],test,.5)
             majority=np.full(len(test),float(np.mean(labels)>=.5))
             reference=metrics(y['test'][:,index],majority,.5)
-            # Activación decidida exclusivamente con validación, no con test.
             val=metrics(y['validation'][:,index],validation,.5)
             reception=dict(eligible=val['balanced_accuracy']>=.60, threshold=.5,
                            target='steam_author_recommendation_not_personal_taste_or_text_sentiment',

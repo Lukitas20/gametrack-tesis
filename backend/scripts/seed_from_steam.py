@@ -1,47 +1,5 @@
 #!/usr/bin/env python
-"""Puebla GameTrack con un catálogo 100% real importado de Steam.
-
-A diferencia de ``seed_data.py``, acá no hay nada sintético: ni jugadores con
-perfiles de gusto fabricados, ni ratings artificiales, ni reseñas generadas.
-Los juegos, sus fichas y sus reseñas salen de la API pública de Steam
-(``app/services/steam_service.py``), analizadas por el mismo módulo NLP que
-procesa las reseñas escritas en la plataforma.
-
-El recomendador arranca en frío de verdad: sin ratings no hay señal
-colaborativa hasta que cuentas reales empiecen a puntuar juegos. Lo único
-que hay desde el arranque es el fallback por popularidad, calculado sobre
-reseñas reales.
-
-Dos modos, por ``--source``:
-
-    snapshot (default) — lee ``data/steam_catalog.json``, ya versionado en el
-        repo, y siembra la base con eso. No pega contra Steam: arranca en
-        segundos y da el mismo catálogo a todo el equipo, sin necesitar
-        ``STEAM_API_KEY`` ni esperar a Steam.
-
-    live — pega contra Steam de verdad, trae juegos y reseñas nuevas, y
-        además ACTUALIZA ``data/steam_catalog.json`` con lo que trajo. Lo
-        corre quien quiera ampliar o refrescar el catálogo compartido; el
-        JSON resultante se commitea para que el resto del equipo lo tenga
-        sin volver a pegarle a Steam.
-
-Uso:
-    python scripts/seed_from_steam.py                        # snapshot compartido, sin red
-    python scripts/seed_from_steam.py --reset                # borra todo antes de sembrar
-    python scripts/seed_from_steam.py --source live           # ~150 juegos, actualiza el snapshot
-    python scripts/seed_from_steam.py --source live --count 300
-    python scripts/seed_from_steam.py --source live --delay 2 # más pausa entre pedidos
-
-Steam limita la cantidad de pedidos por IP en poco tiempo: si un ``--source
-live`` se corta a mitad de camino, subí ``--delay`` y volvé a correrlo — tanto
-la corrida de Steam como la siembra en la base son incrementales, no
-duplican lo que ya está.
-
-Este snapshot contiene una selección de juegos populares, ajustable con
-``--count``. Para sincronizar el índice público completo con checkpoint y
-enriquecimiento progresivo, usar ``scripts/import_steam_appindex.py`` o los
-workers de ``app.workers`` (ver ``CATALOGO_STEAM.md`` en la raíz).
-"""
+"""Importa juegos y reseñas de Steam desde la tienda o desde un snapshot local."""
 
 from __future__ import annotations
 
@@ -55,12 +13,8 @@ from typing import Any
 
 import truststore
 
-# Usa el almacén de certificados del sistema operativo (ver app/main.py).
 truststore.inject_into_ssl()
 
-# El catálogo real de Steam tiene nombres en japonés, chino y cirílico que la
-# consola de Windows (cp1252) no sabe imprimir: sin esto, mostrar el progreso
-# corta el proceso entero con UnicodeEncodeError.
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
@@ -82,9 +36,6 @@ DEFAULT_DELAY = 1.5
 SNAPSHOT_PATH = DATA_DIR / "steam_catalog.json"
 
 
-# ---------------------------------------------------------------------------
-# Steam en vivo -> estructura serializable
-# ---------------------------------------------------------------------------
 
 
 def fetch_catalog_from_steam(count: int, delay: float) -> list[dict[str, Any]]:
@@ -103,8 +54,6 @@ def fetch_catalog_from_steam(count: int, delay: float) -> list[dict[str, Any]]:
         try:
             data = steam_service.get_app_details(appid)
         except steam_service.SteamUnavailable as error:
-            # Cortar acá y quedarse con lo juntado es mejor que seguir
-            # golpeando una API que no responde: es incremental, se retoma.
             print(f"  [{index}/{len(appids)}] Steam dejó de responder ({error}). Se corta acá.")
             break
         if not data or data.get("type") != "game":
@@ -179,9 +128,6 @@ def load_snapshot(path: Path) -> list[dict[str, Any]]:
     return payload["games"]
 
 
-# ---------------------------------------------------------------------------
-# Inserción en la base (compartida por --source live y --source snapshot)
-# ---------------------------------------------------------------------------
 
 
 def seed_catalog(db: Session, games_data: list[dict[str, Any]]) -> tuple[int, int]:

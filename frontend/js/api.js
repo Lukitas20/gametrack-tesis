@@ -1,8 +1,3 @@
-/* Cliente de la API de GameTrack.
- *
- * El frontend lo sirve la misma aplicación FastAPI, así que las rutas son
- * relativas y no hay origen que configurar.
- */
 
 const BASE = "/api/v1";
 
@@ -50,7 +45,6 @@ async function request(path, { method = "GET", body, auth = true, params } = {})
   }
 
   if (!response.ok) {
-    // FastAPI devuelve `detail` como texto o como lista de errores de validación.
     const detail = Array.isArray(payload?.detail)
       ? payload.detail.map((item) => item.msg).join(", ")
       : payload?.detail;
@@ -60,7 +54,6 @@ async function request(path, { method = "GET", body, auth = true, params } = {})
 }
 
 export const api = {
-  // --- Autenticación ---
   login: (username, password, role) =>
     request("/auth/login", { method: "POST", body: { username, password, ...(role ? { role } : {}) }, auth: false }),
   register: (data) => request("/auth/register", { method: "POST", body: data, auth: false }),
@@ -82,7 +75,6 @@ export const api = {
   setPreferences: (genreIds) =>
     request("/auth/me/preferences", { method: "PUT", body: { genre_ids: genreIds } }),
 
-  // --- Catálogo ---
   genres: () => request("/genres", { auth: false }),
   tags: (minGames = 3) => request("/tags", { auth: false, params: { min_games: minGames } }),
   games: (params) => request("/games", { auth: false, params }),
@@ -94,7 +86,6 @@ export const api = {
   similar: (id, limit = 6) => request(`/games/${id}/similar`, { auth: false, params: { limit } }),
   reviews: (id, limit = 10, offset = 0) => request(`/games/${id}/reviews`, { auth: false, params: { limit, offset } }),
 
-  // --- Recomendaciones ---
   recommendations: (strategy = "auto", limit = 12, discovery = "balanced") =>
     request("/recommendations", { params: { strategy, limit, discovery } }),
   discovery: (mode = "affinity", friendId = null) => request("/recommendations/discovery", { params: { mode, friend_id: friendId, limit: 8 } }),
@@ -111,14 +102,12 @@ export const api = {
   playExperiences: () => request("/play/feedback"),
   playBacklog: (mode="light") => request("/play/backlog", {params:{mode}}),
 
-  // --- Amigos y solicitudes ---
   friends: () => request("/friends"),
   requestFriend: (username) => request("/friends/requests", { method: "POST", body: { username } }),
   acceptFriend: (id) => request(`/friends/requests/${id}/accept`, { method: "POST" }),
   cancelFriendRequest: (id) => request(`/friends/requests/${id}`, { method: "DELETE" }),
   removeFriend: (id) => request(`/friends/${id}`, { method: "DELETE" }),
 
-  // --- Interacciones ---
   myRatings: () => request("/me/ratings"),
   myReviews: (params = {}) => request("/me/reviews", { params }),
   rate: (gameId, score, extra = {}) =>
@@ -130,7 +119,6 @@ export const api = {
   analyzeText: (content) =>
     request("/reviews/analyze", { method: "POST", body: { content }, auth: false }),
 
-  // --- Listas ---
   myLists: () => request("/me/lists"),
   myListsSummary: () => request("/me/lists/summary"),
   listsContaining: (gameId) => request(`/me/lists/containing/${gameId}`),
@@ -140,9 +128,7 @@ export const api = {
   removeFromList: (listId, gameId) =>
     request(`/me/lists/${listId}/items/${gameId}`, { method: "DELETE" }),
 
-  // --- Steam ---
 
-  // --- Analítica (rol desarrollador) ---
   studioAnalytics: (studio) => request("/analytics/studio", { params: { studio } }),
   gameAnalytics: (gameId) => request(`/analytics/games/${gameId}`),
   overview: () => request("/analytics/overview"),

@@ -40,7 +40,6 @@ def public_evidence(game):
         positive = game.steamspy_positive
         total = positive + game.steamspy_negative
         source = "Steam vía SteamSpy"
-    # Límite inferior de Wilson: una muestra pequeña no equivale a miles de reseñas.
     community = None
     if total:
         p, z = positive / total, 1.96
@@ -77,11 +76,7 @@ def score_context(db, user, engine=None):
                                                   for gid, signal in signals.items())
     if has_history:
         if history_values is None:
-            # Una ficha sin etiquetas puede tener horas propias verificadas,
-            # pero no permite inferir interés fuerte por otros juegos.
             history_values = values * 0 + .15
-        # Los gustos manuales acompañan; los inferidos del mismo historial no
-        # se cuentan dos veces. No restringen la exploración a un género amplio.
         if user.preferences_source == "manual" and genres and basis != "popularidad":
             genre_values, _ = engine.personal_scores(None, list(genres))
             history_values = .95 * history_values + .05 * genre_values
@@ -91,8 +86,6 @@ def score_context(db, user, engine=None):
         if local is not None:
             local_values, support = local
             local_weights = LOCAL_PERSONAL_MAX_WEIGHT * support
-            # La IA no puede levantar una comparación que tus rechazos
-            # explícitos desaconsejan. Sí puede aportar evidencia negativa.
             rejected = [similarities[gid] * abs(signal["weight"])
                         for gid, signal in used.items() if signal["weight"] < 0]
             if rejected:
@@ -101,9 +94,6 @@ def score_context(db, user, engine=None):
             values = (1. - local_weights) * history_values + local_weights * local_values
             if local_weights.any():
                 basis = "historial_personal_ia_local"
-        # El nuevo modelo aprende relaciones entre historial y rasgos usando
-        # votos reales. Se usa su afinidad relativa al prior, no el porcentaje
-        # positivo general de Steam, y sustituye al canal anterior si aporta.
         supported = affinity_support > 0
         if supported.any():
             proposed = LOCAL_PERSONAL_MAX_WEIGHT * affinity_support
@@ -182,8 +172,6 @@ def score_game(game, context):
     if context["genres"] and not context["has_history"]:
         value = .85*value + .15 if matches else .65*value
     if not context["has_history"]:
-        # Conservar la escala base del selector anterior: la presentación
-        # del índice no cambia los juegos que se eligen por estos gustos.
         value = min(.55, value)
     reasons.extend(item[3] for item in history_reasons(game, context))
     if matches and not context["has_history"]:
@@ -238,9 +226,6 @@ def score_game(game, context):
     elif context["steam_count"] and not context["steam_review_count"]:
         reasons.append("El historial aporta señales de interés, pero aún no tenemos reseñas tuyas comparables para distinguir qué te gustó y qué no.")
     base_value = round(sum(components[key]*weight for key, weight in weights.items())*100)
-    # La escala de compatibilidad se aplica también en la ficha, nunca sólo
-    # al aparecer en el feed. La selección conserva el índice base y no
-    # requiere opiniones: las horas o preferencias reconocibles bastan.
     comparable_rejection = False
     index = context["engine"]._game_index.get(game.id)
     if index is not None:
@@ -282,7 +267,6 @@ def discovery(db, user, mode="affinity", limit=8, friend_id=None):
     if mode == "friends":
         friend_name = (friend.steam_username if friend.steam_verified else None) or friend.full_name or friend.username
         friend_ratings = dict(db.execute(select(Rating.game_id, Rating.score).where(Rating.user_id == friend.id)).all())
-        # Sólo la biblioteca pública actual del amigo autorizado; nunca caché privada ni horas.
         library = steam_profile_service.fetch_library(friend.steam_id) if friend.steam_verified else {"status": "not_linked"}
         library_status = library["status"]
         if library_status == "ok":
@@ -308,12 +292,10 @@ def discovery(db, user, mode="affinity", limit=8, friend_id=None):
             continue
         score = score_game(game, context)
         if context["has_history"] and not context["has_positive_history"] and not context["genres"]:
-            continue  # Los rechazos solos no permiten afirmar afinidad positiva.
+            continue
         if context["personal"] and (score.affinity is None or score.affinity < 45):
             continue
         quality = .7*public["meta"]/100 + .3*public["community"] if public["meta"] is not None else public["community"]
-        # Ordenar por evidencia estable, no por la escala visual. No hay
-        # mínimo de 70/60 ni una obligación de escribir reseñas propias.
         selection_value = score.base_value if score.base_value is not None else score.value
         base = selection_value/100 if selection_value is not None else .95*quality + .05*public["reach"]
         reasons = []

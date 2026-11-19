@@ -1,6 +1,5 @@
 import { h, icon } from "./ui.js";
 
-/** Radios nativos: elección accesible con teclado, sin mezclar perfiles y planes. */
 export function experienceChoices({ value = null, onChange, form = null } = {}) {
   const group = h("fieldset", { class: "experience-choices" },
     h("legend", null, "¿Qué tipo de cuenta querés crear?"));

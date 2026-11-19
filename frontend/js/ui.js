@@ -1,14 +1,6 @@
-/* Utilidades de interfaz: construcción de DOM, íconos, avisos y formato. */
 
 import { cauldronScene } from "./cauldron.js";
 
-/**
- * Constructor de elementos.
- *
- * Los hijos de tipo string se insertan como texto, nunca como HTML: el
- * contenido que viene de la base (reseñas, nombres de usuario) no puede
- * inyectar marcado.
- */
 export function h(tag, props = null, ...children) {
   const element = document.createElement(tag);
 
@@ -45,28 +37,18 @@ export function clear(node) {
   return node;
 }
 
-/**
- * Reemplaza los hijos de un nodo descartando `null`/`undefined`/`false`,
- * igual que hace `h` con sus hijos.
- *
- * `Node.replaceChildren` es la API nativa del DOM y convierte un `null` en
- * el texto literal "null": pasarle el resultado de un condicional
- * (`cond ? algo : null`) imprime "null" en pantalla.
- */
 export function mount(node, ...children) {
   node.replaceChildren();
   append(node, children);
   return node;
 }
 
-/** Información secundaria disponible sin ocupar la lectura principal. */
 export function infoDetails(label, ...children) {
   return h("details", { class: "ui-details" }, h("summary", null, label),
     h("div", { class: "ui-details-body" }, children));
 }
 
 let readableSequence = 0;
-/** Acorta la presentación, conservando íntegro el texto del usuario. */
 export function expandableText(text, { className = "", limit = 320 } = {}) {
   const content = String(text ?? ""), long = content.length > limit || content.split("\n").length > 5;
   const body = h("p", { class: `${className} ui-text-body${long ? " is-collapsed" : ""}`, id: `readable-${++readableSequence}` }, content);
@@ -77,9 +59,6 @@ export function expandableText(text, { className = "", limit = 320 } = {}) {
   return h("div", { class: "ui-readable-text" }, body, button);
 }
 
-/* ------------------------------------------------------------------ *
- * Íconos
- * ------------------------------------------------------------------ */
 
 const PATHS = {
   trophy: "M5 2h6v4a3 3 0 01-6 0V2zM5 3H2v2a3 3 0 003 3M11 3h3v2a3 3 0 01-3 3M8 9v4M5 14h6",
@@ -133,9 +112,6 @@ export function icon(name, size = 16, extraClass = "") {
   return svg;
 }
 
-/* ------------------------------------------------------------------ *
- * Formato
- * ------------------------------------------------------------------ */
 
 export const SENTIMENT_LABEL = {
   positivo: "Positivo",
@@ -191,10 +167,6 @@ export function initials(text) {
     .toUpperCase();
 }
 
-/* Degradados decorativos para las portadas que el dataset no trae. No
- * codifican ningún dato, así que no comparten paleta con los gráficos: se
- * eligen de una lista fija indexada por el nombre para que un juego siempre
- * tenga el mismo. */
 const COVER_GRADIENTS = [
   ["#1e3a5f", "#2d5f8a"],
   ["#3d2b52", "#6b4a7d"],
@@ -215,9 +187,6 @@ export function coverGradient(name) {
   return `linear-gradient(140deg, ${from}, ${to})`;
 }
 
-/* ------------------------------------------------------------------ *
- * Avisos y modales
- * ------------------------------------------------------------------ */
 
 let toastStack = null;
 
@@ -240,9 +209,6 @@ export function toast(message, kind = "info") {
   }, 2600);
 }
 
-/**
- * Abre un modal. `render` recibe una función `close` para cerrarse a sí mismo.
- */
 export function openModal(render, { wide = false } = {}) {
   const overlay = h("div", { class: "overlay" });
 
@@ -271,7 +237,6 @@ export function openModal(render, { wide = false } = {}) {
   document.body.style.overflow = "hidden";
   document.body.appendChild(overlay);
 
-  // El foco entra al modal para que el teclado no quede detrás.
   const focusable = modal.querySelector("input, textarea, button, select");
   if (focusable) focusable.focus();
 
@@ -300,13 +265,6 @@ export function spinnerBlock(message = "Cargando…") {
   );
 }
 
-/** El caldero hirviendo: exclusivo de "¿Qué jugamos hoy?" (ver
- * views/quiz.js). Es una pantalla que aparece una sola vez por sesión de
- * preguntas, así que se puede dar el lujo de ser la pieza más elaborada.
- *
- * La escena vive en ``cauldron.js``: es un port de la animación diseñada en
- * Claude Design, con su propio bucle de animación por frame en vez de
- * keyframes de CSS. */
 export function cauldronLoader(message = "Preparando la poción…") {
   return h(
     "div",
@@ -316,27 +274,8 @@ export function cauldronLoader(message = "Preparando la poción…") {
   );
 }
 
-/** Ruta única de la ilustración de la mascota.
- *
- * Un solo lugar donde se decide de dónde sale: la mascota va a ser también
- * el avatar del chatbot, y cuando llegue ese momento no debería haber que
- * buscar la cadena repetida por todo el frontend. La mascota todavía no
- * tiene nombre; si alguna vez lo tiene, va acá al lado, no en strings
- * sueltos por las vistas. */
 export const MASCOT_SRC = "/assets/brand/mascota.png";
 
-/**
- * La mascota (el maguito encapuchado) como imagen decorativa.
- *
- * `alt=""` + `aria-hidden` porque no aporta información: el mensaje de
- * texto que la acompaña es el que comunica el estado. Las medidas van
- * explícitas para que reservar su espacio no dependa de que la imagen ya
- * haya cargado (si no, cada carga empuja el texto hacia abajo).
- *
- * Si el archivo no está, la imagen se saca sola del DOM en vez de dejar el
- * ícono de imagen rota: la pantalla de carga degrada al círculo rúnico, que
- * es exactamente lo que se veía antes de que existiera la mascota.
- */
 export function mascot({ size = 96, className = "" } = {}) {
   return h("img", {
     class: `gt-mascot${className ? ` ${className}` : ""}`,
@@ -350,13 +289,6 @@ export function mascot({ size = 96, className = "" } = {}) {
   });
 }
 
-/** Círculo rúnico con la mascota flotando en el centro: la carga "de marca"
- * para todo lo demás (cada cambio de pantalla, la búsqueda del catálogo,
- * enriquecer una ficha pendiente desde Steam). Mismo mundo mágico que el
- * caldero, pieza distinta — no es el caldero reciclado en todos lados.
- *
- * El mensaje va en un `role="status"`: sin eso, un lector de pantalla no
- * anuncia nada cuando el estado cambia y la espera es completamente muda. */
 export function magicLoader(message = "Cargando…") {
   return h(
     "div",

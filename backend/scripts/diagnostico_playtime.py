@@ -40,7 +40,6 @@ from sqlalchemy import func, select  # noqa: E402
 from app.db.base import SessionLocal  # noqa: E402
 from app.models import Game, Review  # noqa: E402
 
-# Franjas del asistente (frontend/js/views/quiz.js).
 BUCKETS = [("una tarde (<=15 h)", 15), ("un finde (<=40 h)", 40), ("sin apuro", None)]
 
 
@@ -69,7 +68,6 @@ def main() -> int:
             for row in db.execute(select(Review.game_id).distinct())
         }
 
-        # Horas por juego, sólo muestras utilizables (> 0).
         hours_by_game: dict[int, list[float]] = {}
         for game_id, hours in db.execute(
             select(Review.game_id, Review.hours_at_review).where(
@@ -159,8 +157,6 @@ def main() -> int:
                 print()
                 print("Mayores desacuerdos (RAWG h -> mediana h):")
                 worst.sort(key=lambda item: abs(item[0] - item[1]), reverse=True)
-                # ``dict(result)`` no sirve: ``Result`` tiene ``.keys()`` y
-                # dict() lo confunde con un mapping. Materializar primero.
                 names = dict(
                     db.execute(
                         select(Game.id, Game.name).where(

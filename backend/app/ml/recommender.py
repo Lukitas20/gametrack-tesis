@@ -42,20 +42,11 @@ from app.models import (
     Tag, User, game_tags,
 )
 
-# Vecinos considerados al predecir con filtrado colaborativo.
 NEIGHBOURS = 20
-# Una coincidencia aislada no establece una relación entre dos juegos.
 MIN_SHARED_RATERS = 2
 SIMILARITY_SHRINKAGE = 5.0
-# MMR: peso de la afinidad frente a la repetición de contenido en la tanda.
 DISCOVERY_RELEVANCE = {"familiar": 1.0, "balanced": 0.88, "explore": 0.65}
-# Castigo por incertidumbre en la popularidad: se resta UNCERTAINTY_WEIGHT /
-# sqrt(evidencia). Con dos reseñas cae ~0,7 puntos; con cien, ~0,1.
 UNCERTAINTY_WEIGHT = 1.0
-# TF fijo de un género en el corpus de contenido. Comparable al sqrt de la
-# proporción de votos de una etiqueta destacada (sqrt(0.12) ~ 0.35): el
-# género acompaña, no manda. Es la señal de respaldo de los juegos que
-# todavía no pasaron por la ingesta de etiquetas de SteamSpy.
 GENRE_TF = 0.4
 
 
@@ -71,11 +62,9 @@ class EngineConfig:
     idéntico a antes de que esta clase existiera.
     """
 
-    # Corpus de contenido
-    use_community_tags: bool = True   # etiquetas comunitarias en el corpus
-    use_vote_weights: bool = True     # TF = sqrt(prop. de votos); False = binario
-    genre_tf: float = GENRE_TF        # 0.0 = géneros fuera del corpus
-    # Combinación del asistente (suggest_by_mood)
+    use_community_tags: bool = True
+    use_vote_weights: bool = True
+    genre_tf: float = GENRE_TF
     w_content: float = 0.6
     w_quality: float = 0.15
     w_reach: float = 0.25
@@ -131,13 +120,6 @@ class RecommenderEngine:
 
     def __init__(self, db: Session, config: EngineConfig | None = None) -> None:
         self.config = config or EngineConfig()
-        # Universo recomendable: un juego participa si tiene RASGOS con los
-        # que compararlo — géneros o etiquetas — sin importar cómo llegaron:
-        # ficha rica de la tienda (steam_synced_at), ingesta de SteamSpy
-        # (nivel 1) o dataset curado. Las fichas peladas (solo AppID y
-        # nombre) quedan afuera: siguen en el catálogo y el buscador, pero
-        # sin rasgos no hay nada que recomendar de ellas. Este criterio ES
-        # la política de catálogo del motor: "recomendable" = "con rasgos".
         games = list(
             db.scalars(
                 select(Game)
@@ -158,8 +140,6 @@ class RecommenderEngine:
         }
 
         self._build_content_model(db, games)
-        # Rasgos públicos, sin IDs de usuario ni estadísticas de popularidad.
-        # Se comparte el mismo extractor con el entrenamiento del modelo real.
         self.affinity_features = {
             game.id: dict(genres=sorted(self._genre_slugs[game.id]),
                           tags=sorted(self._community_terms_by_game.get(game.id, set())))
@@ -169,7 +149,6 @@ class RecommenderEngine:
         self._build_popularity_model(games)
         self.local_model, self.local_model_status = load_for_database(db)
 
-    # -- Contenido ---------------------------------------------------------
 
     def _build_content_model(self, db: Session, games: list[Game]) -> None:
         """Matriz TF-IDF construida directo desde los datos, sin "sopa" de texto.
@@ -190,8 +169,6 @@ class RecommenderEngine:
         siendo TF-IDF en sentido estricto — cambió qué cuenta como término y
         cómo se mide su frecuencia, no el modelo.
         """
-        # slug -> columna. Géneros y etiquetas comparten el espacio: si un
-        # concepto existe en ambos ("indie"), se refuerzan en la misma celda.
         genre_terms = (
             {genre.slug for game in games for genre in game.genres}
             if self.config.genre_tf > 0
@@ -202,9 +179,6 @@ class RecommenderEngine:
                 select(game_tags.c.game_id, Tag.slug, game_tags.c.votes)
                 .join(Tag, Tag.id == game_tags.c.tag_id)
                 .join(Game, Game.id == game_tags.c.game_id)
-                # Algunas etiquetas antiguas del seed quedaron como platform.
-                # Votos > 1 son evidencia por asociación de la ingesta SteamSpy;
-                # las categorías oficiales conservan su default de 1.
                 .where(or_(Tag.kind == "community", game_tags.c.votes > 1), _recommendable_game_filter())
             ).all()
             if self.config.use_community_tags
@@ -218,8 +192,6 @@ class RecommenderEngine:
             term: column
             for column, term in enumerate(sorted(genre_terms | community_terms))
         }
-        # También lo necesita la comparación de un anuncio contra el historial:
-        # no depende de haber calculado antes una matriz de recomendaciones.
         broad = set(self._genre_names) | {
             "action", "adventure", "rpg", "indie", "casual", "simulation",
             "strategy", "sports", "racing", "massively-multiplayer", "free-to-play",
@@ -243,16 +215,12 @@ class RecommenderEngine:
                     share = votes / total_votes if total_votes else 0.0
                     matrix[row, self._term_index[slug]] = float(np.sqrt(share))
                 else:
-                    # Variante de evaluación: membresía binaria, sin votos.
                     matrix[row, self._term_index[slug]] = 1.0
 
         self._transformer = TfidfTransformer(norm="l2", smooth_idf=True)
         if games and self._term_index:
             self._tfidf = self._transformer.fit_transform(matrix.tocsr())
         else:
-            # Sin juegos con rasgos no hay corpus que entrenar; la matriz
-            # vacía hace que todo el camino de contenido devuelva None y el
-            # motor degrade a popularidad, en vez de reventar en sklearn.
             self._tfidf = csr_matrix((len(games), 0))
 
     def _similarity_row(self, index: int) -> np.ndarray:
@@ -322,7 +290,6 @@ class RecommenderEngine:
             return None
         return cosine_similarity(vector, self._tfidf).ravel()
 
-    # -- Colaborativo ------------------------------------------------------
 
     def _build_collaborative_model(self, db: Session) -> None:
         rows = db.execute(select(Rating.user_id, Rating.game_id, Rating.score)).all()
@@ -338,26 +305,18 @@ class RecommenderEngine:
             game_columns.append(self._game_index[game_id])
             scores.append(score)
 
-        # Almacenar sólo notas observadas evita reservar usuarios × catálogo.
-        # CSR permite leer un historial en O(notas); los ceros ausentes nunca
-        # se tratan como valoraciones negativas ni participan de la media.
         self.matrix = csr_matrix((scores, (user_rows, game_columns)), shape=shape, dtype=float)
         self.matrix.sort_indices()
         counts = np.diff(self.matrix.indptr)
         totals = np.asarray(self.matrix.sum(axis=1)).ravel()
-        # Media de cada usuario sobre lo que efectivamente valoró.
         self.user_means = np.divide(
             totals, counts, out=np.full(len(self.user_ids), 3.0), where=counts > 0
         )
 
-        # Centrar por usuario neutraliza que unos puntúen alto y otros bajo:
-        # lo que importa es cuánto se aparta cada nota de su propia media.
         centered = self.matrix.copy()
         centered.data -= np.repeat(self.user_means, counts)
         centered.eliminate_zeros()
         self._centered_sparse = centered.tocsc()
-        # Una nota igual a la media sigue siendo evidencia de co-valoración,
-        # aunque desaparezca de la matriz centrada por valer cero.
         observed = self.matrix.astype(np.int32)
         observed.data.fill(1)
         self._observed = observed.tocsc()
@@ -367,18 +326,11 @@ class RecommenderEngine:
         start, end = self.matrix.indptr[row:row + 2]
         return self.matrix.indices[start:end], self.matrix.data[start:end]
 
-    # -- Popularidad -------------------------------------------------------
 
     def _build_popularity_model(self, games: list[Game]) -> None:
         averages = np.array([game.avg_rating for game in games], dtype=float)
         counts = np.array([game.ratings_count for game in games], dtype=float)
 
-        # Juegos sin evidencia interna ni reseñas importadas, pero con la
-        # señal masiva de SteamSpy (nivel 0/1 de la ingesta): se sintetiza la
-        # misma escala que usa `recompute_game_aggregates` para las reseñas
-        # de Steam (1 + 4·ratio de positivos), con el total como evidencia.
-        # Así, un juego que nadie abrió nunca compite en popularidad y
-        # alcance con los que sí — el punto de toda la ingesta.
         for index, game in enumerate(games):
             if counts[index] > 0:
                 continue
@@ -392,28 +344,11 @@ class RecommenderEngine:
         rated = counts > 0
         global_mean = float(averages[rated].mean()) if rated.any() else 3.0
 
-        # Un juego con dos notas de 5 no debe superar a uno con doscientas
-        # notas de 4,6. Achicar hacia la media global (media bayesiana) no
-        # alcanza acá: buena parte de la evidencia real viene de reseñas de
-        # Steam agregadas como "recomendado/no recomendado", que se agrupan
-        # cerca del techo (la media global termina siendo ~4,9), así que
-        # "achicar hacia la media" apenas mueve a un juego con pocas reseñas
-        # perfectas. En cambio, castigar directamente por incertidumbre
-        # (1/sqrt(evidencia)) sí discrimina: cae fuerte con poca evidencia y
-        # cada vez menos a medida que se acumulan reseñas reales.
         self.popularity = averages - UNCERTAINTY_WEIGHT / np.sqrt(np.maximum(counts, 1.0))
         self.global_mean = global_mean
 
-        # Alcance: cuánta gente lo jugó, en escala logarítmica (la diferencia
-        # entre 500 y 5.000 reseñas importa mucho más que entre 1 y 1,5
-        # millones). Va aparte de `popularity` a propósito: son preguntas
-        # distintas — "¿qué tan bueno es?" contra "¿qué tan masivo es?" — y
-        # mezclarlas rompería el orden de "mejor valorados" del catálogo.
-        # Sin este término, un indie con 500 reseñas 99 % positivas le gana
-        # siempre a Counter-Strike con 9,7 millones al 86 %.
         self.reach = _normalize(np.log10(np.maximum(counts, 1.0) + 1.0))
 
-    # -- Consultas ---------------------------------------------------------
 
     def similar_games(self, game_id: int, limit: int = 10) -> list[Recommendation]:
         """Juegos parecidos por contenido a uno dado."""
@@ -487,10 +422,6 @@ class RecommenderEngine:
         if content is None:
             return []
 
-        # A diferencia de la estrategia "contenido" del recomendador
-        # principal, acá el alcance pesa explícitamente: quien pregunta "qué
-        # juego hoy" espera títulos que conozca o pueda jugar con gente, no
-        # la joya oculta con quince reseñas. La afinidad sigue mandando.
         contributions = {
             "contenido": self.config.w_content * _normalize(content),
             "popularidad": self.config.w_quality * _normalize(self.popularity),
@@ -536,11 +467,6 @@ class RecommenderEngine:
         if rated.size == 0:
             return None
 
-        # Si ninguna nota se aparta de la media del propio usuario no hay nada
-        # que propagar a los vecinos: todas las predicciones saldrían iguales.
-        # Pasa con una sola valoración, o cuando alguien puntuó todo igual.
-        # Devolver None acá hace que el caso degrade a popularidad en lugar de
-        # a un orden arbitrario entre predicciones empatadas.
         deviations = ratings - self.user_means[row]
         if float(np.abs(deviations).max()) < 1e-9:
             return None
@@ -551,8 +477,6 @@ class RecommenderEngine:
         rated_set = set(rated)
         centered_history = self._centered_sparse[:, rated].T
         observed_history = self._observed[:, rated]
-        # Incluso un historial grande evita materializar catálogo × historial:
-        # los temporales densos se limitan a un millón de pares por bloque.
         block_size = min(1024, max(1, 1_000_000 // rated.size))
         for start in range(0, len(self.game_ids), block_size):
             end = min(start + block_size, len(self.game_ids))
@@ -607,7 +531,6 @@ class RecommenderEngine:
             return None
         return self.game_names[self.game_ids[rated[int(np.argmax(similarities))]]]
 
-    # -- Recomendación -----------------------------------------------------
 
     def _local_scores(self, user_id: int | None) -> tuple[np.ndarray, np.ndarray] | None:
         if self.local_model is None or user_id not in self._user_index:
@@ -682,17 +605,11 @@ class RecommenderEngine:
         0.5 neutral, no una supuesta opinión personal derivada de popularidad.
         """
         history = self._content_scores_from_history(user_id)
-        # Cada género elegido es una alternativa válida. Una única consulta
-        # con todos exige coincidencias simultáneas y un término raro puede
-        # diluir los demás hasta hacer desaparecer las recomendaciones.
         genre_scores = [self.score_terms({slug: 1.0}) for slug in sorted(set(preferred_genres))]
         genre_scores = [scores for scores in genre_scores if scores is not None]
         preference = None
         if genre_scores:
             similarity = np.maximum.reduce(genre_scores)
-            # Misma escala que el historial firmado: una coincidencia positiva
-            # queda sobre el punto neutral. Cero sigue siendo falta de afinidad;
-            # no se inventa un gusto por términos ausentes del catálogo.
             preference = np.where(similarity > 0, (similarity + 1.0) / 2.0, 0.0)
         values = (history + 1.0) / 2.0 if history is not None else preference
         if values is None:
@@ -747,8 +664,6 @@ class RecommenderEngine:
             self._content_scores_from_history(user_id) if user_id is not None else None
         )
         preferences = self._content_scores_from_preferences(preferred_genres or [])
-        # El coseno del historial firmado vive en [-1, 1]; el de preferencias
-        # positivas en [0, 1]. Escalas fijas, independientes del candidato líder.
         content = (
             (np.clip(history_content, -1.0, 1.0) + 1.0) / 2.0
             if history_content is not None else None
@@ -758,8 +673,6 @@ class RecommenderEngine:
         elif preferences is not None:
             content = 0.8 * content + 0.2 * np.clip(preferences, 0.0, 1.0)
         if personal_affinities is not None:
-            # El mismo perfil firmado del GameTrackScore, con Steam y reseñas
-            # propias. No volver a sumar géneros que ya están en ese perfil.
             content = np.clip(np.array([personal_affinities.get(gid, .15) for gid in self.game_ids]),0.,1.)
         collaboration = (
             self._collaborative_evidence(user_id)
@@ -785,8 +698,6 @@ class RecommenderEngine:
         )
         local = self._local_scores(user_id) if use_local else None
         if chosen == "ia_local":
-            # El canal local se mezcla más abajo; el respaldo sigue teniendo
-            # motivos reales cuando faltan artefacto, historial o ítems.
             chosen = "contenido" if content is not None else "popularidad"
         if strategy == "auto":
             if collaborative is not None and history_size >= settings.REC_COLD_START_THRESHOLD:
@@ -803,8 +714,6 @@ class RecommenderEngine:
 
         components: dict[str, np.ndarray] = {}
         if chosen == "hibrido" and content is not None and collaborative is not None:
-            # Cada candidato cede al contenido la parte colaborativa que sus
-            # vecinos no justifican. Sin vecinos no se inventa una predicción.
             effective_collab_weight = collab_weight * evidence
             components = {
                 "contenido": (1.0 - effective_collab_weight) * content,
@@ -818,8 +727,6 @@ class RecommenderEngine:
             }
             source = RecommendationSource.COLLABORATIVE
         elif chosen in {"contenido", "hibrido"} and content is not None:
-            # Un toque de popularidad desempata entre juegos igual de afines y
-            # evita recomendar títulos afines pero muy mal valorados.
             components = {"contenido": 0.8 * content, "popularidad": 0.2 * popularity}
             source = RecommendationSource.CONTENT
         else:
@@ -937,9 +844,6 @@ class RecommenderEngine:
         return signals
 
 
-# ---------------------------------------------------------------------------
-# Caché del motor
-# ---------------------------------------------------------------------------
 
 _engine: RecommenderEngine | None = None
 _fingerprint: tuple[object, int, int, int, int, int] | None = None
@@ -953,8 +857,6 @@ def _current_fingerprint(db: Session) -> tuple[object, int, int, int, int, int]:
     except OSError:
         model_modified = 0
     bind = db.get_bind()
-    # Identidad real del motor: dos SQLite en memoria pueden tener idéntica
-    # URL y contadores, pero pertenecen a bases y usuarios diferentes.
     database_identity = getattr(bind, "engine", bind)
     return (
         database_identity,

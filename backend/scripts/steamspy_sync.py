@@ -36,12 +36,8 @@ from pathlib import Path
 
 import truststore
 
-# Usa el almacén de certificados del sistema operativo (ver app/main.py).
 truststore.inject_into_ssl()
 
-# El catálogo real de Steam tiene nombres en japonés, chino y cirílico que la
-# consola de Windows (cp1252) no sabe imprimir: sin esto, mostrar el progreso
-# corta el proceso entero con UnicodeEncodeError.
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
@@ -54,7 +50,7 @@ from app.db.base import SessionLocal, init_db  # noqa: E402
 from app.models.steamspy import SteamSpySync  # noqa: E402
 from app.services import steam_service, steamspy_service  # noqa: E402
 
-BATCH_SIZE = 100  # tamaño de lote de nivel 1: reporta progreso cada ~100 s
+BATCH_SIZE = 100
 
 
 def run_index(db, args) -> int:

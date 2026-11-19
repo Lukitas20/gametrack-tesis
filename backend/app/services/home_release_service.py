@@ -39,7 +39,6 @@ def _details(appid):
         name, image = data.get("name"), _image(data.get("header_image"))
         if not isinstance(name, str) or not name.strip() or not image:
             return None
-        # No convertir "2027" o "próximamente" en una fecha exacta inventada.
         label = release.get("date")
         return {"steam_app_id": appid, "name": name[:200], "background_image": image,
             "release_label": label[:100] if isinstance(label, str) and label.strip() else "Fecha por anunciar",

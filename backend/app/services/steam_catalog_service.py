@@ -27,8 +27,6 @@ from app.models import Game, SteamCatalogEntry, SteamCatalogSync
 _LOCKS: dict[str, threading.Lock] = {}
 _LOCKS_GUARD = threading.Lock()
 OVERLAP_SECONDS = 300
-# PostgreSQL scopes advisory locks to the database; never derive this key from
-# a hostname or credentials, which can differ between workers on the same DB.
 _POSTGRES_LOCK_ID = int.from_bytes(
     hashlib.sha256(b"gametrack:steam-catalog").digest()[:8], "big", signed=True
 )
@@ -57,8 +55,6 @@ def _postgres_catalog_lock(bind):
     connection = None
     try:
         connection = bind.engine.connect()
-        # The lock is session scoped; avoid an idle transaction while Steam is
-        # being called, without returning the physical connection to the pool.
         connection = connection.execution_options(isolation_level="AUTOCOMMIT")
         acquired = bool(connection.scalar(
             text("SELECT pg_try_advisory_lock(:lock_id)"),
@@ -66,8 +62,6 @@ def _postgres_catalog_lock(bind):
         ))
     except SQLAlchemyError:
         if connection is not None:
-            # Acquisition may have reached PostgreSQL before a network error.
-            # Never put a possibly locked session back in the connection pool.
             try:
                 connection.invalidate()
             finally:
@@ -87,8 +81,6 @@ def _postgres_catalog_lock(bind):
                     if not released:
                         connection.invalidate()
                 except SQLAlchemyError:
-                    # Closing the physical session releases its locks, even
-                    # when an explicit unlock cannot be acknowledged.
                     connection.invalidate()
         finally:
             connection.close()
@@ -276,8 +268,6 @@ def _new_slug(db: Session, name: str, appid: int, reserved: set[str]) -> str:
 def _apply_page(db: Session, apps: list[dict], seen_at: datetime) -> tuple[int, int]:
     created = updated = 0
     revision_changed = False
-    # Incluso con páginas de 50k, las consultas IN y las escrituras se
-    # mantienen pequeñas. El COMMIT sigue siendo único para toda la página.
     for offset in range(0, len(apps), 400):
         new, changed, affects_recommendations = _apply_chunk(db, apps[offset:offset + 400], seen_at)
         created += new
@@ -289,12 +279,8 @@ def _apply_page(db: Session, apps: list[dict], seen_at: datetime) -> tuple[int, 
 
 
 def _apply_chunk(db: Session, apps: list[dict], seen_at: datetime) -> tuple[int, int, bool]:
-    # La API real incluye AppIDs sin nombre público. No crear un título
-    # inventado ni borrar un nombre local; el cursor sí avanza sobre ellos.
-    # Si Steam les asigna un nombre, entrarán en una próxima pasada de cambios.
     apps = [app for app in apps if app["name"].strip()]
     ids = [app["appid"] for app in apps]
-    # Selecciona únicamente columnas del lote: sin eager-load de géneros/tags.
     games = {row.steam_app_id: row for row in db.execute(select(
         Game.id, Game.steam_app_id, Game.name, Game.steam_synced_at
     ).where(Game.steam_app_id.in_(ids)))} if ids else {}
@@ -382,7 +368,6 @@ def sync_catalog(db: Session, *, max_pages: int | None = None, now: datetime | N
                         state.scan_started_at = None
                         state.status = "idle"
                         state.cursor_appid = 0
-                    # El lote entero, revisión, contadores y cursor son una transacción.
                     db.commit()
                     pages += 1
                     if not more:

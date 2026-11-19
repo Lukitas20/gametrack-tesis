@@ -34,7 +34,6 @@ def _enriched_only(statement: Select) -> Select:
     return statement.where(
         visible_catalog_clause(),
         or_(Game.steam_app_id.is_(None), Game.steam_synced_at.is_not(None)),
-        # Importaciones antiguas pueden conservar software como ficha completa.
         Game.id.notin_(select(game_genres.c.game_id).join(Genre).where(Genre.slug.in_(
             ["utilities", "utilidades", "animation-modeling", "animacion-y-modelado",
              "design-illustration", "diseno-e-ilustracion", "photo-editing", "edicion-fotografica",
@@ -83,8 +82,6 @@ def _apply_filters(
     if min_rating is not None:
         statement = statement.where(Game.avg_rating >= min_rating)
     if max_playtime is not None:
-        # Los juegos sin duración conocida no se descartan: no hay evidencia
-        # de que excedan el límite.
         statement = statement.where(
             or_(Game.playtime_hours.is_(None), Game.playtime_hours <= max_playtime)
         )

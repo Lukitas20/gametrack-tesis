@@ -1,4 +1,3 @@
-/* Perfil: géneros preferidos y actividad de la cuenta de Steam vinculada. */
 
 import { api } from "../api.js";
 import { openOnboarding } from "./onboarding.js";

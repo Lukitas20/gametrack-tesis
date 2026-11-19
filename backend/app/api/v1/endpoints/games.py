@@ -67,8 +67,6 @@ def _require_game(db: Session, game_id: int) -> Game:
     game = get_game(db, game_id)
     if game is None:
         raise HTTPException(status_code=404, detail="El juego no existe")
-    # Servir la copia local y encolar el refresco evita que la disponibilidad
-    # de Steam determine la latencia de una ficha o sus reseñas.
     if not steam_service.maybe_refresh(db, game):
         raise HTTPException(status_code=404, detail="El juego no existe")
     from app.models.steam_catalog import SteamCatalogEntry

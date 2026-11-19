@@ -1,4 +1,3 @@
-// Observa también las tarjetas que llegan de la API después de montar la vista.
 export function initMotion(root) {
   if (!("IntersectionObserver" in window)) return;
   const reduced = matchMedia("(prefers-reduced-motion: reduce)");

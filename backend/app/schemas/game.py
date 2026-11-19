@@ -36,7 +36,6 @@ class GameSummary(BaseModel):
     avg_rating: float
     ratings_count: int
     genres: list[GenreOut]
-    # False para una "ficha pendiente" (stub de Steam sin enriquecer todavía).
     is_enriched: bool
 
 
@@ -54,7 +53,6 @@ class GameDetail(GameSummary):
     playtime_hours: int | None
     reviews_count: int
     tags: list[TagOut]
-    # Para armar el link directo a Steam en la ficha pendiente.
     steam_app_id: int | None
     steam_sync_status: str | None = None
 

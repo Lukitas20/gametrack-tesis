@@ -13,10 +13,6 @@ from app.models import Game, Rating, Review, User
 from app.schemas.interaction import RatingCreate, ReviewCreate
 
 
-# Reseñas con horas necesarias para que la mediana signifique algo. Validado
-# con el diagnóstico sobre el catálogo real: la mediana de muestras por juego
-# es 79, así que el umbral casi no recorta cobertura (959 de 1004 juegos) y
-# filtra justo los casos donde una o dos reseñas dictarían la "duración".
 MIN_HOURS_SAMPLES = 5
 
 
@@ -68,16 +64,6 @@ def recompute_game_aggregates(db: Session, game_id: int) -> None:
     ).one()
     rating_count = int(rating_count or 0)
 
-    # Orden de preferencia: cualquier TOTAL real antes que nuestra muestra.
-    # Contar las reseñas importadas mide el tamaño de la muestra (capada en
-    # ``STEAM_REVIEWS_IMPORT_LIMIT``), no cuánta gente jugó al juego —
-    # Counter-Strike 2 quedaba con 64 "reseñas" y perdía en alcance contra
-    # el Counter-Strike de 1999, que sí tenía su total cargado. Mezclar
-    # totales con muestras es peor que usar una sola fuente imperfecta.
-    #
-    # Entre los dos totales gana el de Steam (autoritativo) sobre el de
-    # SteamSpy (tercero, pero con cobertura de todo el catálogo); miden lo
-    # mismo y en la misma escala, así que convivir no reintroduce la mezcla.
     steamspy_total = (game.steamspy_positive or 0) + (game.steamspy_negative or 0)
     if game.steam_total_reviews:
         steam_count = int(game.steam_total_reviews)
@@ -112,10 +98,6 @@ def recompute_game_aggregates(db: Session, game_id: int) -> None:
         game.avg_rating = 0.0
         game.ratings_count = 0
 
-    # Mismo criterio que usa el recomendador para su piso de popularidad
-    # (ver app/ml/recommender.py): penaliza por incertidumbre en vez de sólo
-    # mostrar el promedio crudo, para que el catálogo no ordene "mejor
-    # valorados" con dos reseñas perfectas por delante de cien muy buenas.
     game.popularity_score = round(
         game.avg_rating - UNCERTAINTY_WEIGHT / math.sqrt(max(game.ratings_count, 1)), 4
     )
@@ -137,7 +119,6 @@ def upsert_rating(db: Session, user: User, data: RatingCreate) -> Rating:
     rating.score = data.score
     rating.hours_played = data.hours_played
     rating.status = data.status
-    # Precisión consistente con las devoluciones: la opinión más reciente gana.
     rating.updated_at = datetime.now(timezone.utc)
 
     db.flush()
@@ -145,8 +126,6 @@ def upsert_rating(db: Session, user: User, data: RatingCreate) -> Rating:
     db.commit()
     db.refresh(rating)
 
-    # Actualizar una valoración existente no cambia la cantidad de filas, así
-    # que la huella del motor no lo detectaría: hay que invalidar a mano.
     invalidate_engine()
     return rating
 

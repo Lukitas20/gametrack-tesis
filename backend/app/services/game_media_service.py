@@ -11,8 +11,6 @@ from app.services import steam_service
 from app.services.steam_media import extract_screenshots, sanitize_screenshots
 
 
-# Memoria acotada y ninguna espera: una galería nunca forma una cola de red.
-# Las capturas y el backoff sobreviven a reinicios en la base de datos.
 _MEDIA_LOCKS = tuple(Lock() for _ in range(32))
 _MEDIA_SLOTS = BoundedSemaphore(2)
 _MEDIA_TIMEOUT = httpx.Timeout(4.0, connect=2.0, pool=1.0)
@@ -47,7 +45,6 @@ def get_game_media(db: Session, game: Game) -> dict:
         return _pending()
     slot = False
     try:
-        # Otra visita pudo completar esta ficha mientras se preparaba el GET.
         db.refresh(game, attribute_names=["screenshots"])
         cached = _cached(game)
         if cached is not None:
@@ -66,7 +63,6 @@ def get_game_media(db: Session, game: Game) -> dict:
         slot = _MEDIA_SLOTS.acquire(blocking=False)
         if not slot:
             return _pending()
-        # Liberar la conexión durante Steam respeta el pool pequeño de Cloud.
         db.commit()
         try:
             data = steam_service.get_app_details(appid, timeout=_MEDIA_TIMEOUT)

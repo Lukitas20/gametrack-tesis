@@ -1,4 +1,3 @@
-/* Informes del estudio, con asistencia local basada en evidencia. */
 import { api } from "../api.js";
 import { developerOnly, requiresLogin } from "../components.js";
 import { chartCard, divergingBar, divergingStackedBar, sentimentLegend, tableView } from "../charts.js";

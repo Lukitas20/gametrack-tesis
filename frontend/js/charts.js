@@ -1,16 +1,3 @@
-/* Primitivas de gráficos en SVG.
- *
- * Especificaciones fijas en todos los gráficos:
- *  · Barras de 18px (tope 24): el resto de la banda queda como aire.
- *  · Extremo de dato redondeado 4px, escuadrado contra la línea base.
- *  · Hueco de 2px del color de la superficie separando rellenos contiguos,
- *    en lugar de un borde dibujado alrededor de cada marca.
- *  · Rejilla y ejes en trazo capilar sólido de 1px, nunca punteado.
- *  · Leyenda presente siempre que haya dos series o más.
- *  · Etiquetas directas selectivas; el resto lo llevan el eje y el tooltip.
- *  · Toda serie tiene su vista de tabla equivalente: el tooltip refuerza, no
- *    es la única manera de leer un valor.
- */
 
 import { h, SENTIMENT_LABEL, signed } from "./ui.js";
 
@@ -59,9 +46,6 @@ function barPath(x, y, width, height, side) {
   return `M${x + r},${y}h${w - r}v${height}h${-(w - r)}a${r},${r} 0 0 1 ${-r},${-r}v${-(height - 2 * r)}a${r},${r} 0 0 1 ${r},${-r}z`;
 }
 
-/* ------------------------------------------------------------------ *
- * Tooltip compartido
- * ------------------------------------------------------------------ */
 
 let tip = null;
 
@@ -91,7 +75,6 @@ function hideTip() {
   if (tip) tip.dataset.show = "false";
 }
 
-/** Zona de captura generosa: nunca se depende de acertar la marca fina. */
 function attachTip(target, hitRect, title, lines) {
   hitRect.addEventListener("mousemove", (event) => showTip(event, title, lines));
   hitRect.addEventListener("mouseleave", hideTip);
@@ -104,9 +87,6 @@ function attachTip(target, hitRect, title, lines) {
   target.appendChild(hitRect);
 }
 
-/* ------------------------------------------------------------------ *
- * Leyenda y vista de tabla
- * ------------------------------------------------------------------ */
 
 export function legend(entries) {
   return h(
@@ -164,9 +144,6 @@ export function tableView(headers, rows, summary = "Ver los datos en tabla") {
   );
 }
 
-/* ------------------------------------------------------------------ *
- * Barra apilada divergente — reparto de sentimiento
- * ------------------------------------------------------------------ */
 
 /**
  * Forma correcta para una escala ordenada (negativo → neutro → positivo):
@@ -184,8 +161,6 @@ export function divergingStackedBar(rows, { labelWidth = 150, onRowClick = null 
   const plotWidth = width - plotLeft - 44;
   const centre = plotLeft + plotWidth / 2;
 
-  // Dominio simétrico redondeado al 25% superior, para que las filas sean
-  // comparables entre sí y el gráfico igual aproveche el ancho.
   let maxExtent = 0;
   const prepared = rows.map((row) => {
     const total = row.positivo + row.neutro + row.negativo;
@@ -205,7 +180,6 @@ export function divergingStackedBar(rows, { labelWidth = 150, onRowClick = null 
     style: `min-width:${Math.max(460, labelWidth + 320)}px`,
   });
 
-  // Rejilla: cuartos del dominio a cada lado, en trazo capilar sólido.
   const ticks = [-domain, -domain / 2, 0, domain / 2, domain];
   for (const tick of ticks) {
     const x = centre + scale(tick);
@@ -236,7 +210,6 @@ export function divergingStackedBar(rows, { labelWidth = 150, onRowClick = null 
     const negativeWidth = scale(row.negative);
     const positiveWidth = scale(row.positive);
 
-    // Izquierda del cero: negativo (extremo redondeado) y mitad del neutro.
     if (row.negative > 0) {
       group.appendChild(
         svgEl("path", {
@@ -262,7 +235,6 @@ export function divergingStackedBar(rows, { labelWidth = 150, onRowClick = null 
       );
     }
 
-    // Etiqueta de fila, recortada si no entra en su canal.
     const maxChars = Math.floor((labelWidth - 12) / CHAR);
     const text = svgEl("text", {
       x: labelWidth - 12,
@@ -274,7 +246,6 @@ export function divergingStackedBar(rows, { labelWidth = 150, onRowClick = null 
       row.label.length > maxChars ? `${row.label.slice(0, maxChars - 1)}…` : row.label;
     group.appendChild(text);
 
-    // Única etiqueta directa por fila: el sentimiento neto.
     const net = row.total ? (row.positivo - row.negativo) / row.total : 0;
     const value = svgEl("text", {
       x: width - 6,
@@ -306,9 +277,6 @@ export function divergingStackedBar(rows, { labelWidth = 150, onRowClick = null 
   return h("div", { class: "chart" }, svg);
 }
 
-/* ------------------------------------------------------------------ *
- * Barra divergente — sentimiento neto por aspecto
- * ------------------------------------------------------------------ */
 
 /**
  * Desviación respecto de un cero: la forma correcta para un valor con signo.
@@ -375,10 +343,6 @@ export function divergingBar(rows, { labelWidth = 130, domain = 1 } = {}) {
     label.textContent = row.label;
     group.appendChild(label);
 
-    // El valor va por fuera del extremo, que es donde siempre hay lugar en una
-    // barra corta. Cuando la barra llega al borde del dominio ya no cabe
-    // afuera: escribirlo ahí invadiría el canal de las etiquetas de fila, así
-    // que en ese caso se pasa adentro del extremo, en blanco sobre el relleno.
     const text = signed(row.value, 2);
     const outsideX = isPositive ? centre + magnitude + 8 : centre - magnitude - 8;
     const fitsOutside = isPositive
@@ -391,7 +355,6 @@ export function divergingBar(rows, { labelWidth = 130, domain = 1 } = {}) {
       valueX = outsideX;
       anchor = isPositive ? "start" : "end";
     } else {
-      // Adentro: el texto arranca desde el extremo hacia el centro.
       valueX = isPositive ? centre + magnitude - 8 : centre - magnitude + 8;
       anchor = isPositive ? "end" : "start";
     }
@@ -421,9 +384,6 @@ export function divergingBar(rows, { labelWidth = 130, domain = 1 } = {}) {
   return h("div", { class: "chart" }, svg);
 }
 
-/* ------------------------------------------------------------------ *
- * Barras horizontales — magnitud
- * ------------------------------------------------------------------ */
 
 /**
  * Magnitud simple: una sola serie, un solo tono. No se usa una rampa de
@@ -479,9 +439,6 @@ export function barChart(rows, { labelWidth = 130, formatValue = (v) => v, color
     label.textContent = row.label;
     group.appendChild(label);
 
-    // La etiqueta va dentro sólo si entra con holgura a ambos lados; si no,
-    // afuera. El margen es amplio a propósito: con uno justo, dos barras de
-    // largo parecido terminan una con la etiqueta adentro y otra afuera.
     const formatted = String(formatValue(row.value));
     const fitsInside = barWidth > textWidth(formatted) + 30;
     const value = svgEl("text", {
@@ -509,11 +466,7 @@ export function barChart(rows, { labelWidth = 130, formatValue = (v) => v, color
   return h("div", { class: "chart" }, svg);
 }
 
-/* ------------------------------------------------------------------ *
- * Composición reutilizable
- * ------------------------------------------------------------------ */
 
-/** Tarjeta de gráfico con título, cuerpo desplazable, leyenda y tabla. */
 export function chartCard({ title, subtitle, chart, legendEntries, table, action }) {
   return h(
     "section",
@@ -535,7 +488,6 @@ export function chartCard({ title, subtitle, chart, legendEntries, table, action
   );
 }
 
-/** Entradas de leyenda del sentimiento, con sus totales. */
 export function sentimentLegend(distribution) {
   return SENTIMENTS.map((key) => ({
     label: SENTIMENT_LABEL[key],

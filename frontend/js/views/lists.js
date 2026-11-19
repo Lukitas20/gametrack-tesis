@@ -1,4 +1,3 @@
-/* Listas del usuario. */
 
 import { api } from "../api.js";
 import { gameGrid, requiresLogin } from "../components.js";

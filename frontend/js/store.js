@@ -1,4 +1,3 @@
-/* Estado de sesión y cachés del catálogo. */
 
 import { api, setToken } from "./api.js";
 
@@ -27,7 +26,6 @@ export function isLoggedIn() {
   return Boolean(state.user);
 }
 
-/** El identificador de acceso no tiene por qué ser el nombre visible. */
 export function displayName(user = state.user) {
   if (!user) return "Mi cuenta";
   if (user.steam_verified && user.steam_username?.trim()) return user.steam_username.trim();
@@ -70,11 +68,9 @@ async function loadRatings() {
     const rows = await api.myRatings();
     state.ratings = new Map(rows.map((row) => [row.game_id, row.score]));
   } catch {
-    // Sin historial no se bloquea la sesión.
   }
 }
 
-/** Carga el catálogo base una sola vez por sesión. */
 export async function loadCatalog() {
   if (state.genres.length) return;
   const [genres, tags] = await Promise.all([api.genres(), api.tags(3)]);
@@ -128,7 +124,6 @@ export function logout() {
   emit();
 }
 
-/** Restaura la sesión guardada al arrancar, si el token sigue siendo válido. */
 export async function restore() {
   const raw = localStorage.getItem(STORAGE_KEY);
   if (raw) {

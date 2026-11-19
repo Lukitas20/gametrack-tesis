@@ -1,4 +1,3 @@
-/* Panel privado: datos Steam y valoraciones GameTrack tienen fuentes distintas. */
 import { api } from "../api.js";
 import { state } from "../store.js";
 import { h, icon, initials, spinnerBlock, emptyState } from "../ui.js";

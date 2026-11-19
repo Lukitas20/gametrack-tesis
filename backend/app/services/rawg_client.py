@@ -1,10 +1,4 @@
-"""Cliente de la API de RAWG para importar juegos reales.
-
-Es opcional: el seed usa el dataset local curado cuando no hay clave de API.
-La respuesta de RAWG se normaliza al mismo formato de diccionario que
-produce ``data/games_seed.json``, así que el resto del seed no distingue el
-origen de los datos.
-"""
+"""Cliente opcional para consultar y normalizar juegos de RAWG."""
 
 from __future__ import annotations
 
@@ -17,7 +11,6 @@ import httpx
 
 from app.core.config import settings
 
-# RAWG devuelve los géneros en inglés; los mapeamos a nuestros slugs.
 GENRE_SLUG_MAP = {
     "action": "accion",
     "adventure": "aventura",
@@ -57,8 +50,6 @@ def _clean_description(raw: str | None) -> str:
     text = re.sub(r"<[^>]+>", " ", raw)
     text = html.unescape(text)
     text = re.sub(r"\s+", " ", text).strip()
-    # Las descripciones de RAWG suelen incluir la traducción al español a
-    # continuación del texto en inglés, separada por este marcador.
     marker = "Español"
     if marker in text:
         text = text.split(marker, 1)[1].strip()
@@ -99,8 +90,6 @@ def _map_game(detail: dict[str, Any]) -> dict[str, Any]:
 
     tags = []
     for tag in (detail.get("tags") or [])[:12]:
-        # RAWG mezcla etiquetas en varios idiomas; nos quedamos con las de inglés
-        # porque son las que tienen slug estable.
         if tag.get("language") != "eng":
             continue
         slug = slugify(tag.get("name", ""))

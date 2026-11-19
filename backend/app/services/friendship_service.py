@@ -85,7 +85,6 @@ def request_friendship(db: Session, user: User, username: str) -> FriendshipRequ
     try:
         db.commit()
     except IntegrityError as error:
-        # La restricción única también protege frente a solicitudes simultáneas.
         db.rollback()
         raise HTTPException(status_code=409, detail="Ya existe una solicitud entre ustedes") from error
     db.refresh(friendship)

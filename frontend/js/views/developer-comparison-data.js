@@ -1,4 +1,3 @@
-/* Los porcentajes describen la muestra analizada, no todos los jugadores. */
 const finite = value => value !== null && value !== undefined && Number.isFinite(Number(value));
 
 export function reviewMetrics(report) {

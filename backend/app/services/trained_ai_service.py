@@ -73,7 +73,6 @@ def review_model_report(db, *, studio=None, game_id=None, limit=MAX_REVIEWS):
         return result
 
     result["sampled"] = len(rows)
-    # Un texto fuera del vocabulario puede ser leído sin producir predicciones.
     result["predicted"] = sum(item.get("reception") is not None or bool(item.get("topics")) for item in predictions)
     result["used"] = result["predicted"] > 0
     topics = {
@@ -96,16 +95,12 @@ def review_model_report(db, *, studio=None, game_id=None, limit=MAX_REVIEWS):
             vote_field = "without_recommendation" if row.is_recommended is None else (
                 "recommended" if row.is_recommended else "not_recommended")
             counts[vote_field] += 1
-            # Elegir evidencia de la misma muestra y priorizar votos negativos,
-            # sin atribuir una polaridad al fragmento ni inventar una cita.
             current = candidates[topic]
             if len(current) < 3 or (row.is_recommended is False and
                                     any(example["recommended"] is not False for example in current)):
                 try:
                     quote = model.evidence(row.content, topic)
                 except (ValueError, TypeError, KeyError, IndexError, ArithmeticError):
-                    # La predicción ya fue calculada. Si falla la selección de
-                    # fragmento, mostrar texto original, nunca generar una cita.
                     logger.warning("No se pudo seleccionar un fragmento del modelo de reseñas")
                     quote = row.content[:320]
                 if quote and quote.strip():

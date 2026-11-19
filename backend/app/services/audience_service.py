@@ -23,7 +23,6 @@ def audience_report(db, *, game_id=None, studio=None):
     reviews = select(Review.user_id).where(Review.game_id.in_(games), Review.source == "user",
                                           real_review_filter(), Review.user_id.in_(players))
     feedback = select(PlayFeedback.user_id).where(PlayFeedback.game_id.in_(games), PlayFeedback.user_id.in_(players))
-    # Las listas privadas y las bibliotecas Steam privadas no se usan en este panel.
     lists = select(GameList.user_id).join(GameListItem).where(
         GameListItem.game_id.in_(games), GameList.is_public.is_(True), GameList.user_id.in_(players))
     cohort = union(ratings, reviews, feedback, lists).subquery()
@@ -50,7 +49,6 @@ def audience_report(db, *, game_id=None, studio=None):
           "Devolución de uso guardada para algún juego analizado; no implica satisfacción.", n, "Experiencias GameTrack")
     group("public_lists", "Incluyeron juegos en listas públicas", lists,
           "Al menos un juego analizado en una lista pública; no demuestra compra ni intención de comprar.", n, "Listas públicas GameTrack")
-    # Géneros del conjunto analizado, separando elección manual de inferencia Steam.
     relevant_genres = select(game_genres.c.genre_id).where(game_genres.c.game_id.in_(games))
     for source, label in (("manual", "Preferencia elegida"), ("steam", "Interés inferido de Steam")):
         rows = db.execute(select(Genre.name, func.count(func.distinct(UserPreference.user_id)))

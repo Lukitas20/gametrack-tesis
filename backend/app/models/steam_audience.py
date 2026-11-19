@@ -9,7 +9,6 @@ class SteamAudienceHistory(Base):
     steam_id: Mapped[str] = mapped_column(String(32), primary_key=True)
     checked_at: Mapped[float] = mapped_column(Float)
     status: Mapped[str] = mapped_column(String(20))
-    # Sólo appid + voto explícito; no texto, alias, horas ni biblioteca privada.
     payload: Mapped[dict] = mapped_column(JSON)
 
 

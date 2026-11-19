@@ -46,14 +46,8 @@ from app.ml.lexicon import (
 )
 from app.models import Aspect, Game, Rating, Review, ReviewAspect, Sentiment
 
-# Umbral de la banda neutra sobre la polaridad [-1, 1].
 NEUTRAL_BAND = 0.25
-# Cuando una cláusula menciona varios aspectos, se conservan los que llegan a
-# esta fracción del aspecto dominante. Un valor alto favorece la precisión,
-# que es lo que importa en un panel de analítica.
 ASPECT_TIE_RATIO = 0.9
-# La negación invierte la polaridad pero la atenúa: "no es bueno" es menos
-# intenso que "es malo".
 NEGATION_FACTOR = 0.7
 
 _MAX_NGRAM = 3
@@ -65,9 +59,6 @@ _CONTRASTIVE_RE = re.compile(
 )
 
 
-# ---------------------------------------------------------------------------
-# Resultados
-# ---------------------------------------------------------------------------
 
 
 @dataclass(frozen=True)
@@ -87,9 +78,6 @@ class TextAnalysis:
     aspects: list[AspectOpinion] = field(default_factory=list)
 
 
-# ---------------------------------------------------------------------------
-# Normalización y segmentación
-# ---------------------------------------------------------------------------
 
 
 def normalize_text(text: str) -> str:
@@ -119,17 +107,12 @@ def split_into_clauses(text: str) -> list[list[str]]:
 
         clauses: list[str] = []
         for chunk in _CLAUSE_SPLIT.split(sentence):
-            # El conector adversativo se conserva al inicio de la cláusula
-            # siguiente; no aporta polaridad propia pero facilita la lectura
-            # de la evidencia guardada.
             parts = _CONTRASTIVE_RE.split(normalize_text(chunk))
             if len(parts) == 1:
                 if chunk.strip():
                     clauses.append(chunk.strip())
                 continue
 
-            # Se reparte el texto original usando las posiciones de los cortes
-            # detectados sobre la versión normalizada (misma longitud).
             offsets = [m.start() for m in _CONTRASTIVE_RE.finditer(normalize_text(chunk))]
             previous = 0
             for offset in offsets:
@@ -146,9 +129,6 @@ def split_into_clauses(text: str) -> list[list[str]]:
     return sentences
 
 
-# ---------------------------------------------------------------------------
-# Emparejamiento con los vocabularios
-# ---------------------------------------------------------------------------
 
 
 def _lookup(key: str, vocabulary: dict[str, float]) -> float | None:
@@ -209,9 +189,6 @@ def score_polarity(tokens: list[str]) -> tuple[float, int]:
         if any(token in NEGATORS for token in window) and not is_exception:
             weight = -weight * NEGATION_FACTOR
 
-        # Los modificadores se buscan a ambos lados: en español el adjetivo
-        # suele ir detrás del sustantivo ("decepción enorme", "tirones
-        # constantes"), así que mirar sólo hacia atrás pierde la mitad.
         span = len(key.split())
         neighbourhood = (
             tokens[max(0, start - 2) : start] + tokens[start + span : start + span + 2]
@@ -271,9 +248,6 @@ def _confidence(score: float, matches: int) -> float:
     return round(min(1.0, 0.4 + 0.12 * matches + 0.4 * abs(score)), 3)
 
 
-# ---------------------------------------------------------------------------
-# Análisis completo
-# ---------------------------------------------------------------------------
 
 
 def analyze_text(text: str) -> TextAnalysis:
@@ -281,7 +255,6 @@ def analyze_text(text: str) -> TextAnalysis:
     if not text or not text.strip():
         return TextAnalysis(sentiment=Sentiment.NEUTRAL, score=0.0, confidence=0.0)
 
-    # aspecto -> (suma de polaridad, cantidad de cláusulas, términos, evidencia)
     per_aspect: dict[Aspect, list[tuple[float, int, str]]] = {}
     global_scores: list[float] = []
     global_matches = 0
@@ -302,8 +275,6 @@ def analyze_text(text: str) -> TextAnalysis:
             if aspects:
                 previous_aspects = aspects
             else:
-                # La opinión continúa sobre el tema de la cláusula anterior:
-                # "el gameplay es correcto aunque le falta profundidad".
                 aspects = previous_aspects
 
             for aspect in aspects:
@@ -315,10 +286,8 @@ def analyze_text(text: str) -> TextAnalysis:
     for aspect, entries in per_aspect.items():
         total_matches = sum(matches for _score, matches, _clause in entries)
         if total_matches == 0:
-            # El aspecto se mencionó pero no se opinó sobre él.
             continue
         score = sum(score for score, _m, _c in entries) / len(entries)
-        # Como evidencia se usa la cláusula de opinión más intensa.
         evidence = max(
             (entry for entry in entries if entry[1] > 0),
             key=lambda entry: abs(entry[0]),
@@ -412,9 +381,6 @@ def analyze_pending_reviews(
     return processed
 
 
-# ---------------------------------------------------------------------------
-# Agregación para el panel de desarrollador
-# ---------------------------------------------------------------------------
 
 
 def _distribution(rows: list[tuple[Sentiment, int]]) -> dict[str, int]:
@@ -500,11 +466,6 @@ def aspect_scores_by_game(
     if not result:
         return result
 
-    # Una cita representativa del agregado, no siempre la más positiva.
-    # Exigimos la misma polaridad y minimizamos la distancia al score medio.
-    # Si no hay una cita que la respalde, queda sin evidencia textual: un
-    # balance negativo no se justifica con un elogio aislado, ni uno mixto
-    # con una opinión extrema.
     evidence_rows = db.execute(
         select(ReviewAspect.game_id, ReviewAspect.evidence, ReviewAspect.score,
                ReviewAspect.sentiment, ReviewAspect.id)
@@ -668,9 +629,6 @@ def studio_analytics(db: Session, studio: str) -> dict:
                 "rating_promedio": game.avg_rating,
                 "cantidad_ratings": game.ratings_count,
                 "cantidad_resenas": totals.get(game.id, 0),
-                # Se devuelve el reparto completo, no sólo el neto: con el neto
-                # solo, el frontend tendría que reconstruirlo y el resultado
-                # sería una aproximación presentada como dato real.
                 "distribucion": game_distribution,
                 "resenas_analizadas": sum(game_distribution.values()),
                 "sentimiento_neto": _net_score(game_distribution),

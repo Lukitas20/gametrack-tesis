@@ -64,21 +64,10 @@ from app.ml.recommender import EngineConfig, RecommenderEngine  # noqa: E402
 from app.models import Game, Tag, game_tags  # noqa: E402
 
 EVAL_DIR = BACKEND_ROOT / "eval"
-POOL_DEPTH = 10   # profundidad del pool y de AP; las métricas @k usan K=3
+POOL_DEPTH = 10
 K = 3
-RANDOM_SEED = 20260810  # orden de anotación reproducible entre los dos CSV
+RANDOM_SEED = 20260810
 
-# ---------------------------------------------------------------------------
-# Consultas representativas
-# ---------------------------------------------------------------------------
-#
-# 28 consultas que cubren el espacio de respuestas de forma estratificada:
-# cada ánimo aparece con cada compañía, las franjas de tiempo aparecen donde
-# más discriminan (tarde/finde), y el aspecto prioritario aparece en las
-# combinaciones donde hay evidencia ABSA que mover. No son las 144
-# combinaciones: son las que un usuario real produce y donde las variantes
-# pueden diferir; agregar consultas después es agregar filas acá (los IDs
-# son estables a propósito).
 
 
 @dataclass(frozen=True)
@@ -100,7 +89,6 @@ class Consulta:
 
 
 CONSULTAS = [
-    # Ánimo x compañía, sin límite de tiempo
     Consulta("C01", "Competir, en línea", "competir", "en-linea"),
     Consulta("C02", "Competir, solo", "competir", "solo"),
     Consulta("C03", "Competir, con amigos", "competir", "amigos"),
@@ -113,20 +101,16 @@ CONSULTAS = [
     Consulta("C10", "Desafío, solo", "desafio", "solo"),
     Consulta("C11", "Desafío, con amigos", "desafio", "amigos"),
     Consulta("C12", "Desafío, en línea", "desafio", "en-linea"),
-    # Sin compañía elegida (el filtro de compañía no aplica)
     Consulta("C13", "Competir, sin preferencia de compañía", "competir"),
     Consulta("C14", "Relajarme, sin preferencia de compañía", "relajarme"),
-    # Franja "una tarde" (<=15 h): donde la exención de juegos-servicio actúa
     Consulta("C15", "Competir, en línea, una tarde", "competir", "en-linea", 15),
     Consulta("C16", "Historia, solo, una tarde", "historia", "solo", 15),
     Consulta("C17", "Relajarme, solo, una tarde", "relajarme", "solo", 15),
     Consulta("C18", "Desafío, solo, una tarde", "desafio", "solo", 15),
     Consulta("C19", "Relajarme, con amigos, una tarde", "relajarme", "amigos", 15),
-    # Franja "un finde" (<=40 h)
     Consulta("C20", "Historia, solo, un finde", "historia", "solo", 40),
     Consulta("C21", "Desafío, solo, un finde", "desafio", "solo", 40),
     Consulta("C22", "Competir, con amigos, un finde", "competir", "amigos", 40),
-    # Aspecto prioritario (ABSA)
     Consulta("C23", "Historia, solo, priorizando la historia", "historia", "solo", None, "historia"),
     Consulta("C24", "Historia, solo, priorizando que ande bien", "historia", "solo", None, "optimizacion"),
     Consulta("C25", "Desafío, solo, priorizando la jugabilidad", "desafio", "solo", None, "jugabilidad"),
@@ -135,16 +119,8 @@ CONSULTAS = [
     Consulta("C28", "Historia, solo, una tarde, priorizando la historia", "historia", "solo", 15, "historia"),
 ]
 
-# ---------------------------------------------------------------------------
-# Variantes: cada decisión de diseño del hilo, como fila de la tabla
-# ---------------------------------------------------------------------------
 
 
-# Mapeo del sistema ANTERIOR al rediseño (el que estaba en quiz.js antes del
-# contrato por claves): géneros con peso uniforme como perfil y sólo
-# categorías de plataforma como filtros. Se expresa con el contrato legado
-# del endpoint — que existe justamente para esto — así la variante corre por
-# el mismo camino de código que corría el sistema viejo.
 _LEGACY_MOOD = {
     "historia": (["rol", "aventura"], []),
     "desafio": (["accion", "estrategia"], []),
@@ -172,7 +148,7 @@ def _legacy_payload(consulta: Consulta) -> QuizRequest:
         mood_tags=mood_tags,
         company_tags=_LEGACY_COMPANY[consulta.company],
         max_playtime=consulta.time,
-        priority_aspect=None,  # el sistema anterior no tenía boost: reordenaba
+        priority_aspect=None,
     )
 
 
@@ -181,10 +157,8 @@ class Variante:
     id: str
     descripcion: str
     engine: EngineConfig = field(default_factory=EngineConfig)
-    # Cómo se traduce la consulta a payload: "nuevo" usa el vocabulario
-    # ponderado del servidor; "legado" reproduce el sistema anterior.
     contrato: str = "nuevo"
-    con_aspecto: bool = True  # False = ignora priority_aspect (sin boost ABSA)
+    con_aspecto: bool = True
 
     def payload(self, consulta: Consulta) -> QuizRequest:
         if self.contrato == "legado":
@@ -248,9 +222,6 @@ def _sweep_variantes() -> list[Variante]:
     return out
 
 
-# ---------------------------------------------------------------------------
-# Ejecución de variantes
-# ---------------------------------------------------------------------------
 
 
 def run_variant(db, variante: Variante) -> dict[str, list[str]]:
@@ -292,9 +263,6 @@ def _game_context(db) -> dict[str, tuple[str, str, str]]:
     return context
 
 
-# ---------------------------------------------------------------------------
-# --pool
-# ---------------------------------------------------------------------------
 
 ANNOTATION_HEADER = [
     "consulta_id", "consulta", "juego_slug", "juego",
@@ -357,8 +325,6 @@ def cmd_pool(db, args) -> int:
         print(f"  {variante.id}: ok")
 
     EVAL_DIR.mkdir(parents=True, exist_ok=True)
-    # Los rankings se guardan para --metrics: la anotación es sobre el pool
-    # (sin variantes), las métricas necesitan saber qué rankeó cada una.
     with open(EVAL_DIR / "rankings.csv", "w", newline="", encoding="utf-8") as fh:
         writer = csv.writer(fh)
         writer.writerow(["variante", "consulta_id", "posicion", "juego_slug"])
@@ -395,9 +361,6 @@ def cmd_pool(db, args) -> int:
     return 0
 
 
-# ---------------------------------------------------------------------------
-# --metrics
-# ---------------------------------------------------------------------------
 
 
 def _read_annotations(path: str) -> dict[tuple[str, str], int]:
@@ -443,7 +406,6 @@ def cmd_metrics(db, args) -> int:
         print("  kappa < 0.6: revisar el criterio ANTES de confiar en la tabla "
               "(¿'relevante' significa lo mismo para los dos?).")
 
-    # Juicio final: acuerdo directo, o adjudicación explícita del resto.
     gold = {key: ann_a[key] for key in shared if ann_a[key] == ann_b[key]}
     disagreements = [key for key in shared if ann_a[key] != ann_b[key]]
     if args.adjudicadas:
@@ -468,7 +430,6 @@ def cmd_metrics(db, args) -> int:
               "--adjudicadas eval/desacuerdos.csv")
         print("No se calculan métricas de ranking hasta completar la adjudicación.")
 
-    # Rankings de la corrida de --pool
     rankings_path = EVAL_DIR / "rankings.csv"
     if not rankings_path.exists():
         print(f"\nFalta {rankings_path}: corré primero `--pool` (genera los "

@@ -55,8 +55,6 @@ def worker_status(db, *, now: datetime | None = None) -> dict:
             "worker_finished_at": latest.stopped_at if latest else None,
             "worker_error": latest.last_error if latest else None,
             "interval_minutes": latest.interval_minutes if active or scheduled else settings.STEAM_CATALOG_INTERVAL_MINUTES,
-            # Entre tandas no hay un proceso vivo. Conservar la configuración
-            # informada por la última ejecución, sin afirmar que sigue activo.
             "key_configured": bool(settings.STEAM_API_KEY) or remote_key or bool(scheduled and latest.key_configured)}
 
 
@@ -83,7 +81,6 @@ class WorkerPresence:
             row.key_configured = bool(settings.STEAM_API_KEY)
             row.interval_minutes = settings.STEAM_CATALOG_INTERVAL_MINUTES
             row.last_error = self.last_error
-            # La limpieza tiene un límite fijo, también tras reinicios abruptos.
             obsolete = select(SteamCatalogWorker.id).where(
                 SteamCatalogWorker.heartbeat_at < now - timedelta(days=1),
                 SteamCatalogWorker.id != self.worker_id).limit(100)
@@ -95,7 +92,6 @@ class WorkerPresence:
             try:
                 self.publish()
             except Exception as error:
-                # No incluir URLs de conexión ni credenciales en los logs.
                 logger.warning("No se pudo actualizar el estado del worker (%s)", type(error).__name__)
 
     def start(self) -> None:
@@ -143,7 +139,6 @@ def process_details(db, *, limit: int | None = None,
             return result
         now = datetime.now(timezone.utc)
         _register_existing(db, limit, now)
-        # Sólo IDs: no materializar el catálogo ni sus géneros y reseñas.
         ids = list(db.scalars(select(Game.id)
             .join(SteamCatalogEntry, SteamCatalogEntry.appid == Game.steam_app_id)
             .where(SteamCatalogEntry.status != "non_game",
@@ -166,7 +161,6 @@ def process_details(db, *, limit: int | None = None,
                 if steam_service.refresh_game(db, game):
                     steamspy_service.refresh_known_traits(db, game)
             except steam_service.SteamUnavailable as error:
-                # refresh_game conserva la última ficha y programa el reintento.
                 _details_retry_at = time.monotonic() + max(60, getattr(error, "retry_after_seconds", 60))
                 remote_failed = True
             except Exception as error:
@@ -183,7 +177,7 @@ def process_details(db, *, limit: int | None = None,
             outcome = entry.status if entry else "unavailable"
             result[outcome if outcome in {"ready", "non_game"} else "deferred"] += 1
             if remote_failed:
-                break  # Una caída o límite afecta al servicio, no sólo a este AppID.
+                break
             if stop.wait(settings.STEAM_CATALOG_REQUEST_DELAY_SECONDS):
                 break
     return result
@@ -207,7 +201,7 @@ def run_cycle(*, session_factory=SessionLocal, stop_event=None,
                 delay=settings.STEAM_CATALOG_REQUEST_DELAY_SECONDS)
             if result["index"].get("status") == "error":
                 _index_retry_at = time.monotonic() + max(60, result["index"].get("retry_after_seconds") or 60)
-        db.rollback()  # soltar cualquier snapshot antes de la tanda de detalles
+        db.rollback()
         if not stop_event or not stop_event.is_set():
             result["details"] = process_details(db, limit=detail_limit, stop_event=stop_event)
     return result
@@ -232,7 +226,6 @@ def run_forever(*, stop_event: threading.Event | None = None,
         try:
             presence.stop()
         except Exception as error:
-            # Si la base está caída, la presencia caduca automáticamente.
             logger.warning("No se pudo cerrar el estado del worker (%s)", type(error).__name__)
 
 

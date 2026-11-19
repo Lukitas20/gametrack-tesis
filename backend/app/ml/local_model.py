@@ -27,7 +27,6 @@ VERSION = 1
 
 
 def database_key(db: Session) -> str:
-    # Impide mezclar IDs de dos bases distintas. Nunca persiste la URL real.
     url = db.get_bind().url
     identity = str(url)
     if url.drivername.startswith("sqlite") and url.database not in (None, "", ":memory:"):
@@ -88,9 +87,6 @@ class LocalModel:
         with np.load(path, allow_pickle=False) as data:
             model = cls(data["game_ids"], data["factors"], data["biases"], data["counts"],
                         float(data["mean"]), json.loads(str(data["metadata"])))
-        # Los IDs se convierten a int al contrastar el catálogo. Rechazar antes
-        # floats (incluidos NaN/inf), strings y matrices evita excepciones o
-        # truncamientos silenciosos que podrían asociar factores a otro juego.
         if (model.game_ids.ndim != 1 or model.game_ids.dtype.kind not in "iu"
                 or model.game_ids.size == 0 or np.any(model.game_ids <= 0)):
             raise ValueError("IDs de juegos inválidos en el artefacto local")
@@ -168,8 +164,6 @@ def evaluate(train: list, test: list, *, factors: int = 12, epochs: int = 100) -
     for uid, gid, actual in test:
         prediction = model.predict(histories.get(uid, []))
         baseline = model.mean + (model.biases[index[gid]] if gid in index else 0.0)
-        # El baseline usa sólo entrenamiento. Los ítems desconocidos cuentan
-        # en la evaluación y cobertura; no se eliminan los casos difíciles.
         value = float(prediction[index[gid]]) if prediction is not None and gid in index else baseline
         covered += int(prediction is not None and gid in index)
         errors.append(value - actual)
@@ -192,14 +186,11 @@ def train_and_save(db: Session, path: Path, *, data_label: str,
         raise ValueError("Se necesitan al menos 20 notas, 3 jugadores y 3 juegos; no se fabrican valoraciones")
     train, test = temporal_split(rows)
     report = evaluate(train, test, factors=factors, epochs=epochs)
-    # El holdout se usa para decidir activación, así que es validación, no
-    # una prueba final independiente. Esa evaluación requiere nuevos datos.
     report["purpose"] = "validation_for_activation_not_final_test"
     automatic_eligible = (report.get("test_ratings", 0) >= 20
                           and report.get("covered_ratings", 0) == report.get("test_ratings")
                           and report["model"]["rmse"] < report["item_bias_baseline"]["rmse"]
                           and report["model"]["mae"] <= report["item_bias_baseline"]["mae"])
-    # Tras medir en holdout, el artefacto servido se reentrena con todos los datos.
     model = fit(rows, factors=factors, epochs=epochs)
     model.metadata.update(database_key=database_key(db), fingerprint=fingerprint(rows),
                           slugs={str(int(gid)): slugs[int(gid)] for gid in model.game_ids},

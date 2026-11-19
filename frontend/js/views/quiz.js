@@ -1,13 +1,3 @@
-/* Asistente "¿Qué jugamos hoy?"
- *
- * Vista de pantalla completa, no modal: es la feature principal de la
- * página, se merece su propio lugar. Las respuestas arman un perfil que
- * entra al motor de recomendación real (contenido + popularidad) en vez de
- * un cruce de etiquetas armado a mano, y si se elige un aspecto prioritario,
- * el orden final sale de sentimiento real de reseñas (ABSA) — "quiero una
- * buena historia" termina siendo "juegos donde reseñas reales dicen que la
- * historia es buena", no sólo "género = Rol".
- */
 
 import { api } from "../api.js";
 import { cover, saveToListButton } from "../components.js";
@@ -17,13 +7,6 @@ import { cauldronLoader, h, icon, mount, toast } from "../ui.js";
 import {backlogView,experienceView,playNavigation} from "./play-hub.js";
 import {playFeedbackButton,feedbackRevision} from "./play-feedback.js";
 
-/**
- * Última tirada del asistente, para poder volver a ella desde la ficha de un
- * juego sin tener que responder todo de nuevo (ver el link "Volver a los
- * resultados" en views/game.js). Vive a nivel de módulo a propósito: es
- * estado de sesión, no de una instancia de la vista, que se recrea entera en
- * cada navegación.
- */
 let lastRun = null;
 let quizGeneration = 0;
 let artworkPromise = null;
@@ -35,9 +18,6 @@ function catalogArtwork() {
   return art;
 }
 
-/** Arranca el asistente de cero, descartando la tirada anterior. Es lo que
- * hace el botón del encabezado: entrar ahí es pedir una recomendación nueva,
- * no volver a ver la de antes. */
 export function startNewQuiz() {
   quizGeneration += 1;
   lastRun = null;
@@ -62,10 +42,6 @@ const QUESTIONS = [
     label: "Ánimo", symbol: "heart",
     title: "¿Qué tenés ganas de vivir?",
     note: "Buscamos juegos que acompañen lo que tenés ganas de hacer hoy.",
-    // El frontend manda la CLAVE del ánimo; qué significa (etiquetas
-    // comunitarias votadas, géneros de respaldo, requisitos duros) lo
-    // resuelve el backend en app/ml/quiz_vocab.py, donde es testeable y
-    // versionable. Acá sólo queda la presentación.
     options: [
       { emoji: "🧠", title: "Quiero una historia", note: "Narrativa, decisiones", mood: "historia" },
       { emoji: "🔥", title: "Quiero desafío", note: "Exigente, souls, roguelike", mood: "desafio" },
@@ -78,9 +54,6 @@ const QUESTIONS = [
     label: "Compañía", symbol: "user",
     title: "¿Con quién jugamos?",
     note: "Buscamos modos de juego que coincidan con tu plan.",
-    // También por clave: el backend une las categorías de la tienda (en
-    // español) con las etiquetas comunitarias equivalentes de SteamSpy (en
-    // inglés), y esa unión evoluciona sin tocar el frontend.
     options: [
       { emoji: "🎧", title: "Solo", note: "Un jugador", company: "solo" },
       { emoji: "👥", title: "Con amigos", note: "Multijugador o cooperativo", company: "amigos" },
@@ -199,7 +172,6 @@ async function guidedQuizView() {
     catch (error) { friendsError = error.message; }
   }
   if (!isCurrent()) return container;
-  // Revalidar las amistades al volver, incluso si quedaron resultados en memoria.
   if (lastRun?.friendIds?.some(id => !friends.some(friend => friend.id === id))) lastRun = null;
 
   function planSummary() {
@@ -415,9 +387,6 @@ async function guidedQuizView() {
     );
   }
 
-  // Volver desde la ficha de un juego cae acá: si hay una tirada guardada se
-  // muestra tal cual, sin rehacer las preguntas ni volver a pedirle nada al
-  // motor.
   if (lastRun) {
     allowRelaxation = lastRun.allowRelaxation;
     excluded = [...lastRun.excluded];

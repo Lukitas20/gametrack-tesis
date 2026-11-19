@@ -1,4 +1,3 @@
-/* El modelo aporta temas y evidencia al informe existente, sin otra vista. */
 import { h, icon } from "../ui.js";
 
 const count = value => Number(value || 0).toLocaleString("es-AR");

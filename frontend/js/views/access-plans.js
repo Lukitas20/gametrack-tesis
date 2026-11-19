@@ -1,6 +1,5 @@
 import { h, icon } from "../ui.js";
 
-// Modelo de negocio, secciones 10.2.1 y 10.2.2: propuesta, no suscripciones activas.
 export const ACCESS_PLANS = [
   { id: "gratis", role: "jugador", name: "Jugador gratuito", price: "Gratis", period: "Sin suscripción",
     description: "Descubrí qué jugar y organizá tu biblioteca.", symbol: "gamepad",

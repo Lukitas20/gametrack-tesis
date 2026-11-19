@@ -1,4 +1,3 @@
-/* La misma lista y acciones de Steam en Perfil y en Amigos. */
 import { api } from "../api.js";
 import { state } from "../store.js";
 import { h, icon, initials, mount, emptyState, spinnerBlock, toast } from "../ui.js";

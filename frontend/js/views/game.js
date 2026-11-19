@@ -1,4 +1,3 @@
-/* Ficha del juego: capturas oficiales, opiniones reales y tu experiencia. */
 import { api } from "../api.js";
 import { personalScorePanel } from "./gametrack-score.js";
 import { steamAchievementPanel } from "./steam-achievements.js";

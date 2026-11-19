@@ -17,7 +17,6 @@ export function accountsView({ query = new URLSearchParams(), role } = {}) {
   let mode = query.get("modo") === "registro" ? "register" : "login";
   let steamError = query.get("steam_error");
   if (query.has("steam_error")) {
-    // Mostrar el resultado una vez, sin conservar un fallo viejo al recargar.
     query.delete("steam_error");
     history.replaceState(history.state, "", `#${accessPath(role, { plan: selectedPlan.id, register: mode === "register" })}`);
   }

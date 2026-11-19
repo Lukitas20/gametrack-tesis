@@ -11,7 +11,6 @@ class RecommendationOut(BaseModel):
     score: float
     source: RecommendationSource
     reason: str
-    # Aportes ponderados en escala 0–1: su suma es score. No son probabilidades.
     components: dict[str, float]
     signals: list[str] = Field(default_factory=list)
 
@@ -23,8 +22,6 @@ class RecommendationResponse(BaseModel):
     profile_hint: str = ""
     local_model: dict = Field(default_factory=dict)
     affinity_model: dict = Field(default_factory=dict)
-    # Cantidad de juegos valorados por el usuario: explica por qué se eligió
-    # esa estrategia y si hubo arranque en frío.
     history_size: int
     cold_start: bool
     items: list[RecommendationOut]

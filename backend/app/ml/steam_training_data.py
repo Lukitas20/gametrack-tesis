@@ -30,7 +30,6 @@ def utc_now() -> str:
 
 
 def nonnegative_int(value: Any) -> int | None:
-    # bool is an int in Python, but is not a valid observation of minutes.
     return value if type(value) is int and value >= 0 else None
 
 
@@ -111,7 +110,6 @@ class ObservationStore:
     def __init__(self, directory: Path):
         self.directory = directory
         directory.mkdir(parents=True, exist_ok=True)
-        # Custom output directories must also remain private/unversioned.
         (directory / ".gitignore").write_text("*\n", encoding="utf-8")
         self.data_path = directory / "observations.jsonl"
         key_path = directory / ".author_hmac.key"
@@ -123,7 +121,7 @@ class ObservationStore:
             try:
                 key_path.chmod(0o600)
             except OSError:
-                pass  # Windows privacy is additionally controlled by directory ACLs.
+                pass
         self.key = key_path.read_bytes()
         if len(self.key) != 32:
             raise ValueError("La clave HMAC privada debe contener exactamente 32 bytes.")
@@ -159,7 +157,6 @@ class ObservationStore:
             return "conflicting_ids"
         previous = self.rows.get(pair)
         if previous is not None:
-            # Review votes are states, not repeat independent interactions.
             previous_time = previous["updated_at"] if previous["updated_at"] is not None else previous["created_at"]
             incoming_time = row["updated_at"] if row["updated_at"] is not None else row["created_at"]
             if previous_time is not None and (incoming_time is None or incoming_time < previous_time):
@@ -235,7 +232,6 @@ class SteamReviewClient:
         self._last_started: float | None = None
 
     def _pause(self, seconds: float) -> None:
-        # Keep individual sleeps bounded (also permits responsive cancellation).
         while seconds > 0:
             part = min(30.0, seconds)
             self.sleep(part)
@@ -276,7 +272,6 @@ class SteamReviewClient:
                 if attempt == self.retries:
                     raise CollectionError(f"Steam devolvió HTTP {response.status_code}; checkpoint conservado.")
                 wait = max(self._retry_after(response), 2.0 ** (attempt + 1))
-                # Respect long server delays by stopping instead of retrying early.
                 if wait > 120:
                     raise CollectionError("Steam solicita una espera superior a 120s; reanudá más tarde.")
                 self._pause(wait)
@@ -289,7 +284,6 @@ class SteamReviewClient:
                 reviews, next_cursor = body["reviews"], body.get("cursor", "")
                 if not isinstance(reviews, list) or not all(isinstance(row, dict) for row in reviews) or not isinstance(next_cursor, str):
                     raise ValueError
-                # The new API deliberately has no `success` member.
                 if body.get("success") not in (None, 1, True):
                     raise ValueError
             except (ValueError, TypeError, KeyError, AttributeError):
@@ -315,8 +309,6 @@ def collect(
     error: str | None = None
     pages = 0
     query_type = getattr(client, 'review_type', 0)
-    # Cursors belong to a query. Never resume a negative-only query with the
-    # cursor of the all-reviews query. The shared store deduplicates real votes.
     query_games = (store.checkpoint['games'] if query_type == 0 else
                    store.checkpoint.setdefault('filtered_games', {}).setdefault(str(query_type), {}))
     try:

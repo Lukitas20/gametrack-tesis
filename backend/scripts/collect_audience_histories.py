@@ -43,7 +43,6 @@ def main():
                 "scope":target,"audience":report},ensure_ascii=False),flush=True)
         return 0
     except Exception:
-        # HTTP/SQL puede incluir parámetros privados. No volcar la excepción.
         print(json.dumps({"operation":"public_audience_histories","result":"failed_no_private_details"}),flush=True)
         return 1
 

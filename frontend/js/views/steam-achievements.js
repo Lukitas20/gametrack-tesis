@@ -77,8 +77,6 @@ export function steamAchievementPanel(appid, name, {onUpdate = () => {}, autoLoa
       loading=false;refresh.disabled=false;return;
     }
     loading=false;refresh.disabled=false;render();
-    // Un fallo transitorio se recupera sin pedirle al usuario que recargue.
-    // Máximo dos reintentos, con el plazo informado por el servidor.
     if(autoLoad && data?.status === "unavailable" && retryCount < 2) {
       retryCount += 1;
       const wait=Math.max(1000,((data.next_refresh_at || Date.now()/1000+30)-Date.now()/1000)*1000+250);

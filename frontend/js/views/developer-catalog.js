@@ -1,4 +1,3 @@
-/* Catálogo del desarrollador: informes comparables sin salir de la búsqueda. */
 import { api } from '../api.js';
 import { cover } from '../components.js';
 import { state, isDeveloper } from '../store.js';

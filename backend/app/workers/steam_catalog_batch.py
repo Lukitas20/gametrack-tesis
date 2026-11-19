@@ -22,7 +22,6 @@ RETRY_MESSAGE = "No se pudo completar la tanda. Se conserva el progreso para la 
 
 
 def database_size_bytes(db) -> int:
-    # Incluye tablas, índices y espacio físico: una medida conservadora.
     return int(db.scalar(text("SELECT pg_database_size(current_database())")))
 
 
@@ -134,7 +133,6 @@ def main(argv=None) -> int:
         print(json.dumps(report, ensure_ascii=False))
         return 1 if report["stop_reason"] in {"retry", "storage_limit", "interrupted"} else 0
     except Exception as error:
-        # Los errores SQL pueden incluir la URL o parámetros privados.
         logger.error("No se pudo ejecutar la tanda (%s). Revisá conexión directa, TLS y migraciones.", type(error).__name__)
         return 1
     finally:

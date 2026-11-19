@@ -21,7 +21,6 @@ class PlayFeedback(Base):
     replay: Mapped[bool | None] = mapped_column(Boolean)
     minutes: Mapped[int | None] = mapped_column(Integer)
     note: Mapped[str | None] = mapped_column(String(500))
-    # Una incidencia no borra la última señal explícita de gusto personal.
     taste_weight: Mapped[float | None] = mapped_column(Float)
     taste_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),server_default=func.now())

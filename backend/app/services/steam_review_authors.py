@@ -26,7 +26,6 @@ def public_name(profile: dict) -> str | None:
     value = profile.get("personaname")
     if not isinstance(value, str):
         return None
-    # Conservar Unicode del alias; quitar controles que no son texto visible.
     value = "".join(c for c in value if not unicodedata.category(c).startswith('C')).strip()
     return value[:120] if value else None
 
@@ -104,10 +103,6 @@ def repair_game_authors(db, game, *, max_pages: int = 5, delay: float = 1.0, hyd
     if len(dated) == len(pending):
         start, end = int(min(dated)), int(max(dated))
     else:
-        # Una reseña ya existía al importarla. Esa fecha sólo acota la
-        # búsqueda: NO se presenta ni guarda como fecha de publicación.
-        # Evita recorrer semanas de reseñas nuevas para reparar una muestra
-        # histórica que originalmente se tomó de las más recientes.
         bounds = [(r.published_at or r.created_at).replace(tzinfo=timezone.utc).timestamp()
                   for r in pending.values() if r.published_at or r.created_at]
         start, end = (946684800, int(max(bounds))) if bounds else (None, None)

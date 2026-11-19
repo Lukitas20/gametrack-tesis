@@ -1,20 +1,3 @@
-/* Caldero animado: la carga del asistente "¿Qué jugamos hoy?".
- *
- * Port a JS plano de la pieza diseñada en Claude Design ("Cauldron Potion
- * Animation"). El original es React sobre un motor de composición; acá no
- * hay build step ni dependencias, así que se porta el modelo y no el
- * framework: la escena es una FUNCIÓN PURA DEL TIEMPO que posiciona divs,
- * y eso sobrevive intacto a la traducción. Se conservan tal cual el espacio
- * de coordenadas (1080×1080), el envelope de intensidad, los easings y las
- * constantes de la pieza, así que ajustar el original y re-portar sigue
- * siendo mecánico.
- *
- * El ciclo dura 10 s y recorre cuatro momentos: el caldero en calma, tres
- * ingredientes que caen, el hervor que sube y un estallido que vuelve a la
- * calma. El bucle se corta solo cuando el nodo sale del DOM
- * (``isConnected``), así que cambiar de pantalla no deja un
- * requestAnimationFrame corriendo para siempre.
- */
 
 const LOOP = 10; // segundos del ciclo completo
 const CYCLE = 2.5; // divide el bucle en 4 partes iguales
@@ -24,7 +7,6 @@ const STAGE = 1080; // lado del espacio de coordenadas original
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const easeInQuad = (t) => t * t;
 
-/** Tween de un tramo: devuelve `from` antes de `start` y `to` después de `end`. */
 function animate({ from = 0, to = 1, start = 0, end = 1, ease }) {
   return (t) => {
     if (t <= start) return from;
@@ -36,9 +18,6 @@ function animate({ from = 0, to = 1, start = 0, end = 1, ease }) {
 const wave = (T, freq = 1, phase = 0) =>
   (Math.sin(((T * TWO_PI) / CYCLE) * freq + phase) + 1) / 2;
 
-/* Intensidad del brujeo: baja al principio, sube con los ingredientes,
- * estalla cerca del final y vuelve al valor de apertura en T=10 para que la
- * costura del bucle no se note. */
 const ENVELOPE = [
   [0, 0.15], [2, 0.15], [2.5, 0.24], [3.7, 0.30], [4.9, 0.38],
   [5, 0.42], [8, 0.85], [8.6, 1.0], [9.4, 0.45], [10, 0.15],
@@ -77,7 +56,6 @@ const FIREWORK_ARMS = 8;
 const GLOW = "#a855f7"; // mismo violeta que el logo
 const STEAM_PERIOD = 5;
 
-/** div absoluto con estilos base; `el.style` se actualiza después por frame. */
 function box(parent, style) {
   const node = document.createElement("div");
   node.style.position = "absolute";
@@ -86,11 +64,6 @@ function box(parent, style) {
   return node;
 }
 
-/**
- * Construye la escena una sola vez y devuelve la función que la actualiza
- * para un tiempo dado. Separar construcción de actualización es lo que hace
- * barato el bucle: por frame sólo se tocan estilos, nunca el árbol.
- */
 function buildScene(root) {
   const breathe = box(root, {
     inset: 0,
@@ -122,7 +95,6 @@ function buildScene(root) {
     node.dataset.dx = "";
   });
 
-  // Sombra, patas y cuerpo: estáticos, se dibujan una vez.
   box(breathe, {
     left: `${540 - 190}px`, top: "745px", width: "380px", height: "46px",
     borderRadius: "50%", background: "oklch(3% 0.01 300 / 0.55)", filter: "blur(6px)",
@@ -148,7 +120,6 @@ function buildScene(root) {
     }),
   );
 
-  // Borde del caldero: por encima del cuerpo y las runas.
   box(breathe, {
     left: `${540 - 155}px`, top: "540px", width: "310px", height: "48px",
     borderRadius: "50%", background: "oklch(34% 0.02 288)",
@@ -311,13 +282,6 @@ function buildScene(root) {
   };
 }
 
-/**
- * Caldero animado para la carga del asistente.
- *
- * `size` es el lado en píxeles: la escena se dibuja siempre en 1080×1080 y
- * se escala con `transform`, así que las coordenadas del diseño original no
- * se tocan y la pieza es nítida en cualquier tamaño.
- */
 export function cauldronScene(size = 340) {
   const wrap = document.createElement("div");
   wrap.className = "gt-cauldron";
@@ -333,9 +297,6 @@ export function cauldronScene(size = 340) {
 
   const render = buildScene(stage);
 
-  // Con "reducir movimiento" activado se dibuja un frame fijo del momento de
-  // más brillo y no se arranca el bucle: la pieza sigue comunicando que algo
-  // está pasando, sin animación que pueda molestar.
   const quiet = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
   if (quiet) {
     render(8.6);
@@ -345,8 +306,6 @@ export function cauldronScene(size = 340) {
   const started = performance.now();
   let frame = 0;
   const tick = (now) => {
-    // El nodo se va del DOM al cambiar de pantalla: ahí se corta el bucle en
-    // vez de seguir consumiendo frames por una animación que ya nadie ve.
     if (!wrap.isConnected && frame > 0) return;
     render((((now - started) / 1000) % LOOP + LOOP) % LOOP);
     frame += 1;

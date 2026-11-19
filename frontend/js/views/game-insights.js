@@ -66,7 +66,6 @@ function analysisContent(gameId, close, upcoming = false) {
         h("p", { class: "insight-user-question" }, question),
         h("div", { class: "insight-reply", role: "status" }, "Buscando evidencia en tu perfil…"));
       thread.append(message);
-      // Sólo conservamos las últimas consultas en la interfaz, no en la base.
       while (thread.children.length > 4) thread.firstElementChild.remove();
       input.value = ""; setBusy(true);
       message.scrollIntoView({ block: "nearest" });

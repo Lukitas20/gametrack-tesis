@@ -2,7 +2,6 @@
 
 import truststore
 
-# Igual que la API y los importadores: respeta el almacén TLS del sistema.
 truststore.inject_into_ssl()
 
 import logging
@@ -21,8 +20,6 @@ logger = logging.getLogger(__name__)
 
 def configure_logging() -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
-    # HTTPX incluye la URL completa en INFO; Steam lleva la clave en su query.
-    # Se conservan nuestros mensajes operativos sin publicar credenciales.
     for name in ("httpx", "httpcore"):
         logging.getLogger(name).setLevel(logging.WARNING)
 
@@ -42,7 +39,6 @@ def main() -> int:
         if settings.DB_AUTO_CREATE:
             init_db()
         else:
-            # El despliegue aplica Alembic antes de iniciar API y worker.
             with SessionLocal() as db:
                 db.execute(select(SteamCatalogWorker.id).limit(1))
         logger.info("Worker de Steam iniciado; usa el catálogo y la cola de la base configurada.")

@@ -62,8 +62,6 @@ def game_features(game: Mapping[str, Any]) -> dict[str, float]:
     """
     genres = _slugs(game.get("genres", []))
     tags = _slugs(game.get("community_tags", game.get("tags", [])), community_only=True)
-    # Binary memberships avoid pretending that the exported catalog contains
-    # vote counts. Normalization makes different tag counts comparable.
     result = {"genre:" + slug: .4 for slug in genres}
     tag_weight = 1 / math.sqrt(len(tags)) if tags else 0.
     result.update({"tag:" + slug: tag_weight for slug in tags})
@@ -106,7 +104,6 @@ def feature_matrix(
     Hours weigh interest continuously; they never create a positive/negative
     training label. Runtime may use real hours with an explicit `strength`.
     """
-    # Keep only interpretable signals with actual descriptive characteristics.
     useful = [row for row in history if game_features(row) and _strength(row) != 0]
     all_games = [*candidates, *useful]
     terms = {term: index for index, term in enumerate(sorted({
@@ -141,8 +138,6 @@ def feature_matrix(
     x[:, 7] = positive.sum() / len(useful)
     x[:, 8] = min(1., math.log1p(len(useful)) / math.log1p(20))
     x[:, 9] = positive.any(); x[:, 10] = negative.any(); x[:, 11] = engagement.any()
-    # Learning separate genre/tag effects avoids imposing a single manually
-    # chosen similarity weight. No target ID or population popularity enters.
     for prefix, offset in (("genre:", 12), ("tag:", 14)):
         selected_columns = [column for term, column in terms.items() if term.startswith(prefix)]
         if selected_columns:
@@ -151,9 +146,6 @@ def feature_matrix(
             for index, mask, weights in ((offset, positive, positive_weights), (offset + 1, negative, negative_weights)):
                 if mask.any():
                     x[:, index] = similarities[:, mask] @ weights[mask] / weights[mask].sum()
-    # Nonlinear comparisons still derive solely from real history. They let
-    # learning distinguish an isolated match from a consistent preference and
-    # agreement between genre and specific tags; they never create observations.
     x[:, 16] = x[:, 1] ** 2; x[:, 17] = x[:, 3] ** 2
     x[:, 18] = x[:, 12] * x[:, 14]; x[:, 19] = x[:, 13] * x[:, 15]
     x[:, 20] = x[:, 6] * x[:, 7]; x[:, 21] = x[:, 6] * x[:, 8]
@@ -181,8 +173,6 @@ def history_for_head(history: Sequence[Mapping[str, Any]], head: str) -> list[di
         return [dict(row) for row in history if type(row.get("recommended")) is bool]
     if head != "hours":
         raise ValueError("Canal de afinidad desconocido")
-    # An interest profile, never a constructed label: all targets remain
-    # actual Steam votes, including negative votes after many played hours.
     return [{**row, "recommended": None, "strength": 1.}
             for row in history if type(row.get("minutes")) in (int, float)
             and math.isfinite(row["minutes"]) and row["minutes"] >= 120]
@@ -208,7 +198,6 @@ class SteamAffinityModel:
             overlap = float(support["maximum_overlap"][index])
             available = (support["history_games"] > 0 and overlap > 0 and bool(game_features(candidates[index]))
                          and bool(eligible.get(head, {}).get("automatic_eligible")))
-            # Evidence support, not a second probability or measured accuracy.
             confidence = min(1., math.log1p(support["history_games"]) / math.log1p(10)) * overlap
             logit = math.log(max(1e-9, probability) / max(1e-9, 1 - probability))
             results.append({"probability": float(probability) if available else None,

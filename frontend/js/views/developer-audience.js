@@ -61,7 +61,6 @@ export function audiencePanel(initial, scope) {
     if (running || !scope) return;
     running = true; phase = "loading"; notice = ""; render();
     try {
-      // Conservamos cada lote para continuar si falla, pero publicamos una sola vista al terminar.
       for (let step = 0; step < 64; step++) {
         if (!root.isConnected) { started = false; return; }
         const result = await api.collectAudience(scope);

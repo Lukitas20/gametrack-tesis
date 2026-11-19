@@ -11,12 +11,8 @@ permite resolver casos donde una palabra suelta significaría lo contrario:
 
 from app.models.enums import Aspect
 
-# ---------------------------------------------------------------------------
-# Léxico de polaridad. Valores en [-1, 1].
-# ---------------------------------------------------------------------------
 
 SENTIMENT_LEXICON: dict[str, float] = {
-    # --- Positivos ---
     "obra de arte": 1.0,
     "obra maestra": 1.0,
     "vale cada peso": 0.95,
@@ -101,9 +97,6 @@ SENTIMENT_LEXICON: dict[str, float] = {
     "exigente": 0.3,
     "justa": 0.3,
     "justo": 0.3,
-    # Términos tibios. En el registro de las reseñas "correcto" o "cumple"
-    # significan "apenas pasable", no un elogio: con peso alto arrastraban las
-    # reseñas neutras hacia la clase positiva.
     "bien": 0.15,
     "correcto": 0.1,
     "correcta": 0.1,
@@ -112,16 +105,11 @@ SENTIMENT_LEXICON: dict[str, float] = {
     "aceptable": 0.1,
     "cumple": 0.1,
     "acompana": 0.1,
-    # Casi nulos, pero necesarios: son la única carga evaluativa de frases como
-    # "la trama es sencilla". Sin ellos la regla de "mencionar no es opinar"
-    # descarta el aspecto por falta de evidencia sentimental.
     "sencillo": 0.05,
     "sencilla": 0.05,
     "simple": 0.05,
-    # Afirmar que algo "tiene peso narrativo" es un elogio.
     "peso narrativo": 0.45,
     "impresionar": 0.3,
-    # --- Negativos ---
     "lo poco que": -0.4,
     "rutinario": -0.4,
     "rutinaria": -0.4,
@@ -211,17 +199,12 @@ SENTIMENT_LEXICON: dict[str, float] = {
     "falta": -0.35,
 }
 
-# ---------------------------------------------------------------------------
-# Modificadores
-# ---------------------------------------------------------------------------
 
-# Invierten la polaridad de las palabras que los siguen.
 NEGATORS: frozenset[str] = frozenset(
     {"no", "ni", "nunca", "jamas", "sin", "tampoco", "nada", "ningun", "ninguna", "ninguno"}
 )
 NEGATION_WINDOW = 4
 
-# "sin embargo" es un conector adversativo, no una negación.
 NEGATION_EXCEPTIONS: frozenset[str] = frozenset({"sin embargo"})
 
 INTENSIFIERS: dict[str, float] = {
@@ -241,8 +224,6 @@ INTENSIFIERS: dict[str, float] = {
     "bastante": 1.2,
     "constante": 1.3,
     "constantes": 1.3,
-    # Amplifican el término al que acompañan en lugar de aportar polaridad
-    # propia: "decepción enorme" es más negativo, no menos.
     "enorme": 1.4,
     "tremendo": 1.5,
     "tremenda": 1.5,
@@ -258,8 +239,6 @@ DIMINISHERS: dict[str, float] = {
     "ligeramente": 0.5,
     "casi": 0.8,
     "mas o menos": 0.5,
-    # "bugs menores" no es lo mismo que "bugs": el adjetivo atenúa el término
-    # al que acompaña, igual que "aislado" o "puntual".
     "menor": 0.5,
     "menores": 0.5,
     "aislado": 0.5,
@@ -268,8 +247,6 @@ DIMINISHERS: dict[str, float] = {
     "puntuales": 0.5,
 }
 
-# Marcan un cambio de opinión: se usan para cortar el texto en cláusulas, de
-# modo que "los gráficos son lindos pero corre mal" no promedie ambas partes.
 CONTRASTIVE_MARKERS: tuple[str, ...] = (
     "sin embargo",
     "si bien",
@@ -279,14 +256,7 @@ CONTRASTIVE_MARKERS: tuple[str, ...] = (
     "eso si",
 )
 
-# ---------------------------------------------------------------------------
-# Vocabulario de aspectos (ABSA)
-# ---------------------------------------------------------------------------
 
-# Cada término tiene un peso que refleja qué tan discriminante es del aspecto.
-# Los términos "débiles" (peso < 0.5) sólo se tienen en cuenta si en la misma
-# cláusula no apareció ningún término fuerte: "las mecánicas funcionan bien"
-# habla de jugabilidad, no de rendimiento, aunque contenga "funcionan".
 ASPECT_TERMS: dict[Aspect, dict[str, float]] = {
     Aspect.GAMEPLAY: {
         "jugabilidad": 1.0,
@@ -387,7 +357,6 @@ ASPECT_TERMS: dict[Aspect, dict[str, float]] = {
         "tecnico": 0.6,
         "cuadros": 0.6,
         "estabilidad": 0.6,
-        # Débiles: sólo cuentan si la cláusula no menciona otro aspecto.
         "corre": 0.4,
         "funciona": 0.3,
         "funcionan": 0.3,

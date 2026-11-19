@@ -1,4 +1,3 @@
-/* Historial de valoraciones del usuario. */
 
 import { api } from "../api.js";
 import { gameGrid, requiresLogin } from "../components.js";
@@ -44,7 +43,6 @@ export async function ratingsView() {
     h("section", { "aria-label": "Tus notas en GameTrack" },
       h("div", { class: "steam-section-head steam-gametrack-ratings-head" }, h("div", null, h("h2", null, "Tus notas en GameTrack"), h("p", { class: "muted" }, "Las puntuaciones de 1 a 5 que guardaste acá.")), count), localBody),
   );
-  // Cargar ambas fuentes por separado: un fallo de Steam no oculta las notas.
   api.myRatings().then(rows => {
     if (state.user?.id !== user.id) return;
     rows = [...rows].sort((a, b) => new Date(b.updated_at || b.created_at) - new Date(a.updated_at || a.created_at));

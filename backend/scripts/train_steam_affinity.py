@@ -37,7 +37,6 @@ MIN_VALIDATION_CLASS = 20
 
 
 def split_user(user: str) -> str:
-    # Fixed before training: an author's all targets stay in one partition.
     bucket = int(hashlib.sha256(("steam-affinity-v1:" + user).encode()).hexdigest()[:8], 16) % 10
     return "validation" if bucket == 0 else "test" if bucket == 1 else "train"
 
@@ -110,8 +109,6 @@ def chronological_examples(rows: list[dict], catalog: list[dict], idf: dict) -> 
                 if previous["steam_appid"] == target["steam_appid"] or previous["steam_appid"] not in games:
                     continue
                 timestamps = [previous.get(key) for key in ("created_at", "updated_at")]
-                # Missing creation cannot establish temporal precedence. A
-                # later revision excludes the row even if it was created early.
                 if timestamps[0] is None or max(time for time in timestamps if time is not None) >= target_time:
                     continue
                 history.append({**games[previous["steam_appid"]], "recommended": previous["voted_up"],
@@ -160,14 +157,9 @@ def train_head(partitions: dict) -> tuple[AffinityHead, dict]:
     weights *= len(weights) / weights.sum()
     prior = float(np.average(labels, weights=weights))
     arrays = {name: _arrays(rows) for name, rows in partitions.items()}
-    # Baselines see exactly the same train rows, preprocessing, weighting and
-    # true held-out votes. Fixed content uses positive-minus-negative cosine.
     prior_scores = {name: np.full(len(y), prior) for name, (_, y) in arrays.items()}
     content_head = _fit(x[:, [6]], labels, 1., weights)
     content_scores = {name: content_head.predict_features(values[:, [6]]) for name, (values, _) in arrays.items()}
-    # A title's general reception must not masquerade as personal affinity.
-    # This comparison uses ONLY train targets; IDs never enter fitted model
-    # features or the packaged artifact. Unseen titles fall back to train prior.
     item_weight, item_positive = Counter(), Counter()
     for row, weight in zip(partitions["train"], weights):
         item_weight[row["appid"]] += float(weight)
@@ -178,7 +170,6 @@ def train_head(partitions: dict) -> tuple[AffinityHead, dict]:
     regularization_grid = (.001, .003, .01, .03, .1, .3, 1., 3.)
     fitted = [_fit(x, labels, c, weights) for c in regularization_grid]
     vx, vy = arrays["validation"]
-    # No test labels participate in model choice, threshold or activation.
     chosen = min(range(len(fitted)), key=lambda index: log_loss(vy, fitted[index].predict_features(vx), labels=[0, 1])) if len(vy) else 0
     head = fitted[chosen]
     chosen_c = regularization_grid[chosen]

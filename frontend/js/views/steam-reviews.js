@@ -1,4 +1,3 @@
-/* Reseñas de Steam: el veredicto original se conserva, sin inventar estrellas. */
 import { api } from "../api.js";
 import { state } from "../store.js";
 import { emptyState, expandableText, h, icon, initials, spinnerBlock, toast } from "../ui.js";

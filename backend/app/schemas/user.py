@@ -49,13 +49,11 @@ class UserResponse(BaseModel):
     analysis_game_id: int | None = None
     created_at: datetime
 
-    # Cuenta de Steam vinculada, si la hay.
     steam_id: str | None = None
     steam_username: str | None = None
     steam_avatar_url: str | None = None
     steam_verified: bool = False
 
-    # Géneros elegidos en el onboarding (ver User.genres).
     genres: list[GenreOut] = []
     preferences_source: Literal["steam", "manual"] | None = None
 

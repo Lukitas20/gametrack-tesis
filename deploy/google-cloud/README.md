@@ -1,12 +1,6 @@
 # Desplegar GameTrack en Google Cloud
 
-Implementación del diseño de [GOOGLE_CLOUD.md](../../GOOGLE_CLOUD.md).
-Instalación del 7 de octubre de 2026 en `gametrack-510920`, región
-`us-central1`. [Abrir GameTrack](https://gametrack-591398735968.us-central1.run.app).
-PostgreSQL, buckets privados, secretos, web, jobs y presupuesto ya están
-creados. Los resultados se registran en [DEPLOYMENT.md](DEPLOYMENT.md).
-El procedimiento siguiente permite reproducir y mantener
-la instalación. Ejecutar `terraform apply` crea servicios facturables.
+Guía para desplegar la API, la base PostgreSQL y los workers de GameTrack con Terraform.
 
 ## Qué debe completar el titular de la cuenta
 

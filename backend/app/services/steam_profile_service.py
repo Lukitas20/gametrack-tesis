@@ -75,7 +75,6 @@ def fetch_library(steam_id):
     body = data.get("response")
     if not isinstance(body, dict):
         return {"status": "unavailable"}
-    # {} indica datos no compartidos. game_count=0 sí es una biblioteca vacía.
     if "game_count" not in body:
         return {"status": "private"}
     if type(body["game_count"]) is not int or body["game_count"] < 0:
@@ -116,7 +115,6 @@ def fetch_friends(steam_id):
             continue
         friends[sid] = {"steam_id": sid, "name": "Jugador de Steam", "avatar": None,
                         "friend_since": _integer(raw.get("friend_since")), "online": None, "playing": None}
-    # Steam limita cada consulta de perfiles a 100 IDs, sin truncar la lista.
     ids = list(friends)
     partial = False
     for start in range(0, len(ids), 100):
@@ -140,7 +138,6 @@ def fetch_friends(steam_id):
 def _merge(previous, fresh):
     if fresh["status"] == "unavailable":
         return {**deepcopy(previous or {}), "status": "unavailable"}
-    # Al volverse privado, se elimina el detalle cacheado de esa sección.
     return fresh
 
 
@@ -168,7 +165,6 @@ def sync_profile(db, user, force=False):
                 cache = db.get(SteamProfileCache, user.id)
         if cache.steam_id != identity.steam_id:
             cache.steam_id = identity.steam_id; cache.library = {}; cache.friends = {}
-        # Red en paralelo, fuera del hilo del evento y sin compartir la sesión SQL.
         with ThreadPoolExecutor(max_workers=2) as pool:
             library_future = pool.submit(fetch_library, identity.steam_id)
             friends_future = pool.submit(fetch_friends, identity.steam_id)
@@ -177,7 +173,6 @@ def sync_profile(db, user, force=False):
             owned = {str(game["appid"]) for game in library.get("items", [])}
             progress = (cache.library or {}).get("achievement_progress", {})
             library["achievement_progress"] = {key: value for key, value in progress.items() if key in owned}
-        # Las reseñas públicas son independientes de la privacidad de la biblioteca.
         if "user_reviews" in (cache.library or {}):
             library["user_reviews"] = deepcopy(cache.library["user_reviews"])
         if library["status"] != "private" and "genre_hints" in (cache.library or {}):
@@ -199,7 +194,6 @@ def profile_payload(db, user, cache):
     games = library.get("items", [])
     appids = [game["appid"] for game in games]
     local = {}
-    # Consultas por lote; no un SELECT por juego y compatible con SQLite.
     for start in range(0, len(appids), 500):
         rows = db.execute(select(Game.id, Game.steam_app_id, Rating.score).outerjoin(
             Rating, (Rating.game_id == Game.id) & (Rating.user_id == user.id)

@@ -21,9 +21,6 @@ from app.models import Game, Rating, User
 
 GroupStrategy = Literal["balanced", "average"]
 
-# Para grupos la modalidad es innegociable. Jugar con amigos incluye tanto
-# competir como cooperar; "Multiplayer" a secas también puede ser local y
-# por eso no basta para la selección específica de juego en línea.
 GROUP_PLAY_MODES = {mode: COMPANY_FILTERS[mode] for mode in ("amigos", "en-linea")}
 
 GROUP_NOTICE = (
@@ -35,8 +32,6 @@ GROUP_NOTICE = (
 
 
 def is_group_playable(game: Game, company: str | None) -> bool:
-    # Sólo metadatos estructurados: una mención en la descripción o una
-    # afinidad alta nunca prueban que exista una modalidad compartida.
     return bool({tag.slug for tag in game.tags} & GROUP_PLAY_MODES.get(company, frozenset()))
 
 
@@ -83,7 +78,6 @@ def group_scores(
         if scores.shape != (len(engine.game_ids),):
             raise ValueError("Los puntajes personales no coinciden con el catálogo del motor")
         if method == "popularidad":
-            # La popularidad general no prueba que a esta persona le guste.
             scores = np.full(len(engine.game_ids), 0.5)
             method = "sin_datos"
         matrix.append(np.clip(np.nan_to_num(scores, nan=0.5, posinf=1.0, neginf=0.0), 0.0, 1.0))

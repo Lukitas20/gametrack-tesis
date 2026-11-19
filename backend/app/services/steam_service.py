@@ -35,12 +35,6 @@ from app.services.steam_review_authors import author_id, hydrate_authors, missin
 
 TIMEOUT = 15.0
 
-# Un cliente HTTP compartido en vez de `httpx.get()` suelto en cada función:
-# cada llamada suelta crea (y en teoría cierra) su propio contexto TLS, pero
-# en Windows con `truststore` cada uno abre handles al almacén de certificados
-# del sistema que no se liberan al ritmo en que se piden; en una importación
-# masiva (cientos de juegos, varios pedidos cada uno) eso agota los file
-# descriptors del proceso. Un cliente único crea ese contexto una sola vez.
 _client: httpx.Client | None = None
 
 
@@ -50,8 +44,6 @@ def _http_client() -> httpx.Client:
         _client = httpx.Client(timeout=TIMEOUT)
     return _client
 
-# Steam devuelve los géneros en inglés; el catálogo los maneja en español.
-# Lo que no esté acá se incorpora con su nombre original.
 GENRE_TRANSLATIONS = {
     "action": "Acción",
     "adventure": "Aventura",
@@ -103,10 +95,6 @@ def _dedupe_names(names: list[str]) -> list[str]:
     return result
 
 
-# Meses en español, resueltos a mano. `datetime.strptime` con %b depende del
-# locale del proceso, y las fichas se piden con `l=spanish` (ver
-# STEAM_STORE_BASE), así que Steam contesta "21 AGO 2012": con los patrones en
-# inglés no parseaba ninguna fecha y TODO el catálogo quedaba sin año.
 _MESES_ES = {
     "ene": 1, "feb": 2, "mar": 3, "abr": 4, "may": 5, "jun": 6,
     "jul": 7, "ago": 8, "sep": 9, "set": 9, "oct": 10, "nov": 11, "dic": 12,
@@ -146,9 +134,6 @@ def _parse_release_date(raw: str) -> date | None:
     return None
 
 
-# ---------------------------------------------------------------------------
-# Llamadas a Steam
-# ---------------------------------------------------------------------------
 
 
 class SteamUnavailable(RuntimeError):
@@ -179,7 +164,6 @@ def get_app_details(steam_app_id: int, *, timeout: httpx.Timeout | None = None) 
             **({"timeout": timeout} if timeout is not None else {}),
         )
     except httpx.HTTPError as error:
-        # Nunca persistir la URL ni los parámetros de una excepción HTTP.
         raise SteamUnavailable("No se pudo contactar a Steam") from error
 
     if response.status_code != 200:
@@ -189,7 +173,7 @@ def get_app_details(steam_app_id: int, *, timeout: httpx.Timeout | None = None) 
 
     try:
         response_data = response.json()
-    except ValueError as error:  # respuesta que no es JSON (portal cautivo, proxy)
+    except ValueError as error:
         raise SteamUnavailable("Steam respondió algo que no es JSON") from error
 
     if not isinstance(response_data, dict):
@@ -456,8 +440,6 @@ def get_review_totals(steam_app_id: int) -> tuple[int, int] | None:
             params={
                 "json": 1,
                 "num_per_page": 1,
-                # Los totales son del juego, no de un idioma: filtrar acá
-                # subestimaría la popularidad de todo lo que no sea español.
                 "language": "all",
                 "purchase_type": "all",
             },
@@ -498,7 +480,7 @@ def get_player_summaries_batch(steam_ids: list[str]) -> dict[str, dict]:
                 params={"key": settings.STEAM_API_KEY, "steamids": ",".join(batch)},
             )
             if response.status_code != 200:
-                break  # No insistir ante un límite o caída del servicio.
+                break
             payload = response.json()
         except (httpx.HTTPError, ValueError):
             break
@@ -530,9 +512,6 @@ def get_player_summary(steam_id: str) -> dict | None:
     return players[0] if players else None
 
 
-# ---------------------------------------------------------------------------
-# Traducción al modelo de datos
-# ---------------------------------------------------------------------------
 
 
 def parse_steam_game(data: dict) -> dict:
@@ -553,8 +532,6 @@ def parse_steam_game(data: dict) -> dict:
         if name:
             genres.append(GENRE_TRANSLATIONS.get(name.lower(), name))
 
-    # Las categorías de Steam ("Un jugador", "Cooperativo") encajan con lo que
-    # el catálogo llama etiquetas.
     tags = [
         (entry.get("description") or "").strip()
         for entry in data.get("categories") or []
@@ -565,8 +542,6 @@ def parse_steam_game(data: dict) -> dict:
     return {
         "name": name[:200],
         "slug": _fit_slug(slugify(name), 120),
-        # La descripción corta viene sin HTML; la larga lo trae y ensuciaría
-        # tanto la vista como el corpus TF-IDF del recomendador.
         "description": (data.get("short_description") or "").strip() or None,
         "released": _parse_release_date((data.get("release_date") or {}).get("date", "")),
         "developer": ", ".join(data.get("developers") or [])[:120] or None,
@@ -586,8 +561,6 @@ def _get_or_create(db: Session, model, name: str):
     existing = db.scalar(select(model).where(model.slug == slug))
     if existing:
         return existing
-    # Preserve existing IDs/slugs, including legacy SQLite data. New rows must
-    # respect VARCHAR limits: PostgreSQL enforces them, SQLite does not.
     bounded_slug = _fit_slug(slug, 60)
     if bounded_slug != slug:
         existing = db.scalar(select(model).where(model.slug == bounded_slug))
@@ -667,9 +640,6 @@ def import_reviews(db: Session, game: Game, steam_app_id: int, *, commit: bool =
     ``recommendationid`` (``steam_review_id``), así que las que ya estén en
     la base se descartan antes de crear nada.
     """
-    # Presupuesto persistente por juego, no por pedido: los refrescos no
-    # pueden hacer crecer indefinidamente el corpus. No borrar muestras
-    # antiguas ni contar las reseñas escritas por usuarios de GameTrack.
     imported = db.scalar(select(func.count(Review.id)).where(
         Review.game_id == game.id, Review.source == "steam"
     )) or 0
@@ -689,8 +659,6 @@ def import_reviews(db: Session, game: Game, steam_app_id: int, *, commit: bool =
         if names_updated and commit:
             db.commit()
         return 0
-    # Una muestra acotada también puede reparar fechas de reseñas ya guardadas.
-    # Nunca agrega nuevas reseñas por encima del presupuesto persistente.
     raw_reviews = get_app_reviews(steam_app_id, num=budget if missing_dates or missing_identities else remaining)
 
     existing_ids = {
@@ -771,8 +739,6 @@ def import_reviews(db: Session, game: Game, steam_app_id: int, *, commit: bool =
     if created:
         db.flush()
         recompute_game_aggregates(db, game.id)
-        # Las horas de los reseñadores recién importados mueven la mediana:
-        # es la fuente de duración del filtro "¿cuánto tiempo tenés?".
         recompute_median_review_hours(db, game.id)
         if commit:
             from app.services.steam_catalog_service import bump_catalog_revision
@@ -796,8 +762,6 @@ def import_game(db: Session, steam_app_id: int) -> Game | None:
     try:
         data = get_app_details(steam_app_id)
     except SteamUnavailable:
-        # Importar es opcional y reintentable: sin Steam simplemente no se
-        # importa nada ahora, sin distinguirlo de un AppID inexistente.
         return None
     if not data or data.get("type") != "game":
         return None
@@ -806,8 +770,6 @@ def import_game(db: Session, steam_app_id: int) -> Game | None:
     genres = parsed.pop("genres", [])
     tags = parsed.pop("tags", [])
 
-    # El slug es único: si el juego ya está en el catálogo por otra fuente
-    # (el dataset local, RAWG) se le adosa el AppID en lugar de fallar.
     base_slug = parsed["slug"]
     collision = 0
     while db.scalar(select(Game.id).where(Game.slug == parsed["slug"])) is not None:
@@ -816,9 +778,6 @@ def import_game(db: Session, steam_app_id: int) -> Game | None:
         parsed["slug"] = base_slug[:120 - len(suffix)].rstrip("-") + suffix
 
     game = Game(**parsed, steam_app_id=steam_app_id, steam_synced_at=datetime.now(timezone.utc))
-    # El juego entra a la sesión antes de asociarle géneros y etiquetas:
-    # `_get_or_create` hace flush, y si el Game todavía estuviera fuera de la
-    # sesión, SQLAlchemy descartaría silenciosamente la asociación.
     db.add(game)
     game.genres = [_get_or_create(db, Genre, name) for name in genres]
     game.tags = [_get_or_create(db, Tag, name) for name in tags]
@@ -872,23 +831,16 @@ def refresh_game(db: Session, game: Game) -> bool:
         return False
 
     parsed = parse_steam_game(data)
-    # Publicar las capturas oficiales antes del procesamiento de reseñas.
-    # No marcar la ficha completa ni cambiar su fecha de sincronización:
-    # un fallo posterior conserva las imágenes y deja el resto en reintento.
     if game.screenshots != parsed["screenshots"]:
         game.screenshots = parsed["screenshots"]
         db.commit()
     genres = parsed.pop("genres", [])
     tags = parsed.pop("tags", [])
-    # Preservar URLs y votos comunitarios al refrescar categorías de Steam.
     parsed.pop("name", None)
     parsed.pop("slug", None)
     for field, value in parsed.items():
         setattr(game, field, value)
     game.genres = [_get_or_create(db, Genre, name) for name in genres]
-    # El motor reconoce también etiquetas antiguas con votos reales cuya
-    # clasificación global quedó como platform. El refresco debe conservar
-    # esa misma evidencia, sin borrar rasgos como Cyberpunk o FPS.
     voted_tags = set(db.scalars(select(game_tags.c.tag_id).where(
         game_tags.c.game_id == game.id, game_tags.c.votes > 1)))
     community = [tag for tag in game.tags if tag.kind == "community" or tag.id in voted_tags]
@@ -936,8 +888,6 @@ def maybe_refresh(db: Session, game: Game) -> bool:
             last_sync = last_sync.replace(tzinfo=timezone.utc)
         if game.screenshots is not None and datetime.now(timezone.utc) - last_sync < ttl and (entry is None or entry.status == "ready"):
             return True
-    # Una galería nueva solicitada por el usuario precede a las tareas
-    # normales del catálogo, respetando el backoff si Steam no responde.
     priority = 200 if game.is_enriched and game.screenshots is None else 100
     queue_game_refresh(db, game, priority=priority)
     db.commit()

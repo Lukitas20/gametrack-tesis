@@ -63,7 +63,6 @@ def main() -> int:
             print(json.dumps({**report, "result": "complete"}), flush=True)
             return 0
     except Exception:
-        # Excepciones de drivers HTTP/SQL pueden incluir claves o identificadores.
         print(json.dumps({**report, "result": "failed_no_private_details"}), flush=True)
         return 1
 

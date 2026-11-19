@@ -38,7 +38,6 @@ def write_packet(output, source, cases, *, kind, models=None):
         for case in cases:
             for dimension in case["dimensions"]:
                 writer.writerow([case["id"], dimension, "", "", "", "", ""])
-    # La hoja ciega no incluye las predicciones ni los votos guardados.
     (output / "blind.json").write_text(json.dumps([{k:v for k,v in case.items() if k != "prediction"}
                                                    for case in cases], ensure_ascii=False, indent=2), encoding="utf-8")
     return manifest
@@ -90,7 +89,6 @@ def export_reviews(sqlite, output, limit):
     if not cases:
         raise ValueError("No hay reseñas reales guardadas para exportar")
     source=json.dumps(cases, ensure_ascii=False, default=str).encode("utf-8")
-    # Las enumeraciones del analizador heredan str y mantienen sus valores.
     return write_packet(output, source, cases, kind="review_classification",
                         models=dict(review_sha256=sha(artifact_path().read_bytes()) if model else None,
                                     review_status=status["status"], eligible_topics={key:value["eligible"] for key,value in status.get("topics",{}).items()}, rules="four_aspects"))
@@ -165,7 +163,6 @@ def metrics(packet, annotations, audit):
             or proof.get("disjoint_train_tune_evaluation") is not True or not proof.get("reviewer")
             or not proof.get("training_index_sha256") or not proof.get("tuning_index_sha256")):
         raise ValueError("Auditoría de separación insuficiente")
-    # No entrenar, elegir variantes ni modificar las predicciones al leer juicios.
     if manifest["kind"] == "recommendations":
         from app.ml.evaluacion import precision_at_k
         runs={}

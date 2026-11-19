@@ -113,8 +113,6 @@ def update_experience(
         values["onboarding_step"] = None
     elif user.onboarding_step:
         values["onboarding_step"] = "studio" if data.role is UserRole.DEVELOPER else "player"
-    # La condición se evalúa en la escritura: dos solicitudes concurrentes no
-    # pueden consumir la elección inicial de Steam para tipos distintos.
     result = db.execute(update(User).where(User.id == user.id,
         or_(User.role == data.role, User.onboarding_step == "choose"))
         .values(**values).execution_options(synchronize_session=False))

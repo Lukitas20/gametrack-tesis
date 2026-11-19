@@ -26,9 +26,6 @@ def assign_steam_username(db, user, name=None):
     """
     connection = db.connection()
     if connection.dialect.name == "sqlite" and not connection.connection.driver_connection.in_transaction:
-        # El modo legacy de sqlite3 no inicia BEGIN para SELECT/SAVEPOINT.
-        # Debe existir una transacción exterior para que rollback abarque
-        # también esta reserva de nombre y no quede una cuenta incompleta.
         connection.exec_driver_sql("BEGIN")
     base = (name or "jugador_steam").strip()[:50]
     if len(base) < 3:
@@ -48,8 +45,6 @@ def assign_steam_username(db, user, name=None):
         except IntegrityError:
             if not db.is_active:
                 raise
-            # Otros conflictos (por ejemplo SteamID duplicado) siguen siendo
-            # responsabilidad del flujo de autenticación.
             if db.scalar(select(User.id).where(User.username == candidate)) is None:
                 raise
     raise ValueError("No pudimos asignar un nombre de usuario disponible")

@@ -43,7 +43,6 @@ from app.models import Game, Genre, Tag, game_tags
 from app.models.steamspy import SYNC_DONE, SYNC_PENDING, SYNC_SKIPPED, SteamSpySync
 from app.services import steam_service
 
-# Cadencia documentada por SteamSpy para el endpoint por juego.
 DEFAULT_SLEEP_SECONDS = 1.0
 DEFAULT_MAX_CONSECUTIVE_FAILURES = 5
 INDEX_CHUNK_SIZE = 2000
@@ -81,7 +80,7 @@ def fetch_appdetails(steam_app_id: int) -> dict:
 
     try:
         return response.json()
-    except ValueError as error:  # "Too many connections" en texto plano, proxy...
+    except ValueError as error:
         raise SteamSpyUnavailable("SteamSpy respondió algo que no es JSON") from error
 
 
@@ -115,18 +114,15 @@ def parse_owners(raw: Any) -> int:
     return sum(numbers) // len(numbers)
 
 
-# ---------------------------------------------------------------------------
-# Nivel 0: índice masivo
-# ---------------------------------------------------------------------------
 
 
 @dataclass
 class IndexReport:
-    created: int = 0        # fichas pendientes nuevas en ``games``
-    updated: int = 0        # juegos existentes con señal de SteamSpy refrescada
-    queued: int = 0         # filas nuevas en la cola de nivel 1
-    reprioritized: int = 0  # filas de la cola con prioridad/nombre refrescados
-    invalid: int = 0        # entradas del índice sin AppID o sin nombre
+    created: int = 0
+    updated: int = 0
+    queued: int = 0
+    reprioritized: int = 0
+    invalid: int = 0
 
 
 def ingest_index_entries(
@@ -200,8 +196,6 @@ def ingest_index_entries(
             queue_by_appid[appid] = queue_row
             report.queued += 1
         else:
-            # La prioridad y el nombre se refrescan; el estado no: una fila
-            # ``done`` sigue hecha, una ``pending`` con intentos los conserva.
             queue_row.priority = owners
             queue_row.name = name
             report.reprioritized += 1
@@ -220,18 +214,15 @@ def ingest_index_entries(
     return report
 
 
-# ---------------------------------------------------------------------------
-# Nivel 1: rasgos por juego
-# ---------------------------------------------------------------------------
 
 
 @dataclass
 class BatchReport:
-    processed: int = 0    # filas de la cola tocadas en esta corrida
-    enriched: int = 0     # juegos que recibieron etiquetas/género/señal
-    skipped: int = 0      # AppIDs sin datos en SteamSpy (no son juegos)
-    unavailable: int = 0  # fallos de transporte (quedaron en pending)
-    aborted: bool = False  # el lote se cortó por fallos consecutivos
+    processed: int = 0
+    enriched: int = 0
+    skipped: int = 0
+    unavailable: int = 0
+    aborted: bool = False
     errors: list[str] = field(default_factory=list)
 
 
@@ -261,13 +252,11 @@ def apply_appdetails(db: Session, game: Game, payload: dict) -> None:
     géneros sólo se asignan si el juego no tenía: los de la ficha rica de
     Steam son más completos y no hay que pisarlos con menos información.
     """
-    # SteamSpy devuelve ``"tags": []`` (lista vacía) cuando no hay votos, y
-    # un dict nombre->votos cuando los hay. La lista vacía no es un error.
     raw_tags = payload.get("tags") or {}
     tags_with_votes: dict[str, int] = raw_tags if isinstance(raw_tags, dict) else {}
 
     current_slugs = {tag.slug for tag in game.tags}
-    applied: list[tuple[int, int]] = []  # (tag_id, votos)
+    applied: list[tuple[int, int]] = []
     for name, votes in tags_with_votes.items():
         tag = _get_or_create_community_tag(db, name)
         if tag.slug not in current_slugs:
@@ -295,8 +284,6 @@ def apply_appdetails(db: Session, game: Game, payload: dict) -> None:
     if not game.publisher:
         game.publisher = (payload.get("publisher") or "").strip() or None
 
-    # Los votos van con UPDATE explícito: la relación ``secondary`` maneja la
-    # membresía (y deja votes=1 al insertar), esto escribe la evidencia.
     db.flush()
     for tag_id, votes in applied:
         db.execute(
@@ -388,8 +375,6 @@ def enrich_next_batch(
         try:
             payload = fetch(row.steam_app_id)
         except SteamSpyUnavailable as error:
-            # Invariante: fallo de transporte => la fila SIGUE pendiente y el
-            # juego no se toca. Sólo queda anotado el intento y su motivo.
             row.last_error = str(error)
             report.unavailable += 1
             report.errors.append(f"{row.steam_app_id}: {error}")
@@ -407,10 +392,6 @@ def enrich_next_batch(
         row.synced_at = datetime.now(timezone.utc)
 
         if is_empty_entry(payload):
-            # SteamSpy respondió, y respondió "de esto no tengo nada": no es
-            # un juego (DLC, banda sonora, software). La fila se cierra como
-            # ``skipped``; la ficha en ``games`` queda como esté — retirarla
-            # del catálogo es una decisión de política, no de transporte.
             row.status = SYNC_SKIPPED
             report.skipped += 1
             db.commit()
@@ -418,8 +399,6 @@ def enrich_next_batch(
 
         game = steam_service.get_game_by_steam_app_id(db, row.steam_app_id)
         if game is None:
-            # La cola puede sobrevivir a una ficha borrada a mano: se recrea
-            # el stub y se enriquece igual, que es lo que pediría el índice.
             name = (payload.get("name") or row.name).strip()
             slug = steam_service.slugify(name)
             if db.scalar(select(Game.id).where(Game.slug == slug)):

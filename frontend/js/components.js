@@ -1,4 +1,3 @@
-/* Componentes compartidos entre vistas. */
 
 import { api } from "./api.js";
 import { navigate } from "./router.js";
@@ -17,7 +16,6 @@ import {
   toast,
 } from "./ui.js";
 
-/** Portada del juego, con reserva cuando el dataset no trae imagen. */
 export function cover(game, { rank = null } = {}) {
   const inner = game.background_image
     ? h("img", { src: game.background_image, alt: "", loading: "lazy" })
@@ -67,15 +65,7 @@ export function gameGrid(games, decorate = null) {
   );
 }
 
-/* ------------------------------------------------------------------ *
- * Valoración con estrellas
- * ------------------------------------------------------------------ */
 
-/**
- * Selector de 1 a 5 estrellas. Al elegir, guarda y avisa: el motor de
- * recomendación se invalida en el backend, así que el próximo pedido ya
- * refleja el cambio.
- */
 export function starRating(gameId, { onChange = null } = {}) {
   const container = h("div", { class: "row", style: { gap: "var(--s-3)" } });
 
@@ -121,9 +111,6 @@ export function starRating(gameId, { onChange = null } = {}) {
   return container;
 }
 
-/* ------------------------------------------------------------------ *
- * Guardar en lista
- * ------------------------------------------------------------------ */
 
 export function saveToListButton(game) {
   const button = h(
@@ -239,9 +226,6 @@ export function saveToListButton(game) {
   return button;
 }
 
-/* ------------------------------------------------------------------ *
- * Reseñas
- * ------------------------------------------------------------------ */
 
 export function sentimentChip(sentiment) {
   if (!sentiment) return h("span", { class: "chip" }, "Sin analizar");
@@ -290,9 +274,6 @@ export function reviewItem(review, { expanded = false } = {}) {
         review.aspects?.length?h("div",{class:"aspect-tags"},review.aspects.map(aspectChip)):null)):null);
 }
 
-/* ------------------------------------------------------------------ *
- * Aviso de sesión requerida
- * ------------------------------------------------------------------ */
 
 export function requiresLogin(message) {
   return h(

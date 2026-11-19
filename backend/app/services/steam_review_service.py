@@ -138,7 +138,7 @@ def fetch_reviews(steam_id, page):
 
 
 def reviews(db, user, page=1, force=False):
-    cache = profiles.sync_profile(db, user)  # exige identidad verificada
+    cache = profiles.sync_profile(db, user)
     with profiles._user_lock(user.id):
         cache = db.get(SteamProfileCache, user.id, populate_existing=True)
         library = deepcopy(cache.library)
@@ -152,10 +152,10 @@ def reviews(db, user, page=1, force=False):
             if value["status"] == "unavailable" and previous:
                 value = {**deepcopy(previous), "status": "unavailable"}
             if page == 1 and value["status"] != "unavailable":
-                pages = {}  # las páginas pueden cambiar al publicar o borrar reseñas
+                pages = {}
             value["checked_at"] = now
             if value["status"] == "private":
-                pages = {}  # no retener reseñas que dejaron de ser públicas
+                pages = {}
             pages[str(page)] = value
             library["user_reviews"] = dict(sorted(pages.items(), key=lambda item: -item[1]["checked_at"])[:MAX_CACHED_PAGES])
             cache.library = library

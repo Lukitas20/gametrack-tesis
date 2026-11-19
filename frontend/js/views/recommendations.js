@@ -1,4 +1,3 @@
-/* Inicio del jugador: selección personal y colecciones del catálogo. */
 import { cover } from "../components.js";
 import { isDeveloper, isLoggedIn } from "../store.js";
 import { emptyState, h, icon } from "../ui.js";

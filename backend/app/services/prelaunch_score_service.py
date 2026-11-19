@@ -29,8 +29,6 @@ _cache = {}
 _lock = threading.Lock()
 TTL = 3600
 INCOMPLETE_TTL = 120
-# Rasgos de presentación, clasificación por edad o distribución no bastan
-# para llamar parecidos a juegos de jugabilidad distinta.
 PRESENTATION_TERMS = {"3d", "2d", "controller", "violent", "violence", "gore", "nudity",
                       "sexual-content", "early-access", "full-controller-support"}
 
@@ -100,7 +98,6 @@ def announced_game(appid):
             raise HTTPException(502, 'Steam devolvió una ficha incompleta. Intentá nuevamente.')
         genres = [GENRE_TRANSLATIONS.get(item['description'].lower(), item['description'])
                   for item in (data.get('genres') or []) if isinstance(item, dict) and isinstance(item.get('description'), str)]
-        # Las etiquetas de Steam usan slugs ingleses en el modelo existente.
         tags, tag_source = public_tags(appid)
         label = (data.get('release_date') or {}).get('date')
         result = {'appid': appid, 'name': name[:200], 'genres': genres[:15], 'tags': tags,
@@ -131,8 +128,6 @@ def preview_similarities(engine, genres, tags, history_ids):
         return {}, known
     weights = np.array([1. if term in specific else .15 for term in engine._term_index])
     candidate = normalize(engine._transformer.transform(query.tocsr()).multiply(weights).tocsr())
-    # Un anuncio x historial completo. No usa el recorte global por horas ni
-    # construye la matriz catálogo x historial que necesita el feed general.
     ids = [gid for gid in history_ids if gid in engine._game_index]
     if not ids:
         return {}, known
@@ -222,8 +217,6 @@ def build_preview(announced, context, question=None):
             text += ' Esos rasgos compartidos no confirman afinidad con el conjunto de la propuesta.'
         (positive if signal['weight'] > 0 else cautions).append(point(text,*tag_refs,rid,'profile'))
         reasons.append(text)
-    # Explicar la evidencia ausente, sin convertir juegos no probados o rasgos
-    # incompletos del catálogo en una opinión negativa del usuario.
     supported = set().union(*(specific & context['engine']._community_terms_by_game.get(item[1], set())
                               for item in comparisons if item[2]['weight'] > 0)) if comparisons else set()
     generic = (PRESENTATION_TERMS | genres | {slugify(name) for name in GENRE_TRANSLATIONS}

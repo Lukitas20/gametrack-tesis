@@ -1,4 +1,3 @@
-/* Catálogo con búsqueda y filtros. */
 
 import { api } from "../api.js";
 import { gameGrid } from "../components.js";
@@ -78,11 +77,6 @@ export async function catalogView({ query }) {
   async function reload({ append = false } = {}) {
     if (loading) return;
     loading = true;
-    // Si ya hay resultados en pantalla, un refetch los mantiene atenuados en
-    // vez de reemplazarlos por un loader (sin salto). La primera carga, en
-    // cambio, arranca de la nada: ahí se ve la animación completa, con un
-    // mínimo de tiempo en pantalla para que no sea un parpadeo (las
-    // consultas locales suelen resolver en menos de lo que dura verla).
     const isFirstLoad = !append && !results.querySelector(".game-grid");
     if (!append && isFirstLoad) results.replaceChildren(magicLoader());
     else if (!append) results.classList.add("is-loading");
@@ -112,7 +106,6 @@ export async function catalogView({ query }) {
         );
       }
 
-      // Botón de "cargar más" mientras queden resultados.
       const loaded = filters.offset + page.items.length;
       const oldMore = results.querySelector("[data-more]");
       if (oldMore) oldMore.remove();

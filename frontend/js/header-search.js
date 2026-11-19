@@ -4,7 +4,6 @@ import { state } from "./store.js";
 import { h, icon } from "./ui.js";
 import { cover } from "./components.js";
 
-// El historial queda en este navegador, separado por cuenta.
 const historyKey = () => `gametrack.search.v1.${state.user?.id ?? "guest"}`;
 export function createHeaderSearch(slot) {
   let timer, revision = 0, active = -1, choices = [];

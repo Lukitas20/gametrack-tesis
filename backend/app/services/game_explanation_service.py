@@ -80,7 +80,6 @@ def explain_game(db, user, game_id, question=None, _context=None):
     elif context["genres"] and not context["has_history"]:
         cautions.append(point("No coincide directamente con los géneros que elegiste. Si hay afinidad, viene de otros rasgos y de tus valoraciones.", "profile", "game"))
 
-    # Usa exactamente las comparaciones y fuentes que alimentan el puntaje.
     for _, gid, negative, text in history_reasons(game, context):
         previous, signal = context["history_games"][gid], context["signals"][gid]
         ref = f"history-{gid}"
@@ -152,8 +151,6 @@ def explain_game(db, user, game_id, question=None, _context=None):
         confidence_question = bool(re.search(r"confianza|confiab|segur|certeza|falt.*dato|evidencia",q))
         if confidence_question:
             selected.append(point(score.confidence_message, "profile", "game"))
-        # Consultas acotadas al dominio. El texto de la pregunta no se ejecuta,
-        # no cambia el perfil ni puede introducir nuevas fuentes o instrucciones.
         if re.search(r"no.*gust|contra|riesgo|duda|negativ|rechaz|desventaj", q):
             selected.extend(cautions)
         elif not confidence_question and re.search(r"gust|afinidad|recomend|encaj|favor", q):

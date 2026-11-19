@@ -117,7 +117,6 @@ def explain_developer_report(report: dict, question: str, overview: dict | None 
     if report['resenas']['analizadas']:
         response['answer'] += '\n\n' + trained['answer']
     else:
-        # Las inferencias no dependen del procesamiento histórico por reglas.
         response['title'] = trained['title']
         response['answer'] = trained['answer']
         response['actions'] = []

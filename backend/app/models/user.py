@@ -33,10 +33,6 @@ class User(Base):
     avatar_url: Mapped[str | None] = mapped_column(Text)
     bio: Mapped[str | None] = mapped_column(Text)
 
-    # --- Cuenta de Steam vinculada ----------------------------------------
-    # Permite entrar sin contraseña y, con STEAM_API_KEY configurada, importar
-    # la biblioteca del usuario como historial inicial. Es la vía más directa
-    # para que una cuenta nueva salga del arranque en frío.
     steam_id: Mapped[str | None] = mapped_column(String(20), unique=True, index=True)
     steam_username: Mapped[str | None] = mapped_column(String(100))
     steam_avatar_url: Mapped[str | None] = mapped_column(Text)
@@ -51,17 +47,12 @@ class User(Base):
     role: Mapped[UserRole] = mapped_column(
         enum_column(UserRole), default=UserRole.PLAYER, index=True
     )
-    # Columna heredada, conservada por compatibilidad del esquema. No concede
-    # permisos: el único tipo de cuenta y fuente de autorización es role.
     developer_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
     onboarding_step: Mapped[str | None] = mapped_column(String(20))
     analysis_game_id: Mapped[int | None] = mapped_column(
         ForeignKey("games.id", ondelete="SET NULL")
     )
-    # Nombre declarado del estudio o desarrollador independiente, sin verificar
-    # pertenencia ni restringir los juegos que puede consultar como referencia.
     studio: Mapped[str | None] = mapped_column(String(120), index=True)
-    # Las elecciones manuales tienen prioridad sobre los gustos inferidos.
     preferences_source: Mapped[str | None] = mapped_column(String(20))
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -116,7 +107,6 @@ class UserPreference(Base):
     genre_id: Mapped[int] = mapped_column(
         ForeignKey("genres.id", ondelete="CASCADE"), index=True
     )
-    # Intensidad de la preferencia en el rango [0, 1].
     weight: Mapped[float] = mapped_column(Float, default=1.0)
 
     created_at: Mapped[datetime] = mapped_column(

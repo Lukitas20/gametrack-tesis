@@ -47,27 +47,14 @@ from app.services.friendship_service import resolve_group_members
 
 router = APIRouter(prefix="/quiz", tags=["que-jugamos"])
 
-# Se evalúa todo el universo del motor antes de relajar. Los lotes acotan los
-# parámetros SQL y evitan una consulta por juego al leer tags y géneros.
 QUERY_BATCH = 500
-# Penalización máxima por redundancia; sólo puede mover alternativas cercanas
-# dentro del mismo nivel de cumplimiento, nunca saltarse una restricción.
 DIVERSITY_PENALTY = 0.06
 
-# Peso del sentimiento del aspecto prioritario en el puntaje final. El
-# aspecto SUMA sobre la afinidad, no la reemplaza (antes se reordenaba
-# lexicográficamente y el ABSA pisaba todo lo demás): con score ABSA en
-# [-1, 1], un juego con reseñas negativas del aspecto baja, uno sin
-# evidencia queda neutro, y la afinidad con el ánimo sigue contando.
 ASPECT_BOOST = 0.35
-# Una sola mención no debe pesar como decenas. La constante es heurística:
-# se debe calibrar con la evaluación anotada, no interpretarla como confianza.
 ASPECT_PRIOR_MENTIONS = 5
 
 
 class QuizRequest(BaseModel):
-    # Contrato nuevo: el frontend manda la CLAVE de cada respuesta y el
-    # backend resuelve qué significa (vocabulario versionado y testeable).
     mood: Literal["historia", "desafio", "relajarme", "competir"] | None = None
     company: Literal["solo", "amigos", "en-linea"] | None = None
     max_playtime: int | None = Field(default=None, gt=0, le=10000, description="Umbral orientativo de horas registradas, o null=sin límite")
@@ -77,8 +64,6 @@ class QuizRequest(BaseModel):
     friend_ids: list[Annotated[int, Field(gt=0)]] = Field(default_factory=list, max_length=4)
     group_strategy: GroupStrategy = "balanced"
 
-    # Contrato viejo (frontend legado): sigue funcionando si `mood`/`company`
-    # no vienen. Se traduce al mecanismo nuevo con peso uniforme.
     genres: list[str] = Field(default_factory=list, description="(legado) géneros del ánimo")
     mood_tags: list[str] = Field(default_factory=list, description="(legado) requisito duro del ánimo")
     company_tags: list[str] = Field(default_factory=list, description="(legado) etiquetas de compañía")
@@ -234,8 +219,6 @@ def _violations(
 ) -> list[str]:
     tags = {tag.slug for tag in game.tags}
     result = []
-    # Sin mediana el juego sigue disponible como alternativa, pero no se
-    # presenta como una coincidencia verificada ni pasa el modo estricto.
     unknown_time = (
         payload.max_playtime is not None
         and game.median_review_hours is None
@@ -347,9 +330,6 @@ def run_quiz(
         )})
     candidates = [c for c in candidates if c.game_id in games]
     evaluated_candidates = len(candidates)
-    # La compañía es una condición de uso, incluso sin amigos registrados.
-    # Filtrar también el fallback y el contrato legado antes de formar niveles:
-    # relajar el ánimo/tiempo nunca puede convertir un singleplayer en grupal.
     if company:
         candidates = [c for c in candidates if company & {tag.slug for tag in games[c.game_id].tags}]
     if user and not members:
@@ -359,8 +339,6 @@ def run_quiz(
             candidates=[replace(c,score=.75*c.score+.25*context['scores'].get(c.game_id,.5)) for c in candidates]
     fits = {}
     if members:
-        # Esta restricción nunca participa de la relajación: ninguna afinidad
-        # convierte un juego individual en uno que se pueda compartir.
         candidates = [c for c in candidates if is_group_playable(games[c.game_id], payload.company)]
         fits = group_scores(db, engine, members, payload.group_strategy)
         candidates = [replace(c, score=0.4 * c.score + 0.6 * fits[c.game_id]["score"])
@@ -368,9 +346,6 @@ def run_quiz(
     violations = {c.game_id: _violations(games[c.game_id], payload, mood_required, company, mood_fallback)
                   for c in candidates}
 
-    # Los niveles se ordenan por las restricciones que realmente incumple
-    # cada juego. Una alternativa nunca desplaza una coincidencia exacta;
-    # tampoco se descarta tiempo/compañía al caer a popularidad.
     tiers: dict[tuple[bool, bool, bool], list[Recommendation]] = {}
     for candidate in candidates:
         failed = violations[candidate.game_id]
@@ -410,9 +385,6 @@ def suggest(
     outcome = run_quiz(db, payload, members=members, user=user)
     profile, _, company = _resolve_vocabulary(payload)
 
-    # Prioriza las tres fichas elegidas para el worker, sirviendo los datos
-    # locales sin esperar a Steam. La comprobación de cambios también cubre
-    # otras implementaciones del refresco y clasificaciones concurrentes.
     changed = False
     for candidate in outcome.ranked[:3]:
         game = outcome.games.get(candidate.game_id)
@@ -427,11 +399,7 @@ def suggest(
                          {tag.slug for tag in game.tags}, {genre.slug for genre in game.genres})
                 changed = changed or before != after
 
-    # Recalcular si cambió la modalidad o la elegibilidad de una ficha. El
-    # mantenimiento conserva todas sus interacciones; no borra el juego.
     if payload.friend_ids:
-        # Comprobar también antes de devolver afinidades que nadie haya
-        # revocado una amistad durante la consulta.
         members = resolve_group_members(db, user, payload.friend_ids)
     if changed:
         outcome = run_quiz(db, payload, members=members, user=user)

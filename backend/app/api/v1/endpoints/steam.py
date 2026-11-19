@@ -76,7 +76,6 @@ def import_game_from_steam(
             status_code=404, detail=f"Steam no reconoce el AppID {steam_app_id}"
         )
 
-    # El catálogo cambió: el recomendador tiene que reconstruir su modelo.
     invalidate_engine()
     return game
 

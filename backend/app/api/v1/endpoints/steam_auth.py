@@ -75,7 +75,7 @@ def consume(db, token, purpose):
         SteamAuthFlow.expires_at >= int(time.time())
     ).returning(SteamAuthFlow.user_id)).first()
     db.commit()
-    return row  # A row with user_id=None is a valid anonymous login attempt.
+    return row
 
 
 def return_url(token):
@@ -94,7 +94,6 @@ def begin(db, user_id=None):
 
 @router.get("/start")
 def start(request: Request, db: Session = Depends(get_db)):
-    # Llegar por 127.0.0.1 no debe dejar la cookie en un origen distinto al retorno.
     if str(request.base_url).rstrip("/") != base_url():
         return RedirectResponse(base_url() + cookie_path() + "/start", status_code=303)
     token, url = begin(db)
@@ -144,15 +143,12 @@ def verified_steam_id(params, expected_return):
         raise ValueError("invalid") from None
     verification = {k: v for k, v in params.items() if k.startswith("openid.")}
     verification["openid.mode"] = "check_authentication"
-    # Fixed HTTPS endpoint, no redirects: assertions cannot choose a server to contact.
     with httpx.Client(timeout=httpx.Timeout(20.0, connect=8.0), follow_redirects=False) as client:
         for attempt in range(2):
             try:
                 response = client.post(ENDPOINT, data=verification)
                 break
             except (httpx.ConnectError, httpx.ConnectTimeout):
-                # Sólo repetir si no se pudo establecer la conexión. Steam
-                # consume la firma: nunca repetir un envío o una lectura fallida.
                 if attempt == 1:
                     raise
         response.raise_for_status()
@@ -171,7 +167,6 @@ def resolve_user(db, steam_id, link_user_id):
     else:
         legacy = db.scalar(select(User).where(User.steam_id == steam_id))
         if link_user_id is None and legacy:
-            # Un ID escrito manualmente nunca se convierte en una credencial.
             raise ValueError("conflict")
         if link_user_id is not None:
             user = db.get(User, link_user_id)
@@ -181,18 +176,14 @@ def resolve_user(db, steam_id, link_user_id):
             if other and other.steam_id != steam_id:
                 raise ValueError("linked")
         else:
-            # Steam pertenece al acceso de jugadores. El tipo queda fijado
-            # al crear la cuenta; no se ofrece elegir un estudio después.
             user = User(role=UserRole.PLAYER, steam_id=steam_id, onboarding_step="player")
             assign_steam_username(db, user)
         if not user or not user.is_active:
-            # New users receive the column default at flush above.
             raise ValueError("inactive")
         user.steam_id = steam_id
         db.add(SteamIdentity(steam_id=steam_id, user_id=user.id))
     if not user or not user.is_active:
         raise ValueError("inactive")
-    # La Web API mejora el perfil, pero no es requisito para autenticar.
     if settings.STEAM_API_KEY:
         try:
             profile = get_player_summary(steam_id)
@@ -233,7 +224,6 @@ def callback(request: Request, db: Session = Depends(get_db)):
         return failure("timeout")
     except httpx.HTTPError as error:
         db.rollback()
-        # No registrar la URL ni el mensaje: pueden contener la firma de acceso.
         logger.warning("Steam OpenID: fallo de conexión (%s)", type(error).__name__)
         return failure("unavailable")
     except IntegrityError:

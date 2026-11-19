@@ -23,8 +23,6 @@ def validate_version(value: str) -> str:
 
 def upload_artifact(client: httpx.Client, *, bucket: str, version: str,
                     path: Path, token: str) -> None:
-    # ifGenerationMatch=0 impide modificar una versión publicada, incluso con
-    # dos ejecuciones concurrentes. La identidad sólo tiene objectCreator.
     response = client.post(
         f"https://storage.googleapis.com/upload/storage/v1/b/{bucket}/o",
         params={"uploadType": "media", "name": f"versions/{version}/{path.name}",
@@ -50,7 +48,6 @@ def main(argv=None) -> int:
             path = Path(directory) / "local_model.npz"
             with SessionLocal() as db:
                 report = train_and_save(db, path, data_label=args.data_label)
-            # Sólo funciona con la identidad del job; no requiere archivos de claves.
             with httpx.Client(timeout=10, trust_env=False) as metadata:
                 response = metadata.get(
                     "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token",
@@ -59,15 +56,12 @@ def main(argv=None) -> int:
                 response.raise_for_status()
                 token = response.json()["access_token"]
             with httpx.Client(timeout=120) as storage:
-                # Subir el informe primero y activar la versión sólo si el job
-                # finaliza bien; el archivo npz se publica completo al terminar.
                 for artifact in (path.with_suffix(".json"), path):
                     upload_artifact(storage, bucket=bucket, version=args.version,
                                     path=artifact, token=token)
             print(json.dumps({"version": args.version, "report": report}, ensure_ascii=False))
         return 0
     except Exception as error:
-        # No volcar URLs de base, encabezados ni respuestas con credenciales.
         print(f"No se pudo publicar el modelo ({type(error).__name__}). Revisá los logs y usá una versión nueva.")
         return 1
 

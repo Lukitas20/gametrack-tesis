@@ -107,7 +107,6 @@ def main():
     try:
         result=load(args.url,args.requests,args.concurrency) if args.command=="load" else restore(args.backup,args.execute)
     except Exception as exc:
-        # No imprimir errores de conexión que puedan incluir secretos.
         print(json.dumps(dict(status="not_verified",error_type=type(exc).__name__)));return 2
     print(json.dumps(result));return 0
 

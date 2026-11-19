@@ -45,7 +45,6 @@ def affinity_scores(engine, signals):
     model, status = load_affinity_model()
     history = []
     features = getattr(engine, 'affinity_features', {})
-    # Priorizar opiniones expresas y conservar también el interés por horas.
     ordered = sorted(signals.items(), key=lambda item: (
         item[1].get('source') == 'steam_playtime', -abs(item[1].get('weight', 0)), item[0]))
     for gid, signal in ordered[:100]:
@@ -67,7 +66,6 @@ def affinity_scores(engine, signals):
     try:
         candidates = [features.get(gid, {}) for gid in engine.game_ids]
         predictions = []
-        # Memoria acotada aunque crezca el catálogo: nunca matriz juegos².
         for start in range(0, len(candidates), 2048):
             predictions.extend(model.predict_many(candidates[start:start + 2048], history))
         if len(predictions) != n:

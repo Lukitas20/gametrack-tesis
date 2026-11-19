@@ -28,7 +28,6 @@ from sqlalchemy.pool import NullPool
 from sqlalchemy.schema import Table
 
 
-# These rows describe running processes, not persistent application data.
 TRANSIENT_TABLES = frozenset({"steam_catalog_workers"})
 MAX_BATCH_SIZE = 1000
 
@@ -84,7 +83,6 @@ def _validate_schema(
 
 
 def _assert_empty(connection: Connection, tables: list[Table]) -> None:
-    # Inspect all application tables, even ones not copied (worker heartbeats).
     occupied = [
         table.name for table in tables
         if connection.execute(select(1).select_from(table).limit(1)).first() is not None
@@ -167,8 +165,6 @@ def _reset_sequences(connection: Connection, tables: list[Table]) -> None:
             next_id = max(int(maximum or 0) + 1, 1)
             schema_name, sequence_name = sequence
             quoted = f"{preparer.quote_schema(schema_name)}.{preparer.quote(sequence_name)}"
-            # Unlike setval(), RESTART is transactional: a later failure rolls
-            # back sequence changes together with the copied rows.
             connection.exec_driver_sql(
                 f"ALTER SEQUENCE {quoted} RESTART WITH {next_id}"
             )
@@ -189,8 +185,6 @@ def transfer(
         raise TransferError("No se encontraron las tablas de la aplicación.")
 
     with source_engine.connect() as source, destination_engine.begin() as destination:
-        # Python's sqlite3 legacy mode does not BEGIN on SELECT. This explicit
-        # transaction gives counts and streamed rows the same consistent snapshot.
         source.exec_driver_sql("BEGIN")
         try:
             _validate_schema(source, tables, source=True)
@@ -207,8 +201,6 @@ def transfer(
                 destination.exec_driver_sql(
                     f"LOCK TABLE {quoted} IN SHARE ROW EXCLUSIVE MODE"
                 )
-                # Recheck after the lock: another connection could have inserted
-                # rows between the initial validation and acquiring every lock.
                 _assert_empty(destination, tables)
             counts = _source_counts(source, tables)
             if execute:
@@ -237,7 +229,6 @@ def main(argv: list[str] | None = None) -> int:
     source_engine = None
     destination_engine = None
     try:
-        # Lazy imports keep --help and helper tests independent of settings/.env.
         backend_root = str(Path(__file__).resolve().parents[1])
         if backend_root not in sys.path:
             sys.path.insert(0, backend_root)
@@ -261,7 +252,6 @@ def main(argv: list[str] | None = None) -> int:
         print(str(exc), file=sys.stderr)
         return 1
     except Exception:
-        # DB exceptions can embed the DSN or row parameters; never print them.
         print(
             "No se pudo completar la transferencia. Revisá la conexión, las migraciones "
             "y los permisos. La transacción de datos fue cancelada; el origen no cambió.",
